@@ -22,6 +22,12 @@ class ActivityRepositoryTests(unittest.TestCase):
                 is_idle=False,
                 idle_seconds=0,
                 platform="windows",
+                git_repo=None,
+                git_branch=None,
+                git_commit_hash=None,
+                git_modified_files=None,
+                context_switches=0,
+                tag=None,
             )
 
             with ActivityRepository(db_path) as repository:

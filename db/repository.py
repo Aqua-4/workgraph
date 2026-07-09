@@ -23,13 +23,21 @@ class ActivityRepository:
         self._migrate()
 
     def _migrate(self) -> None:
-        try:
-            self._connection.execute(
-                "ALTER TABLE activity_sessions ADD COLUMN idle_seconds INTEGER NOT NULL DEFAULT 0"
-            )
-            self._connection.commit()
-        except sqlite3.OperationalError:
-            pass  # column already exists
+        migrations = [
+            "ALTER TABLE activity_sessions ADD COLUMN idle_seconds INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE activity_sessions ADD COLUMN git_repo TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN git_branch TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN git_commit_hash TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN git_modified_files TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN context_switches INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE activity_sessions ADD COLUMN tag TEXT",
+        ]
+        for migration in migrations:
+            try:
+                self._connection.execute(migration)
+                self._connection.commit()
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     def save_session(self, session: ActivitySession) -> int:
         cursor = self._connection.execute(
@@ -44,9 +52,15 @@ class ActivityRepository:
                 browser_domain,
                 is_idle,
                 idle_seconds,
+                git_repo,
+                git_branch,
+                git_commit_hash,
+                git_modified_files,
+                context_switches,
+                tag,
                 platform
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 _format_datetime(session.start_time),
@@ -58,6 +72,12 @@ class ActivityRepository:
                 session.browser_domain,
                 int(session.is_idle),
                 session.idle_seconds,
+                session.git_repo,
+                session.git_branch,
+                session.git_commit_hash,
+                session.git_modified_files,
+                session.context_switches,
+                session.tag,
                 session.platform,
             ),
         )

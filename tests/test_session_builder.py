@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, timezone
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from processor.session_builder import SessionBuilder
 from workgraph.models import ActivitySample
@@ -7,7 +7,8 @@ from workgraph.models import ActivitySample
 
 def sample(offset: int, app: str = "Code", idle: bool = False) -> ActivitySample:
     return ActivitySample(
-        observed_at=datetime(2026, 7, 9, 10, 0, tzinfo=timezone.utc) + timedelta(seconds=offset),
+        observed_at=datetime(2026, 7, 9, 10, 0, tzinfo=timezone.utc)
+        + timedelta(seconds=offset),
         app_name=app,
         process_name=f"{app}.exe",
         window_title="main.py",
@@ -15,6 +16,11 @@ def sample(offset: int, app: str = "Code", idle: bool = False) -> ActivitySample
         is_idle=idle,
         idle_seconds=0,
         platform="windows",
+        git_repo=None,
+        git_branch=None,
+        git_commit_hash=None,
+        git_modified_files=None,
+        context_switches=0,
     )
 
 

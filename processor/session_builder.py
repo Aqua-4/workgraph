@@ -17,11 +17,26 @@ class SessionBuilder:
             return None
 
         if self._belongs_to_current(sample):
+            # Check if app/window changed (context switch)
+            context_switches = sample.context_switches
+            if (
+                self._current.app_name != sample.app_name
+                or self._current.window_title != sample.window_title
+            ):
+                context_switches = self._current.context_switches + 1
+
             self._current = replace(
                 self._current,
                 end_time=sample.observed_at,
-                duration_sec=_duration_seconds(self._current.start_time, sample.observed_at),
+                duration_sec=_duration_seconds(
+                    self._current.start_time, sample.observed_at
+                ),
                 idle_seconds=sample.idle_seconds,
+                git_repo=sample.git_repo,
+                git_branch=sample.git_branch,
+                git_commit_hash=sample.git_commit_hash,
+                git_modified_files=sample.git_modified_files,
+                context_switches=context_switches,
             )
             return None
 
@@ -50,6 +65,7 @@ class SessionBuilder:
             and self._current.browser_domain == sample.browser_domain
             and self._current.is_idle == sample.is_idle
             and self._current.platform == sample.platform
+            and self._current.git_repo == sample.git_repo
         )
 
 
@@ -65,6 +81,11 @@ def _session_from_sample(sample: ActivitySample) -> ActivitySession:
         is_idle=sample.is_idle,
         idle_seconds=sample.idle_seconds,
         platform=sample.platform,
+        git_repo=sample.git_repo,
+        git_branch=sample.git_branch,
+        git_commit_hash=sample.git_commit_hash,
+        git_modified_files=sample.git_modified_files,
+        context_switches=sample.context_switches,
     )
 
 

@@ -3,15 +3,18 @@ from __future__ import annotations
 import logging
 import signal
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from collector.browser_tracker import BrowserTracker
+from collector.git_tracker import GitTracker
 from collector.idle_tracker import IdleTracker
 from collector.window_tracker import WindowTracker
 from db.repository import ActivityRepository
 from processor.session_builder import SessionBuilder
+from services.activity_tagger import ActivityTagger
 from workgraph.models import ActivitySample, utc_now
 
 LOGGER = logging.getLogger(__name__)
@@ -52,6 +55,8 @@ class CollectorService:
         self.window_tracker = WindowTracker()
         self.browser_tracker = BrowserTracker(settings.browser_history_lookback_seconds)
         self.idle_tracker = IdleTracker(settings.idle_threshold_seconds)
+        self.git_tracker = GitTracker()
+        self.activity_tagger = ActivityTagger()
         self.session_builder = SessionBuilder(settings.session_gap_seconds)
         self.repository = ActivityRepository(settings.database_path)
         self._running = False
@@ -74,6 +79,15 @@ class CollectorService:
     def collect_once(self) -> None:
         active_window = self.window_tracker.get_active_window()
         idle_state = self.idle_tracker.get_idle_state()
+        git_activity = self.git_tracker.get_activity()
+
+        # Serialize modified files as comma-separated list
+        git_modified_files = (
+            ",".join(git_activity.modified_files)
+            if git_activity.modified_files
+            else None
+        )
+
         sample = ActivitySample(
             observed_at=utc_now(),
             app_name=active_window.app_name,
@@ -83,17 +97,30 @@ class CollectorService:
             is_idle=idle_state.is_idle,
             idle_seconds=idle_state.idle_seconds,
             platform=active_window.platform,
+            git_repo=git_activity.repo_name,
+            git_branch=git_activity.branch,
+            git_commit_hash=git_activity.commit_hash,
+            git_modified_files=git_modified_files,
+            context_switches=0,
         )
 
         completed = self.session_builder.ingest(sample)
         if completed:
-            self.repository.save_session(completed)
-            LOGGER.debug("Saved activity session: %s", completed)
+            # Tag the completed session
+            completed_tagged = replace(
+                completed, tag=self.activity_tagger.tag_session(completed)
+            )
+            self.repository.save_session(completed_tagged)
+            LOGGER.debug("Saved activity session: %s", completed_tagged)
 
     def flush(self) -> None:
         completed = self.session_builder.flush()
         if completed:
-            self.repository.save_session(completed)
+            # Tag the completed session
+            completed_tagged = replace(
+                completed, tag=self.activity_tagger.tag_session(completed)
+            )
+            self.repository.save_session(completed_tagged)
 
     def stop(self, *_args) -> None:
         self._running = False

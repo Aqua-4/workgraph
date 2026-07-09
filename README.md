@@ -37,7 +37,7 @@ Future versions will introduce analytics, dashboards, and AI-powered coaching.
 
 ## Features
 
-### Version 1
+### Version 1 — Collection Foundation
 
 * Active application tracking
 * Window title tracking
@@ -47,15 +47,20 @@ Future versions will introduce analytics, dashboards, and AI-powered coaching.
 * Local SQLite storage
 * Lightweight background service
 
+### Version 1.1 — Work Attribution
+
+* Git repository tracking (branch, commits, modified files)
+* Activity tagging (automatic categorization by rules)
+* Context-switch counting
+* Advanced session splitting
+
 ### Planned
 
-* Git activity tracking
-* Calendar integration
-* Work categorization
-* Context-switch analytics
-* Focus session detection
+* Calendar integration (Outlook/Teams meetings)
+* Focus session analytics
 * Local dashboard
-* AI-powered work coaching
+* Timeline view
+* AI-powered coaching
 * Raspberry Pi synchronization
 
 ---
@@ -72,6 +77,8 @@ WorkGraph is designed with privacy as a core principle.
 * Browser domains
 * Idle time
 * Session duration
+* **Git repository, branch, and recent commits** (v1.1+)
+* **Activity tags** (based on configurable rules)
 * System events
 
 ### What WorkGraph Does NOT Collect
@@ -148,20 +155,23 @@ workgraph/
 ├── collector/
 │   ├── window_tracker.py
 │   ├── browser_tracker.py
-│   └── idle_tracker.py
+│   ├── idle_tracker.py
+│   └── git_tracker.py
 │
 ├── processor/
 │   └── session_builder.py
+│
+├── services/
+│   ├── collector_service.py
+│   └── activity_tagger.py
 │
 ├── db/
 │   ├── repository.py
 │   └── schema.sql
 │
-├── services/
-│   └── collector_service.py
-│
 ├── config/
-│   └── settings.yaml
+│   ├── settings.yaml
+│   └── tags.yaml
 │
 ├── logs/
 │
@@ -184,11 +194,73 @@ workgraph/
   "end_time": "2026-07-09T11:17:00",
   "duration_sec": 4320,
   "app_name": "VSCode",
-  "window_title": "mcp_server.py",
+  "window_title": "rbac_service.py",
   "browser_domain": null,
-  "is_idle": false
+  "is_idle": false,
+  "idle_seconds": 0,
+  "git_repo": "mcp-platform",
+  "git_branch": "feature/rbac",
+  "git_commit_hash": "a1b2c3d",
+  "git_modified_files": "rbac_service.py,auth.py",
+  "context_switches": 3,
+  "tag": "Client Delivery"
 }
 ```
+
+---
+
+## Activity Tagging (v1.1+)
+
+WorkGraph can automatically categorize your work using configurable rules in `config/tags.yaml`.
+
+### Example Configuration
+
+```yaml
+tags:
+  Client Delivery:
+    repos:
+      - compass
+      - tenet
+
+  Interview Prep:
+    domains:
+      - leetcode.com
+      - hackerrank.com
+    keywords:
+      - interview
+
+  Learning:
+    domains:
+      - udemy.com
+      - coursera.org
+
+  Personal Projects:
+    repos:
+      - crypto-trader
+```
+
+### How It Works
+
+Sessions are tagged by matching:
+- **Git repositories** — if `git_repo` matches a rule's `repos` list
+- **Browser domains** — if `browser_domain` matches a rule's `domains` list
+- **Keywords** — if any keyword appears in window title, app name, or domain
+
+Each session gets exactly one tag (first matching rule wins).
+
+### Use Case
+
+After a week, WorkGraph can show:
+
+```
+Client Delivery    32h
+Meetings           11h
+Learning            2h
+Personal Projects   1h
+Interview Prep      0h
+```
+
+Compare this against how you *felt* you spent your time—often revealing unexpected patterns.
 
 ---
 
@@ -220,7 +292,11 @@ Potential insights:
 
 ### Version 3
 
-Introduce AI-powered coaching.
+Introduce AI-powered coaching and optional centralized storage.
+
+**Storage options:**
+* Local SQLite (default) — all data stays on your machine
+* PostgreSQL (opt-in) — push logs to your own database server for team analytics or compliance
 
 Potential capabilities:
 
@@ -229,6 +305,7 @@ Potential capabilities:
 * Burnout risk detection
 * Personalized improvement plans
 * Goal alignment analysis
+* Team-level analytics (when using PostgreSQL backend)
 
 ---
 
@@ -239,7 +316,6 @@ Potential capabilities:
 * Python 3.11+
 * uv
 * SQLite
-* SQLAlchemy
 * Pydantic
 
 ### Activity Collection
@@ -333,6 +409,7 @@ Run a one-shot snapshot every hour:
 ### Future
 
 * FastAPI
+* SQLAlchemy
 * PostgreSQL
 * Redis
 * Ollama
@@ -352,16 +429,23 @@ Run a one-shot snapshot every hour:
 
 ### v1.1
 
-* [ ] Git activity tracking
+* [x] Git repository tracking
+* [x] Activity tagging (rules-based categorization)
+* [x] Context-switch counting
 * [ ] Calendar event tracking
-* [ ] Configuration management
+* [ ] Focus time analytics
+
+### v1.2
+
+* [ ] Local dashboard
+* [ ] Timeline view
+* [ ] Weekly reports
 
 ### v2.0
 
-* [ ] Analytics dashboard
-* [ ] Focus time analysis
-* [ ] Context-switch analysis
-* [ ] Work categorization
+* [ ] Analytics engine
+* [ ] Focus session detection
+* [ ] Burnout risk detection
 
 ### v3.0
 

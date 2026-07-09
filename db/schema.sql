@@ -10,6 +10,13 @@ CREATE TABLE IF NOT EXISTS activity_sessions (
     window_title TEXT,
     browser_domain TEXT,
     is_idle INTEGER NOT NULL,
+    idle_seconds INTEGER NOT NULL DEFAULT 0,
+    git_repo TEXT,
+    git_branch TEXT,
+    git_commit_hash TEXT,
+    git_modified_files TEXT,
+    context_switches INTEGER NOT NULL DEFAULT 0,
+    tag TEXT,
     platform TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
