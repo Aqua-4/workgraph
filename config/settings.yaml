@@ -1,0 +1,6 @@
+database_path: activity.db
+poll_interval_seconds: 5
+idle_threshold_seconds: 300
+session_gap_seconds: 90
+browser_history_lookback_seconds: 600
+log_path: logs/workgraph.log

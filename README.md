@@ -237,6 +237,7 @@ Potential capabilities:
 ### Core
 
 * Python 3.11+
+* uv
 * SQLite
 * SQLAlchemy
 * Pydantic
@@ -246,6 +247,43 @@ Potential capabilities:
 * psutil
 * pywin32 (Windows)
 * browser-history integration
+
+---
+
+## Version 1 Quick Start
+
+Install dependencies and run the collector with uv:
+
+```bash
+uv sync
+uv run python main.py
+```
+
+Collect one sample and exit:
+
+```bash
+uv run python main.py --once
+```
+
+Run the v1 tests:
+
+```bash
+uv run python -m unittest discover -s tests
+```
+
+### Platform Notes
+
+Windows is the primary target for v1 active application tracking. WorkGraph uses the Win32 foreground-window and last-input APIs when running on Windows. Install the optional Windows dependency group if you extend the collector with pywin32 integrations:
+
+```bash
+uv sync --extra windows
+```
+
+Linux support is included through common X11 tools. Active-window tracking uses `xprop` or `xdotool` when available, and idle detection uses `xprintidle` when available.
+
+Browser domain tracking is best-effort and privacy-preserving. WorkGraph first checks the active browser window title for a visible URL/domain. If the title does not contain one, it copies the browser History SQLite database, reads recent URL metadata, extracts only the domain, and stores only that domain in `activity.db`.
+
+Supported v1 browser history paths include Brave, Chrome/Chromium, Edge, and Firefox on Windows and Linux. Brave usually does not expose the URL in the window title, so the History fallback is the expected path for Brave domain detection.
 
 ### Future
 

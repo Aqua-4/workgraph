@@ -3,6 +3,11 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# WorkGraph runtime data
+activity.db
+activity.db-*
+logs/
+
 # C extensions
 *.so
 
