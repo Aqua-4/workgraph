@@ -1,0 +1,54 @@
+tags:
+  # Client Delivery - focus on CAT framework
+  Client Delivery:
+    repos:
+      - compass
+      - atlas
+    domains: []
+    keywords: []
+
+  # Interview Preparation
+  Interview Prep:
+    repos: []
+    domains:
+      - leetcode.com
+      - hackerrank.com
+      - codewars.com
+    keywords:
+      - interview
+      - prep
+      - coding challenge
+
+  # Personal Projects
+  Personal:
+    repos:
+      - crypto-trader
+      - personal-utils
+    domains:
+      - github.com
+    keywords: []
+
+  # Learning and Development
+  Learning:
+    repos: []
+    domains:
+      - udemy.com
+      - coursera.org
+      - youtube.com
+      - docs.python.org
+    keywords:
+      - tutorial
+      - course
+      - learn
+
+  # Administrative tasks
+  Admin:
+    repos: []
+    domains:
+      - mail.google.com
+      - outlook.office.com
+      - calendar.google.com
+    keywords:
+      - email
+      - admin
+      - meeting
