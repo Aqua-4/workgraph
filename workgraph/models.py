@@ -39,6 +39,7 @@ class ActivitySession:
     window_title: str | None
     browser_domain: str | None
     is_idle: bool
+    idle_seconds: int
     platform: str
 
 

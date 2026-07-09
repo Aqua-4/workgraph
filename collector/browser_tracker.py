@@ -169,16 +169,26 @@ def _domain_from_history_file(
     window_title: str | None,
     lookback_seconds: int,
 ) -> str | None:
-    with tempfile.NamedTemporaryFile(prefix="workgraph-history-", suffix=".sqlite") as temp_file:
+    # NamedTemporaryFile holds an open exclusive handle on Windows, so
+    # shutil.copy2 into the same path fails with PermissionError.  Use
+    # mkstemp instead and clean up explicitly.
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix="workgraph-history-", suffix=".sqlite")
+    os.close(tmp_fd)
+    try:
         try:
-            shutil.copy2(history_path, temp_file.name)
+            shutil.copy2(history_path, tmp_path)
         except OSError:
             return None
 
         if history_path.name == "places.sqlite":
-            rows = _read_firefox_history(Path(temp_file.name), lookback_seconds)
+            rows = _read_firefox_history(Path(tmp_path), lookback_seconds)
         else:
-            rows = _read_chromium_history(Path(temp_file.name), lookback_seconds)
+            rows = _read_chromium_history(Path(tmp_path), lookback_seconds)
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
     if not rows:
         return None

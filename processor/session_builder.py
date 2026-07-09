@@ -21,6 +21,7 @@ class SessionBuilder:
                 self._current,
                 end_time=sample.observed_at,
                 duration_sec=_duration_seconds(self._current.start_time, sample.observed_at),
+                idle_seconds=sample.idle_seconds,
             )
             return None
 
@@ -62,6 +63,7 @@ def _session_from_sample(sample: ActivitySample) -> ActivitySession:
         window_title=sample.window_title,
         browser_domain=sample.browser_domain,
         is_idle=sample.is_idle,
+        idle_seconds=sample.idle_seconds,
         platform=sample.platform,
     )
 

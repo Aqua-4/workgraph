@@ -299,11 +299,11 @@ Supported v1 browser history paths include Brave, Chrome/Chromium, Edge, and Fir
 
 ### v1.0
 
-* [ ] Active window tracking
-* [ ] Idle detection
-* [ ] Browser domain tracking
-* [ ] SQLite persistence
-* [ ] Session aggregation
+* [x] Active window tracking
+* [x] Idle detection
+* [x] Browser domain tracking
+* [x] SQLite persistence
+* [x] Session aggregation
 
 ### v1.1
 

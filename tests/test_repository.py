@@ -20,6 +20,7 @@ class ActivityRepositoryTests(unittest.TestCase):
                 window_title="README.md",
                 browser_domain=None,
                 is_idle=False,
+                idle_seconds=0,
                 platform="windows",
             )
 

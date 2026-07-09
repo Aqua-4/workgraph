@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import signal
 import time
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from collector.browser_tracker import BrowserTracker
 from collector.idle_tracker import IdleTracker
@@ -13,18 +14,36 @@ from db.repository import ActivityRepository
 from processor.session_builder import SessionBuilder
 from workgraph.models import ActivitySample, utc_now
 
-
 LOGGER = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class CollectorSettings:
+class CollectorSettings(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     database_path: str = "activity.db"
     poll_interval_seconds: float = 5.0
     idle_threshold_seconds: int = 300
     session_gap_seconds: int = 90
     browser_history_lookback_seconds: int = 600
     log_path: str = "logs/workgraph.log"
+
+    @field_validator("poll_interval_seconds")
+    @classmethod
+    def poll_interval_must_be_positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("poll_interval_seconds must be positive")
+        return v
+
+    @field_validator(
+        "idle_threshold_seconds",
+        "session_gap_seconds",
+        "browser_history_lookback_seconds",
+    )
+    @classmethod
+    def int_fields_must_be_positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("value must be positive")
+        return v
 
 
 class CollectorService:

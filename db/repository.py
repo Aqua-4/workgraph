@@ -20,6 +20,16 @@ class ActivityRepository:
         schema_path = Path(__file__).with_name("schema.sql")
         self._connection.executescript(schema_path.read_text(encoding="utf-8"))
         self._connection.commit()
+        self._migrate()
+
+    def _migrate(self) -> None:
+        try:
+            self._connection.execute(
+                "ALTER TABLE activity_sessions ADD COLUMN idle_seconds INTEGER NOT NULL DEFAULT 0"
+            )
+            self._connection.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
 
     def save_session(self, session: ActivitySession) -> int:
         cursor = self._connection.execute(
@@ -33,9 +43,10 @@ class ActivityRepository:
                 window_title,
                 browser_domain,
                 is_idle,
+                idle_seconds,
                 platform
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 _format_datetime(session.start_time),
@@ -46,6 +57,7 @@ class ActivityRepository:
                 session.window_title,
                 session.browser_domain,
                 int(session.is_idle),
+                session.idle_seconds,
                 session.platform,
             ),
         )
