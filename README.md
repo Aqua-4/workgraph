@@ -285,6 +285,51 @@ Browser domain tracking is best-effort and privacy-preserving. WorkGraph first c
 
 Supported v1 browser history paths include Brave, Chrome/Chromium, Edge, and Firefox on Windows and Linux. Brave usually does not expose the URL in the window title, so the History fallback is the expected path for Brave domain detection.
 
+### Running as a Background Service
+
+Use the included launcher scripts to run WorkGraph automatically on login or startup.
+
+#### Windows — Task Scheduler
+
+1. Open **Task Scheduler** and choose **Create Task**.
+2. **General** tab: give it a name (e.g. `WorkGraph Collector`). Optionally tick *Run whether user is logged on or not*.
+3. **Triggers** tab: click *New* → *At log on* (or *At startup*).
+4. **Actions** tab: click *New* → *Start a program* → browse to `run.bat` in the project folder.
+5. **Settings** tab: uncheck *Stop the task if it runs longer than*.
+6. Click *OK* and enter your password if prompted.
+
+To run a one-shot snapshot on a fixed schedule instead of running continuously, set the trigger interval you want and point the action to:
+
+```
+run.bat --once
+```
+
+#### Linux — cron
+
+Make the script executable once:
+
+```bash
+chmod +x run.sh
+```
+
+Open your crontab:
+
+```bash
+crontab -e
+```
+
+Run at boot (continuous collector):
+
+```cron
+@reboot /absolute/path/to/workgraph/run.sh >> /absolute/path/to/workgraph/logs/cron.log 2>&1
+```
+
+Run a one-shot snapshot every hour:
+
+```cron
+0 * * * * /absolute/path/to/workgraph/run.sh --once >> /absolute/path/to/workgraph/logs/cron.log 2>&1
+```
+
 ### Future
 
 * FastAPI
