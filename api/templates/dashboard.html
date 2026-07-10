@@ -32,6 +32,57 @@
                 different applications
             </div>
         </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Goal Coverage</div>
+            <div class="stat-value">{{ "%.0f"|format(stats.tagged_ratio * 100) }}%</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                active time tagged
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Context Switch Rate</div>
+            <div class="stat-value">{{ "%.1f"|format(stats.switch_rate_per_hour) }}</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                switches per active hour
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Meeting Load (Proxy)</div>
+            <div class="stat-value">{{ "%.1f"|format(stats.meeting_hours) }}h</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                {{ "%.0f"|format(stats.meeting_ratio * 100) }}% of active time
+            </div>
+        </div>
+    </div>
+
+    <h2>Focus Quality</h2>
+    <div class="card">
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Deep Work Blocks</div>
+                <div class="stat-value">{{ stats.deep_work_blocks }}</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    sessions >= 30 minutes
+                </div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Longest Focus Block</div>
+                <div class="stat-value">{{ "%.1f"|format(stats.longest_focus_hours) }}h</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    max uninterrupted active block
+                </div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Average Focus Block</div>
+                <div class="stat-value">{{ "%.0f"|format(stats.avg_focus_minutes) }}m</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    among deep work blocks
+                </div>
+            </div>
+        </div>
     </div>
 
     <h2>Time by Goal (Tagged)</h2>
@@ -81,6 +132,58 @@
         </div>
         {% else %}
         <p style="color: #999; padding: 20px; text-align: center;">No activity data yet. Run the collector.</p>
+        {% endif %}
+    </div>
+
+    <h2>Repository Focus</h2>
+    <div class="card">
+        {% if stats.repo_stats %}
+        <div class="bar-chart">
+            {% set max_seconds = stats.repo_stats.values()|max %}
+            {% for repo, seconds in stats.repo_stats.items()|sort(attribute='1', reverse=True) %}
+            <div class="bar-item">
+                <div class="bar-label">{{ repo }}</div>
+                <div class="bar-container">
+                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
+                        {% if (seconds / max_seconds * 100) > 15 %}
+                        {{ "%.1f"|format(seconds / 3600) }}h
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #999; padding: 20px; text-align: center;">No repository activity detected in this window.</p>
+        {% endif %}
+    </div>
+
+    <h2>Daily Trend (Last 7 Days)</h2>
+    <div class="card">
+        {% if stats.daily_trend %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Day</th>
+                    <th>Active Hours</th>
+                    <th>Meeting Hours (Proxy)</th>
+                    <th>Switches / Hour</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in stats.daily_trend %}
+                <tr>
+                    <td>{{ row.day }}</td>
+                    <td>{{ "%.2f"|format(row.active_hours) }}h</td>
+                    <td>{{ "%.2f"|format(row.meeting_hours) }}h</td>
+                    <td>{{ "%.2f"|format(row.switches_per_hour) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #999; padding: 20px; text-align: center;">Not enough daily data yet.</p>
         {% endif %}
     </div>
 

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Query
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import sqlite3
@@ -109,13 +109,174 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     )
     total_seconds = cursor.fetchone()["total_seconds"] or 0
 
+    # Total idle time (from idle sessions)
+    cursor.execute(
+        """
+        SELECT SUM(duration_sec) as total_idle_seconds
+        FROM activity_sessions
+        WHERE start_time >= ? AND is_idle = 1
+        """,
+        (start_iso,),
+    )
+    total_idle_seconds = cursor.fetchone()["total_idle_seconds"] or 0
+
+    # Tagged active time for goal adherence
+    cursor.execute(
+        """
+        SELECT SUM(duration_sec) as tagged_active_seconds
+        FROM activity_sessions
+        WHERE start_time >= ? AND is_idle = 0 AND tag IS NOT NULL
+        """,
+        (start_iso,),
+    )
+    tagged_active_seconds = cursor.fetchone()["tagged_active_seconds"] or 0
+
+    # Context switching metrics
+    cursor.execute(
+        """
+        SELECT SUM(context_switches) as total_switches
+        FROM activity_sessions
+        WHERE start_time >= ? AND is_idle = 0
+        """,
+        (start_iso,),
+    )
+    total_switches = cursor.fetchone()["total_switches"] or 0
+
+    # Deep work / focus metrics
+    cursor.execute(
+        """
+        SELECT
+            COUNT(*) as deep_work_blocks,
+            MAX(duration_sec) as longest_focus_sec,
+            AVG(duration_sec) as avg_focus_sec
+        FROM activity_sessions
+        WHERE start_time >= ?
+          AND is_idle = 0
+          AND duration_sec >= 1800
+        """,
+        (start_iso,),
+    )
+    focus_row = cursor.fetchone()
+    deep_work_blocks = focus_row["deep_work_blocks"] or 0
+    longest_focus_sec = focus_row["longest_focus_sec"] or 0
+    avg_focus_sec = focus_row["avg_focus_sec"] or 0
+
+    # Meeting proxy from app name / domain / title patterns
+    cursor.execute(
+        """
+        SELECT SUM(duration_sec) as meeting_seconds
+        FROM activity_sessions
+        WHERE start_time >= ?
+          AND is_idle = 0
+          AND (
+            LOWER(COALESCE(app_name, '')) LIKE '%teams%'
+            OR LOWER(COALESCE(app_name, '')) LIKE '%zoom%'
+            OR LOWER(COALESCE(app_name, '')) LIKE '%webex%'
+            OR LOWER(COALESCE(app_name, '')) LIKE '%slack%'
+            OR LOWER(COALESCE(browser_domain, '')) LIKE '%meet.google.com%'
+            OR LOWER(COALESCE(browser_domain, '')) LIKE '%teams.microsoft.com%'
+            OR LOWER(COALESCE(browser_domain, '')) LIKE '%zoom.us%'
+            OR LOWER(COALESCE(browser_domain, '')) LIKE '%webex.com%'
+            OR LOWER(COALESCE(window_title, '')) LIKE '%meeting%'
+            OR LOWER(COALESCE(window_title, '')) LIKE '%standup%'
+            OR LOWER(COALESCE(window_title, '')) LIKE '%huddle%'
+          )
+        """,
+        (start_iso,),
+    )
+    meeting_seconds = cursor.fetchone()["meeting_seconds"] or 0
+
+    # Top repositories by active time
+    cursor.execute(
+        """
+        SELECT git_repo, SUM(duration_sec) as total_seconds
+        FROM activity_sessions
+        WHERE start_time >= ?
+          AND is_idle = 0
+          AND git_repo IS NOT NULL
+        GROUP BY git_repo
+        ORDER BY total_seconds DESC
+        LIMIT 5
+        """,
+        (start_iso,),
+    )
+    repo_stats = {row["git_repo"]: row["total_seconds"] for row in cursor.fetchall()}
+
+    # Daily trend (active time, meeting proxy, switches)
+    cursor.execute(
+        """
+        SELECT
+            substr(start_time, 1, 10) as day,
+            SUM(CASE WHEN is_idle = 0 THEN duration_sec ELSE 0 END) as active_seconds,
+            SUM(CASE WHEN is_idle = 0 THEN context_switches ELSE 0 END) as switches,
+            SUM(
+                CASE
+                    WHEN is_idle = 0 AND (
+                        LOWER(COALESCE(app_name, '')) LIKE '%teams%'
+                        OR LOWER(COALESCE(app_name, '')) LIKE '%zoom%'
+                        OR LOWER(COALESCE(app_name, '')) LIKE '%webex%'
+                        OR LOWER(COALESCE(app_name, '')) LIKE '%slack%'
+                        OR LOWER(COALESCE(browser_domain, '')) LIKE '%meet.google.com%'
+                        OR LOWER(COALESCE(browser_domain, '')) LIKE '%teams.microsoft.com%'
+                        OR LOWER(COALESCE(browser_domain, '')) LIKE '%zoom.us%'
+                        OR LOWER(COALESCE(browser_domain, '')) LIKE '%webex.com%'
+                        OR LOWER(COALESCE(window_title, '')) LIKE '%meeting%'
+                        OR LOWER(COALESCE(window_title, '')) LIKE '%standup%'
+                        OR LOWER(COALESCE(window_title, '')) LIKE '%huddle%'
+                    ) THEN duration_sec
+                    ELSE 0
+                END
+            ) as meeting_seconds
+        FROM activity_sessions
+        WHERE start_time >= ?
+        GROUP BY day
+        ORDER BY day DESC
+        LIMIT 7
+        """,
+        (start_iso,),
+    )
+    daily_trend = []
+    for row in cursor.fetchall():
+        active_seconds = row["active_seconds"] or 0
+        switches = row["switches"] or 0
+        meeting_day_seconds = row["meeting_seconds"] or 0
+        daily_trend.append(
+            {
+                "day": row["day"],
+                "active_hours": round(active_seconds / 3600, 2),
+                "meeting_hours": round(meeting_day_seconds / 3600, 2),
+                "switches_per_hour": round(switches / max(active_seconds / 3600, 0.001), 2),
+            }
+        )
+
     conn.close()
+
+    active_hours = total_seconds / 3600 if total_seconds else 0
+    tagged_ratio = (tagged_active_seconds / total_seconds) if total_seconds else 0
+    meeting_ratio = (meeting_seconds / total_seconds) if total_seconds else 0
+    switch_rate_per_hour = total_switches / active_hours if active_hours else 0
 
     return {
         "tag_stats": tag_stats,
         "app_stats": app_stats,
+        "repo_stats": repo_stats,
         "total_seconds": total_seconds,
         "total_hours": round(total_seconds / 3600, 1),
+        "total_idle_seconds": total_idle_seconds,
+        "total_idle_hours": round(total_idle_seconds / 3600, 1),
+        "tagged_active_seconds": tagged_active_seconds,
+        "tagged_ratio": round(tagged_ratio, 3),
+        "meeting_seconds": meeting_seconds,
+        "meeting_hours": round(meeting_seconds / 3600, 1),
+        "meeting_ratio": round(meeting_ratio, 3),
+        "total_switches": int(total_switches),
+        "switch_rate_per_hour": round(switch_rate_per_hour, 2),
+        "deep_work_blocks": int(deep_work_blocks),
+        "longest_focus_sec": int(longest_focus_sec),
+        "longest_focus_hours": round((longest_focus_sec or 0) / 3600, 2),
+        "avg_focus_sec": int(avg_focus_sec or 0),
+        "avg_focus_minutes": round((avg_focus_sec or 0) / 60, 1),
+        "daily_trend": daily_trend,
     }
 
 
