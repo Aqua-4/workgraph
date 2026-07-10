@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 
+from db.repository import ActivityRepository
+from services.activity_tagger import ActivityTagger
 from services.collector_service import (
     CollectorService,
     CollectorSettings,
     configure_logging,
 )
+from workgraph.models import ActivitySession
 
 
 def main() -> None:
@@ -33,9 +37,16 @@ def main() -> None:
         default=8000,
         help="Port for the web dashboard (default: 8000).",
     )
+    parser.add_argument(
+        "--retag-existing",
+        action="store_true",
+        help="Recompute tags for all existing sessions using current config/tags.yaml rules.",
+    )
     args = parser.parse_args()
 
-    if args.web:
+    if args.retag_existing:
+        retag_existing_sessions(args.config)
+    elif args.web:
         start_web_dashboard(args.port)
     else:
         settings = load_settings(args.config)
@@ -48,6 +59,58 @@ def main() -> None:
             service.repository.close()
         else:
             service.run_forever()
+
+
+def retag_existing_sessions(config_path: str) -> None:
+    """Retag all existing sessions in DB with current tagging rules."""
+    settings = load_settings(config_path)
+    configure_logging(settings.log_path)
+
+    repository = ActivityRepository(settings.database_path)
+    try:
+        backup_path = repository.backup_database()
+        print(f"Backup created: {backup_path}")
+
+        tagger = ActivityTagger()
+        rows = repository.all_sessions()
+        total = len(rows)
+        updated = 0
+
+        for row in rows:
+            session = _session_from_row(row)
+            new_tag = tagger.tag_session(session)
+            old_tag = row["tag"]
+            if new_tag != old_tag:
+                repository.update_session_tag(int(row["id"]), new_tag)
+                updated += 1
+
+        print(f"Retag complete: updated {updated} of {total} sessions")
+    finally:
+        repository.close()
+
+
+def _session_from_row(row: dict) -> ActivitySession:
+    return ActivitySession(
+        start_time=_parse_datetime(str(row["start_time"])),
+        end_time=_parse_datetime(str(row["end_time"])),
+        duration_sec=int(row["duration_sec"]),
+        app_name=str(row["app_name"]),
+        process_name=row["process_name"],
+        window_title=row["window_title"],
+        browser_domain=row["browser_domain"],
+        is_idle=bool(row["is_idle"]),
+        idle_seconds=int(row["idle_seconds"]),
+        platform=str(row["platform"]),
+        git_repo=row["git_repo"],
+        git_branch=row["git_branch"],
+        context_switches=int(row["context_switches"]),
+        tag=row["tag"],
+    )
+
+
+def _parse_datetime(value: str) -> datetime:
+    # sqlite rows may contain ISO timestamps with/without timezone.
+    return datetime.fromisoformat(value)
 
 
 def start_web_dashboard(port: int = 8000) -> None:
