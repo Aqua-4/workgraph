@@ -434,10 +434,15 @@ uv run python main.py --once
 Start the web dashboard to visualize your activity:
 
 ```bash
-uv run python main.py --web
+# Use the launcher script (default port 3000)
+./run.sh              # Linux/macOS
+run.bat               # Windows
+
+# Or start manually with custom port
+uv run python main.py --web --port 8000
 ```
 
-Then open your browser to: **http://127.0.0.1:8000**
+Then open your browser to: **http://127.0.0.1:3000** (or your custom port)
 
 Features:
 - **Dashboard**: See your time allocation by goal and app
