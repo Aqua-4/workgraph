@@ -416,11 +416,30 @@ Potential capabilities:
 
 ## Version 1 Quick Start
 
-Install dependencies and run the collector with uv:
+### Option 1: Unified (Collector + Dashboard)
+
+Run everything with a single command:
 
 ```bash
-uv sync
-uv run python main.py
+# Start both collector and dashboard together
+./run-dashboard.sh                    # Linux/macOS
+# or
+run-dashboard.bat                     # Windows
+```
+
+Then open your browser to: **http://127.0.0.1:4000**
+
+The collector runs in the background continuously collecting data, while the dashboard displays it at the same time.
+
+### Option 2: Collector Only
+
+If you only want to collect data without viewing it:
+
+```bash
+# Run the collector continuously
+./run.sh                              # Linux/macOS
+# or
+run.bat                               # Windows
 ```
 
 Collect one sample and exit:
@@ -429,20 +448,25 @@ Collect one sample and exit:
 uv run python main.py --once
 ```
 
-### Web Dashboard (V1.1+)
+### Option 3: Manual Commands
 
-Start the web dashboard to visualize your activity:
+For more control, use uv directly:
 
 ```bash
-# Use the launcher script (default port 3000)
-./run.sh              # Linux/macOS
-run.bat               # Windows
+# Install dependencies
+uv sync
 
-# Or start manually with custom port
-uv run python main.py --web --port 8000
+# Run collector
+uv run python main.py
+
+# Run just the dashboard (in another terminal)
+uv run python main.py --web --port 4000
+
+# Run both together
+uv run python -m services.unified_launcher
 ```
 
-Then open your browser to: **http://127.0.0.1:3000** (or your custom port)
+### Web Dashboard (V1.1+)
 
 Features:
 - **Dashboard**: See your time allocation by goal and app

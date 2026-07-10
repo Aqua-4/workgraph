@@ -4,51 +4,53 @@ The WorkGraph web dashboard provides a visual interface to view your activity da
 
 ## Quick Start
 
-Start the dashboard server with the launcher scripts:
+### Unified (Recommended)
 
-**Linux/macOS:**
+Start both the collector and dashboard together with one command:
+
 ```bash
-./run.sh
+# Linux/macOS
+./run-dashboard.sh
+
+# Windows
+run-dashboard.bat
 ```
 
-**Windows:**
-```cmd
-run.bat
-```
+Then open your browser to: **http://127.0.0.1:4000**
 
-Then open your browser to: **http://127.0.0.1:3000**
+The collector runs continuously in the background, and the dashboard displays data in real-time.
 
 ### Manual Start
 
-Or start manually on any port:
+Start the dashboard server directly:
 
 ```bash
-uv run python main.py --web
+uv run python main.py --web --port 4000
 ```
+
+Then open your browser to: **http://127.0.0.1:4000**
 
 Customize the port:
 
 ```bash
-uv run python main.py --web --port 8000
-```
-
-### Running Collector and Dashboard Together
-
-To run the collector and dashboard simultaneously on different ports:
-
-**Terminal 1 - Collector (collects background data):**
-```bash
-uv run python main.py
-```
-
-**Terminal 2 - Dashboard (web server on port 3000):**
-```bash
-./run.sh                    # Linux/macOS
-# or
 uv run python main.py --web --port 3000
 ```
 
-Both will run continuously and share the same SQLite database.
+### Running Collector and Dashboard Separately
+
+If you want to run them in separate terminals:
+
+**Terminal 1 - Collector:**
+```bash
+./run.sh          # Linux/macOS
+# or
+run.bat           # Windows
+```
+
+**Terminal 2 - Dashboard:**
+```bash
+uv run python main.py --web --port 4000
+```
 
 ## Features
 
@@ -137,8 +139,6 @@ No external CSS frameworks, no JavaScript bundling, no frontend build step. Desi
 uv run python main.py --web --port 8001
 ```
 
-Or edit the launcher script to use a different default port.
-
 ### No data appears
 
 1. Run the collector first: `uv run python main.py --once`
@@ -171,15 +171,3 @@ uv run python main.py
 # Terminal 2: Run dashboard
 uv run python main.py --web --port 8000
 ```
-
-## Launcher Scripts
-
-WorkGraph includes launcher scripts (`run.sh` for Linux/macOS, `run.bat` for Windows) that start the web dashboard on **port 3000**:
-
-- They avoid interfering with development environments
-- Can be added to Task Scheduler (Windows) or cron (Linux/macOS)
-- Edit the scripts to change the default port
-
-**Edit launcher port:**
-- `run.sh`: Change `--port 3000` to desired port
-- `run.bat`: Change `--port 3000` to desired port
