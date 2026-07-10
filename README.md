@@ -350,6 +350,33 @@ Interview Prep      0h
 
 Compare this against how you *felt* you spent your time—often revealing unexpected patterns.
 
+### Re-tag Existing Sessions After Rule Changes
+
+When you update `config/tags.yaml`, existing rows in `activity.db` keep their old tags until re-tagged.
+
+Run a full re-tag migration:
+
+```bash
+uv run python main.py --retag-existing
+```
+
+What this does:
+- Creates a timestamped backup in `backups/` first
+- Recomputes tags for all stored sessions using current rules
+- Updates only sessions where the tag changed
+
+Use custom paths if needed:
+
+```bash
+uv run python main.py --retag-existing --tags-config config/tags.yaml --backup-dir backups
+```
+
+If the new rules are not correct, restore the previous snapshot:
+
+```bash
+uv run python main.py --restore-backup backups/activity-YYYYMMDD-HHMMSS.db
+```
+
 ---
 
 ## Goals

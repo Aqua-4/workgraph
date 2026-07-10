@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -26,8 +26,8 @@ class ActivityTaggerTests(unittest.TestCase):
         """Should tag sessions by git repository."""
         tagger = ActivityTagger()
         session = ActivitySession(
-            start_time=datetime(2026, 7, 9, 10, 0, tzinfo=timezone.utc),
-            end_time=datetime(2026, 7, 9, 10, 5, tzinfo=timezone.utc),
+            start_time=datetime(2026, 7, 9, 10, 0, tzinfo=UTC),
+            end_time=datetime(2026, 7, 9, 10, 5, tzinfo=UTC),
             duration_sec=300,
             app_name="Code",
             process_name="Code.exe",
@@ -36,7 +36,7 @@ class ActivityTaggerTests(unittest.TestCase):
             is_idle=False,
             idle_seconds=0,
             platform="windows",
-            git_repo="mcp-platform",
+            git_repo="aicoe-enterprise-mcp-api-backend",
             git_branch="feature/rbac",
             context_switches=0,
         )
@@ -48,8 +48,8 @@ class ActivityTaggerTests(unittest.TestCase):
         """Should tag sessions by browser domain."""
         tagger = ActivityTagger()
         session = ActivitySession(
-            start_time=datetime(2026, 7, 9, 10, 0, tzinfo=timezone.utc),
-            end_time=datetime(2026, 7, 9, 10, 5, tzinfo=timezone.utc),
+            start_time=datetime(2026, 7, 9, 10, 0, tzinfo=UTC),
+            end_time=datetime(2026, 7, 9, 10, 5, tzinfo=UTC),
             duration_sec=300,
             app_name="Chrome",
             process_name="chrome.exe",
@@ -70,8 +70,8 @@ class ActivityTaggerTests(unittest.TestCase):
         """Should return None if no rule matches."""
         tagger = ActivityTagger()
         session = ActivitySession(
-            start_time=datetime(2026, 7, 9, 10, 0, tzinfo=timezone.utc),
-            end_time=datetime(2026, 7, 9, 10, 5, tzinfo=timezone.utc),
+            start_time=datetime(2026, 7, 9, 10, 0, tzinfo=UTC),
+            end_time=datetime(2026, 7, 9, 10, 5, tzinfo=UTC),
             duration_sec=300,
             app_name="Slack",
             process_name="slack.exe",

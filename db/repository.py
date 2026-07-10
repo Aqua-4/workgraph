@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import shutil
 import sqlite3
-from datetime import datetime
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 from workgraph.models import ActivitySession
 
@@ -38,7 +39,7 @@ class ActivityRepository:
                 self._connection.commit()
             except sqlite3.OperationalError:
                 pass  # column already exists
-        
+
         # Create git_activity table if it doesn't exist
         try:
             self._connection.execute("""
@@ -123,6 +124,42 @@ class ActivityRepository:
         for session in sessions:
             self.save_session(session)
 
+    def all_sessions(self) -> list[sqlite3.Row]:
+        cursor = self._connection.execute(
+            """
+            SELECT *
+            FROM activity_sessions
+            ORDER BY start_time ASC
+            """
+        )
+        return list(cursor.fetchall())
+
+    def update_session_tag(self, session_id: int, tag: str | None) -> None:
+        self._connection.execute(
+            """
+            UPDATE activity_sessions
+            SET tag = ?
+            WHERE id = ?
+            """,
+            (tag, session_id),
+        )
+        self._connection.commit()
+
+    def backup_database(self, backup_dir: str | Path = "backups") -> Path:
+        backup_directory = Path(backup_dir)
+        backup_directory.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        backup_path = backup_directory / f"activity-{timestamp}.db"
+
+        backup_connection = sqlite3.connect(backup_path)
+        try:
+            self._connection.backup(backup_connection)
+            backup_connection.commit()
+        finally:
+            backup_connection.close()
+
+        return backup_path
+
     def close(self) -> None:
         self._connection.close()
 
@@ -135,3 +172,13 @@ class ActivityRepository:
 
 def _format_datetime(value: datetime) -> str:
     return value.isoformat(timespec="seconds")
+
+
+def restore_database_from_backup(db_path: str | Path, backup_path: str | Path) -> None:
+    source = Path(backup_path)
+    if not source.exists():
+        raise FileNotFoundError(f"Backup not found: {source}")
+
+    destination = Path(db_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
