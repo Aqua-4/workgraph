@@ -29,9 +29,6 @@ class ActivitySample:
     platform: str
     git_repo: str | None = None
     git_branch: str | None = None
-    git_commit_hash: str | None = None
-    git_modified_files: str | None = None
-    context_switches: int = 0
 
 
 @dataclass(frozen=True)
@@ -48,8 +45,6 @@ class ActivitySession:
     platform: str
     git_repo: str | None = None
     git_branch: str | None = None
-    git_commit_hash: str | None = None
-    git_modified_files: str | None = None
     context_switches: int = 0
     tag: str | None = None
 

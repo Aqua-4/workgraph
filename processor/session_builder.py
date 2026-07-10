@@ -18,7 +18,7 @@ class SessionBuilder:
 
         if self._belongs_to_current(sample):
             # Check if app/window changed (context switch)
-            context_switches = sample.context_switches
+            context_switches = self._current.context_switches
             if (
                 self._current.app_name != sample.app_name
                 or self._current.window_title != sample.window_title
@@ -34,8 +34,6 @@ class SessionBuilder:
                 idle_seconds=sample.idle_seconds,
                 git_repo=sample.git_repo,
                 git_branch=sample.git_branch,
-                git_commit_hash=sample.git_commit_hash,
-                git_modified_files=sample.git_modified_files,
                 context_switches=context_switches,
             )
             return None
@@ -83,9 +81,7 @@ def _session_from_sample(sample: ActivitySample) -> ActivitySession:
         platform=sample.platform,
         git_repo=sample.git_repo,
         git_branch=sample.git_branch,
-        git_commit_hash=sample.git_commit_hash,
-        git_modified_files=sample.git_modified_files,
-        context_switches=sample.context_switches,
+        context_switches=0,
     )
 
 

@@ -24,8 +24,6 @@ class ActivityRepositoryTests(unittest.TestCase):
                 platform="windows",
                 git_repo=None,
                 git_branch=None,
-                git_commit_hash=None,
-                git_modified_files=None,
                 context_switches=0,
                 tag=None,
             )

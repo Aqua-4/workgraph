@@ -81,13 +81,6 @@ class CollectorService:
         idle_state = self.idle_tracker.get_idle_state()
         git_activity = self.git_tracker.get_activity()
 
-        # Serialize modified files as comma-separated list
-        git_modified_files = (
-            ",".join(git_activity.modified_files)
-            if git_activity.modified_files
-            else None
-        )
-
         sample = ActivitySample(
             observed_at=utc_now(),
             app_name=active_window.app_name,
@@ -99,9 +92,6 @@ class CollectorService:
             platform=active_window.platform,
             git_repo=git_activity.repo_name,
             git_branch=git_activity.branch,
-            git_commit_hash=git_activity.commit_hash,
-            git_modified_files=git_modified_files,
-            context_switches=0,
         )
 
         completed = self.session_builder.ingest(sample)

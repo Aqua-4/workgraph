@@ -1,8 +1,8 @@
 # WorkGraph
 
-> Privacy-first work telemetry for engineers.
+> Local-first work telemetry and goal attribution for engineers.
 
-WorkGraph is a local-first activity intelligence platform that helps engineers understand how their workday is spent across coding, meetings, research, documentation, and administrative tasks.
+WorkGraph is a privacy-first activity intelligence platform that helps engineers understand how their workday is spent and whether their time aligns with their goals. Unlike generic time trackers, WorkGraph attributes activities to meaningful work categories (Client Delivery, Learning, Interview Prep, Personal Projects, etc.) so you can see if you're spending enough time on what matters.
 
 Unlike traditional productivity trackers, WorkGraph focuses on collecting structured activity metadata that can later be analyzed to generate actionable insights about focus, context switching, workload distribution, and work habits.
 
@@ -35,9 +35,37 @@ Future versions will introduce analytics, dashboards, and AI-powered coaching.
 
 ---
 
+## Goal Attribution
+
+WorkGraph's core innovation is **automatic categorization** of activities into meaningful goals and projects. Instead of just tracking time in applications, WorkGraph answers:
+
+**This Week:**
+
+```text
+Client Delivery       38 hours
+Meetings             12 hours
+Interview Prep        2 hours
+Learning              1 hour
+Personal Projects    0.5 hours
+```
+
+You can configure custom tags based on:
+
+* **Git repositories** — Map projects to goals
+* **Browser domains** — Track learning sites separately from entertainment
+* **Window titles & keywords** — Catch ad-hoc work patterns
+
+This enables powerful insights:
+
+* "I intended to spend 5 hours on NZ Masters this week, but only managed 0.5 hours"
+* "I'm in 8 hours of meetings per day—that's 40% of my workday"
+* "I'm neglecting professional development"
+
+---
+
 ## Features
 
-### Version 1 — Collection Foundation
+### Version 1.0 — Collection Foundation
 
 * Active application tracking
 * Window title tracking
@@ -49,23 +77,56 @@ Future versions will introduce analytics, dashboards, and AI-powered coaching.
 
 ### Version 1.1 — Work Attribution
 
-* Git repository tracking (branch, commits, modified files)
+* Git repository tracking (branch detection, modified file metadata)
 * Activity tagging (automatic categorization by rules)
 * Context-switch counting
 * Advanced session splitting
 
-### Planned
+### Version 1.2 — Visualization & Multi-Device
 
-* Calendar integration (Outlook/Teams meetings)
-* Focus session analytics
-* Local dashboard
+* Local web dashboard
 * Timeline view
+* PostgreSQL backend for multi-device sync
+* Activity export (JSON, CSV)
+
+### Version 2.0 — Analytics Engine
+
+* Goal drift detection (alerts when time allocation diverges from priorities)
+* Focus block analysis
+* Weekly/monthly reports
+* Burnout risk indicators
+* Trend analysis
+
+### Version 3.0 — Intelligence
+
 * AI-powered coaching
-* Raspberry Pi synchronization
+* Productivity recommendations
+* Goal alignment analysis
+* Team insights (voluntary sharing)
+
+### Future
+
+* Meeting detection (Teams, Zoom, Google Meet, Webex)
+* Raspberry Pi server for centralized sync
+* Mobile companion app
 
 ---
 
-## Privacy First
+## Design Principles
+
+**Local First** — All data is collected and stored on your machine. No cloud required.
+
+**Privacy First** — No screenshots, keystrokes, or personal data collection. You control what you share.
+
+**Vendor Neutral** — Works with any editor, browser, or tools. No lock-in.
+
+**Low Resource Usage** — Minimal CPU, memory, and disk impact. Designed to run continuously.
+
+**LLM Optional** — AI coaching is opt-in. Core features work without external services.
+
+---
+
+## Privacy
 
 WorkGraph is designed with privacy as a core principle.
 
@@ -77,7 +138,7 @@ WorkGraph is designed with privacy as a core principle.
 * Browser domains
 * Idle time
 * Session duration
-* **Git repository, branch, and recent commits** (v1.1+)
+* **Git repository and branch** (v1.1+)
 * **Activity tags** (based on configurable rules)
 * System events
 

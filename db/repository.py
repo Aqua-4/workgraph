@@ -27,10 +27,10 @@ class ActivityRepository:
             "ALTER TABLE activity_sessions ADD COLUMN idle_seconds INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE activity_sessions ADD COLUMN git_repo TEXT",
             "ALTER TABLE activity_sessions ADD COLUMN git_branch TEXT",
-            "ALTER TABLE activity_sessions ADD COLUMN git_commit_hash TEXT",
-            "ALTER TABLE activity_sessions ADD COLUMN git_modified_files TEXT",
             "ALTER TABLE activity_sessions ADD COLUMN context_switches INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE activity_sessions ADD COLUMN tag TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN git_commit_hash TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN git_modified_files TEXT",
         ]
         for migration in migrations:
             try:
@@ -38,6 +38,33 @@ class ActivityRepository:
                 self._connection.commit()
             except sqlite3.OperationalError:
                 pass  # column already exists
+        
+        # Create git_activity table if it doesn't exist
+        try:
+            self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS git_activity (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    repo TEXT NOT NULL,
+                    branch TEXT,
+                    commit_hash TEXT,
+                    file_name TEXT,
+                    event_type TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (session_id) REFERENCES activity_sessions(id) ON DELETE CASCADE
+                )
+            """)
+            self._connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_git_activity_session_id
+                    ON git_activity (session_id)
+            """)
+            self._connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_git_activity_repo
+                    ON git_activity (repo)
+            """)
+            self._connection.commit()
+        except sqlite3.OperationalError:
+            pass
 
     def save_session(self, session: ActivitySession) -> int:
         cursor = self._connection.execute(
@@ -54,13 +81,11 @@ class ActivityRepository:
                 idle_seconds,
                 git_repo,
                 git_branch,
-                git_commit_hash,
-                git_modified_files,
                 context_switches,
                 tag,
                 platform
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 _format_datetime(session.start_time),
@@ -74,8 +99,6 @@ class ActivityRepository:
                 session.idle_seconds,
                 session.git_repo,
                 session.git_branch,
-                session.git_commit_hash,
-                session.git_modified_files,
                 session.context_switches,
                 session.tag,
                 session.platform,

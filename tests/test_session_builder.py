@@ -18,9 +18,6 @@ def sample(offset: int, app: str = "Code", idle: bool = False) -> ActivitySample
         platform="windows",
         git_repo=None,
         git_branch=None,
-        git_commit_hash=None,
-        git_modified_files=None,
-        context_switches=0,
     )
 
 

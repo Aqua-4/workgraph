@@ -4,6 +4,7 @@ tags:
     repos:
       - compass
       - atlas
+      - mcp-platform
     domains: []
     keywords: []
 

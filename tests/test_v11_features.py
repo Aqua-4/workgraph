@@ -38,8 +38,6 @@ class ActivityTaggerTests(unittest.TestCase):
             platform="windows",
             git_repo="mcp-platform",
             git_branch="feature/rbac",
-            git_commit_hash="abc123",
-            git_modified_files="rbac_service.py,auth.py",
             context_switches=0,
         )
 
@@ -62,8 +60,6 @@ class ActivityTaggerTests(unittest.TestCase):
             platform="windows",
             git_repo=None,
             git_branch=None,
-            git_commit_hash=None,
-            git_modified_files=None,
             context_switches=0,
         )
 
@@ -86,8 +82,6 @@ class ActivityTaggerTests(unittest.TestCase):
             platform="windows",
             git_repo=None,
             git_branch=None,
-            git_commit_hash=None,
-            git_modified_files=None,
             context_switches=0,
         )
 

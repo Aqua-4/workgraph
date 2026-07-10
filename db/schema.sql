@@ -13,12 +13,22 @@ CREATE TABLE IF NOT EXISTS activity_sessions (
     idle_seconds INTEGER NOT NULL DEFAULT 0,
     git_repo TEXT,
     git_branch TEXT,
-    git_commit_hash TEXT,
-    git_modified_files TEXT,
     context_switches INTEGER NOT NULL DEFAULT 0,
     tag TEXT,
     platform TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS git_activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    repo TEXT NOT NULL,
+    branch TEXT,
+    commit_hash TEXT,
+    file_name TEXT,
+    event_type TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES activity_sessions(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_activity_sessions_start_time
@@ -29,3 +39,9 @@ CREATE INDEX IF NOT EXISTS idx_activity_sessions_app_name
 
 CREATE INDEX IF NOT EXISTS idx_activity_sessions_browser_domain
     ON activity_sessions (browser_domain);
+
+CREATE INDEX IF NOT EXISTS idx_git_activity_session_id
+    ON git_activity (session_id);
+
+CREATE INDEX IF NOT EXISTS idx_git_activity_repo
+    ON git_activity (repo);
