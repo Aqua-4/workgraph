@@ -456,7 +456,7 @@ run-dashboard.bat                     # Windows
 
 Then open your browser to: **http://127.0.0.1:4000**
 
-The collector runs in the background continuously collecting data, while the dashboard displays it at the same time.
+The collector runs in self-healing mode (auto-restarts on crashes), while the dashboard displays data at the same time.
 
 ### Option 2: Collector Only
 
@@ -468,6 +468,8 @@ If you only want to collect data without viewing it:
 # or
 run.bat                               # Windows
 ```
+
+`run.sh` and `run.bat` use a self-healing supervisor by default in continuous mode, so collector crashes are automatically restarted.
 
 Collect one sample and exit:
 

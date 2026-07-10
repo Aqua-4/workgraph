@@ -18,7 +18,7 @@ run-dashboard.bat
 
 Then open your browser to: **http://127.0.0.1:4000**
 
-The collector runs continuously in the background, and the dashboard displays data in real-time.
+The collector runs in self-healing mode (auto-restarts if it crashes), and the dashboard displays data in real-time.
 
 ### Manual Start
 
@@ -46,6 +46,8 @@ If you want to run them in separate terminals:
 # or
 run.bat           # Windows
 ```
+
+`run.sh` / `run.bat` are self-healing in continuous mode.
 
 **Terminal 2 - Dashboard:**
 ```bash
@@ -95,18 +97,18 @@ The dashboard uses:
 ### View last 7 days of activity:
 
 ```bash
-uv run python main.py --web --port 8000
-# Open http://127.0.0.1:8000
+uv run python main.py --web --port 4000
+# Open http://127.0.0.1:4000
 ```
 
 ### Filter by tag:
 
-Visit: `http://127.0.0.1:8000/timeline?tag=Client%20Delivery&days=14`
+Visit: `http://127.0.0.1:4000/timeline?tag=Client%20Delivery&days=14`
 
 ### Get JSON stats:
 
 ```bash
-curl http://127.0.0.1:8000/api/stats?days=7 | jq .
+curl http://127.0.0.1:4000/api/stats?days=7 | jq .
 ```
 
 ## Architecture
@@ -141,9 +143,9 @@ uv run python main.py --web --port 8001
 
 ### No data appears
 
-1. Run the collector first: `uv run python main.py --once`
-2. Let it collect for a few minutes: `uv run python main.py`
-3. Then start the dashboard: `uv run python main.py --web`
+1. Run unified mode: `./run-dashboard.sh` (or `run-dashboard.bat` on Windows)
+2. Or run collector self-healing mode: `./run.sh` and dashboard in another terminal
+3. For a quick sample, use: `uv run python main.py --once`
 
 ### Server won't start
 
@@ -166,8 +168,8 @@ Example:
 
 ```bash
 # Terminal 1: Run collector
-uv run python main.py
+./run.sh
 
 # Terminal 2: Run dashboard
-uv run python main.py --web --port 8000
+uv run python main.py --web --port 4000
 ```

@@ -12,4 +12,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-exec uv run python main.py "$@"
+# Self-healing mode is default for continuous collection.
+# Pass through one-shot and web modes directly to main.py.
+for arg in "$@"; do
+	if [[ "$arg" == "--once" || "$arg" == "--web" ]]; then
+		exec uv run python main.py "$@"
+	fi
+done
+
+exec uv run python -m services.collector_supervisor "$@"

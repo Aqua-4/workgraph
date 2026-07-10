@@ -15,4 +15,14 @@
 setlocal
 cd /d "%~dp0"
 
-uv run python main.py %*
+set "USE_MAIN=0"
+for %%A in (%*) do (
+	if /I "%%~A"=="--once" set "USE_MAIN=1"
+	if /I "%%~A"=="--web" set "USE_MAIN=1"
+)
+
+if "%USE_MAIN%"=="1" (
+	uv run python main.py %*
+) else (
+	uv run python -m services.collector_supervisor %*
+)
