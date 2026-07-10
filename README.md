@@ -501,19 +501,39 @@ Supported v1 browser history paths include Brave, Chrome/Chromium, Edge, and Fir
 
 Use the included launcher scripts to run WorkGraph automatically on login or startup.
 
-#### Windows — Task Scheduler
+#### Windows — Launch Hidden Task
+
+Use Task Scheduler to launch WorkGraph silently (no visible cmd window).
 
 1. Open **Task Scheduler** and choose **Create Task**.
-2. **General** tab: give it a name (e.g. `WorkGraph Collector`). Optionally tick *Run whether user is logged on or not*.
+2. **General** tab: give it a name (e.g. `WorkGraph Collector (Hidden)`).
 3. **Triggers** tab: click *New* → *At log on* (or *At startup*).
-4. **Actions** tab: click *New* → *Start a program* → browse to `run.bat` in the project folder.
-5. **Settings** tab: uncheck *Stop the task if it runs longer than*.
-6. Click *OK* and enter your password if prompted.
+4. **Actions** tab: click *New* → *Start a program*.
+5. Set **Program/script** to:
 
-To run a one-shot snapshot on a fixed schedule instead of running continuously, set the trigger interval you want and point the action to:
-
+```text
+wscript.exe
 ```
-run.bat --once
+
+6. Set **Add arguments (optional)** to:
+
+```text
+//B //NoLogo "C:\path\to\workgraph\run-hidden.vbs"
+```
+
+7. Set **Start in (optional)** to your project folder:
+
+```text
+C:\path\to\workgraph
+```
+
+8. **Settings** tab: uncheck *Stop the task if it runs longer than*.
+9. Click *OK*.
+
+To run a one-shot snapshot on a fixed schedule instead of running continuously, keep the same program and use this argument instead:
+
+```text
+//B //NoLogo "C:\path\to\workgraph\run-hidden.vbs" --once
 ```
 
 #### Linux — cron
