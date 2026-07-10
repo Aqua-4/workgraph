@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - WorkGraph{% endblock %}
+
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div>
+    <h2>This Week Overview</h2>
+
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-label">Total Active Time</div>
+            <div class="stat-value">{{ "%.1f"|format(stats.total_hours) }}h</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                {{ "%.0f"|format(stats.total_seconds / 60) }} minutes
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Categories Tagged</div>
+            <div class="stat-value">{{ stats.tag_stats|length }}</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                active projects
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Apps Used</div>
+            <div class="stat-value">{{ stats.app_stats|length }}</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                different applications
+            </div>
+        </div>
+    </div>
+
+    <h2>Time by Goal (Tagged)</h2>
+    <div class="card">
+        {% if stats.tag_stats %}
+        <div class="bar-chart">
+            {% set max_seconds = stats.tag_stats.values()|max %}
+            {% for tag, seconds in stats.tag_stats.items()|sort(attribute='1', reverse=True) %}
+            <div class="bar-item">
+                <div class="bar-label">
+                    <span class="tag-badge">{{ tag }}</span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
+                        {% if (seconds / max_seconds * 100) > 15 %}
+                        {{ "%.1f"|format(seconds / 3600) }}h
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #999; padding: 20px; text-align: center;">No tagged activities yet. Configure tags in config/tags.yaml</p>
+        {% endif %}
+    </div>
+
+    <h2>Time by Application</h2>
+    <div class="card">
+        {% if stats.app_stats %}
+        <div class="bar-chart">
+            {% set max_seconds = stats.app_stats.values()|max %}
+            {% for app, seconds in stats.app_stats.items()|sort(attribute='1', reverse=True) %}
+            <div class="bar-item">
+                <div class="bar-label">{{ app }}</div>
+                <div class="bar-container">
+                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
+                        {% if (seconds / max_seconds * 100) > 15 %}
+                        {{ "%.1f"|format(seconds / 3600) }}h
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #999; padding: 20px; text-align: center;">No activity data yet. Run the collector.</p>
+        {% endif %}
+    </div>
+
+    <h2>Quick Tips</h2>
+    <div class="card">
+        <ul style="margin-left: 20px; line-height: 1.8;">
+            <li><strong>Goal Attribution:</strong> Edit <code>config/tags.yaml</code> to tag your projects and goals.</li>
+            <li><strong>Check Timeline:</strong> Visit the <a href="/timeline">Timeline</a> view to see a detailed chronological breakdown.</li>
+            <li><strong>More Data:</strong> Run the collector for a week to see meaningful patterns emerge.</li>
+            <li><strong>Meeting Detection:</strong> Version 1.2 will auto-detect Teams, Zoom, and Meet meetings.</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

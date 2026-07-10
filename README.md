@@ -63,6 +63,33 @@ This enables powerful insights:
 
 ---
 
+## Goal Drift Detection
+
+WorkGraph's future **Goal Drift Analysis** feature will alert you when your actual time allocation diverges from your intended priorities.
+
+**Example Warning:**
+
+```
+This Week
+─────────────────────────────────────
+Client Delivery      42h  ✓ On track
+Meetings            11h  ⚠ Above target (5h)
+Learning             1h  🚨 Way below target (5h)
+NZ Masters           0h  🚨 Neglected (5h planned)
+Personal Projects   0.5h ✓ On track
+─────────────────────────────────────
+
+⚠️ Alert: You spent only 1.5 hours on long-term
+   goals this week. That's 3% of your time.
+   
+Recommendation: Block 1-2 hours daily for 
+learning and NZ Masters work.
+```
+
+This kind of insight isn't commonly available in time tracking tools, but it's exactly what busy engineers need to stay aligned with their goals.
+
+---
+
 ## Features
 
 ### Version 1.0 — Collection Foundation
@@ -106,7 +133,7 @@ This enables powerful insights:
 
 ### Future
 
-* Meeting detection (Teams, Zoom, Google Meet, Webex)
+* **Meeting detection** — Automatically detect meeting time from Teams, Zoom, Google Meet, and Webex windows
 * Raspberry Pi server for centralized sync
 * Mobile companion app
 
@@ -401,6 +428,25 @@ Collect one sample and exit:
 ```bash
 uv run python main.py --once
 ```
+
+### Web Dashboard (V1.1+)
+
+Start the web dashboard to visualize your activity:
+
+```bash
+uv run python main.py --web
+```
+
+Then open your browser to: **http://127.0.0.1:8000**
+
+Features:
+- **Dashboard**: See your time allocation by goal and app
+- **Timeline**: Chronological view of all activities with filtering
+- **API**: Access raw data via REST endpoints
+
+For more details, see [DASHBOARD.md](DASHBOARD.md).
+
+### Run Tests
 
 Run the v1 tests:
 

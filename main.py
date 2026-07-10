@@ -22,18 +22,47 @@ def main() -> None:
         action="store_true",
         help="Collect one sample and exit after flushing it to SQLite.",
     )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Start the web dashboard (requires FastAPI and Uvicorn).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port for the web dashboard (default: 8000).",
+    )
     args = parser.parse_args()
 
-    settings = load_settings(args.config)
-    configure_logging(settings.log_path)
-
-    service = CollectorService(settings)
-    if args.once:
-        service.collect_once()
-        service.flush()
-        service.repository.close()
+    if args.web:
+        start_web_dashboard(args.port)
     else:
-        service.run_forever()
+        settings = load_settings(args.config)
+        configure_logging(settings.log_path)
+
+        service = CollectorService(settings)
+        if args.once:
+            service.collect_once()
+            service.flush()
+            service.repository.close()
+        else:
+            service.run_forever()
+
+
+def start_web_dashboard(port: int = 8000) -> None:
+    """Start the web dashboard server."""
+    try:
+        import uvicorn
+        from api.app import app
+    except ImportError:
+        print("Error: FastAPI and Uvicorn required for web dashboard.")
+        print("Install with: uv sync")
+        return
+
+    print(f"Starting WorkGraph Dashboard on http://127.0.0.1:{port}")
+    print("Press Ctrl+C to stop the server")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 
 def load_settings(path: str) -> CollectorSettings:

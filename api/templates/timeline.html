@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Timeline - WorkGraph{% endblock %}
+
+{% block nav_timeline %}active{% endblock %}
+
+{% block content %}
+<div>
+    <h2>Activity Timeline</h2>
+
+    <div class="card" style="margin-bottom: 20px;">
+        <form method="get" style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <div>
+                <label for="days">Past Days:</label>
+                <select name="days" id="days" onchange="this.form.submit()" style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="1" {% if days == 1 %}selected{% endif %}>1 day</option>
+                    <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
+                    <option value="14" {% if days == 14 %}selected{% endif %}>14 days</option>
+                    <option value="30" {% if days == 30 %}selected{% endif %}>30 days</option>
+                </select>
+            </div>
+            <div>
+                <label for="tag">Filter by Tag:</label>
+                <input type="text" name="tag" id="tag" value="{{ selected_tag or '' }}" placeholder="e.g., Client Delivery" style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <div>
+                <label for="app">Filter by App:</label>
+                <input type="text" name="app" id="app" value="{{ selected_app or '' }}" placeholder="e.g., VSCode" style="padding: 6px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            <button type="submit" style="padding: 6px 15px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer;">Filter</button>
+        </form>
+    </div>
+
+    <div class="card">
+        {% if sessions %}
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 20%;">Time</th>
+                    <th style="width: 15%;">App</th>
+                    <th style="width: 15%;">Duration</th>
+                    <th style="width: 20%;">Window / Domain</th>
+                    <th style="width: 10%;">Tag</th>
+                    <th style="width: 10%;">Repo</th>
+                    <th style="width: 10%;">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for session in sessions %}
+                <tr>
+                    <td class="time-small">
+                        {{ session.start_time[:16] }}<br>
+                        {% if session.start_time[:10] != session.end_time[:10] %}
+                        <span style="color: #999;">→ {{ session.end_time[:16] }}</span>
+                        {% else %}
+                        <span style="color: #999;">→ {{ session.end_time[11:16] }}</span>
+                        {% endif %}
+                    </td>
+                    <td><span class="app-badge">{{ session.app_name }}</span></td>
+                    <td class="duration">
+                        {% set mins = (session.duration_sec / 60)|int %}
+                        {% if mins < 60 %}
+                            {{ mins }}m
+                        {% else %}
+                            {{ "%.1f"|format(mins / 60) }}h
+                        {% endif %}
+                    </td>
+                    <td class="time-small">
+                        {% if session.browser_domain %}
+                            <strong>{{ session.browser_domain }}</strong>
+                        {% elif session.window_title %}
+                            {{ session.window_title[:50] }}{% if session.window_title|length > 50 %}...{% endif %}
+                        {% else %}
+                            <em style="color: #ccc;">—</em>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if session.tag %}
+                            <span class="tag-badge">{{ session.tag }}</span>
+                        {% else %}
+                            <span style="color: #ccc; font-size: 0.85em;">untagged</span>
+                        {% endif %}
+                    </td>
+                    <td class="time-small">
+                        {% if session.git_repo %}
+                            <strong>{{ session.git_repo }}</strong>
+                            {% if session.git_branch %}
+                            <br><em>{{ session.git_branch }}</em>
+                            {% endif %}
+                        {% else %}
+                            <em style="color: #ccc;">—</em>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if session.is_idle %}
+                            <span style="color: #999; font-size: 0.85em;">idle</span>
+                        {% else %}
+                            <span style="color: #28a745; font-size: 0.85em;">●</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p style="text-align: center; margin-top: 20px; color: #999; font-size: 0.9em;">
+            Showing {{ sessions|length }} sessions from the past {{ days }} day(s)
+        </p>
+        {% else %}
+        <p style="text-align: center; padding: 40px; color: #999;">
+            No activities found. Try adjusting your filters or run the collector to gather data.
+        </p>
+        {% endif %}
+    </div>
+
+    <h2>Legend</h2>
+    <div class="card">
+        <ul style="margin-left: 20px; line-height: 2;">
+            <li><strong>App:</strong> Application or browser that was active</li>
+            <li><strong>Window / Domain:</strong> Window title or browser domain you were on</li>
+            <li><strong>Tag:</strong> Auto-categorized goal based on rules in config/tags.yaml</li>
+            <li><strong>Repo:</strong> Git repository detected (if applicable)</li>
+            <li><strong>Status:</strong> Green dot = active, gray = idle time</li>
+            <li><strong>Duration:</strong> How long the session lasted</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}
