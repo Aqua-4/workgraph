@@ -6,7 +6,9 @@ __pycache__/
 # WorkGraph runtime data
 activity.db
 activity.db-*
+backups/*.db
 logs/
+config/my-tags.yaml
 
 # C extensions
 *.so

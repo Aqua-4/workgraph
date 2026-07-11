@@ -33,7 +33,21 @@ idle_threshold_seconds: 600  # 10 minutes
 
 ### `tags.yaml` — Activity Categorization
 
-Defines rules to automatically categorize your activities into meaningful tags. This is the key file for organizing your work across different life goals.
+Defines fallback rules to automatically categorize your activities into meaningful tags.
+
+#### Personal Override (recommended)
+
+To keep personal rules safe from git pulls/merges:
+
+- Create `config/my-tags.yaml` with your own tags
+- Keep `config/tags.yaml` as the shared sample/default in the repo
+
+Load order used by the app:
+
+1. `config/my-tags.yaml` (if present)
+2. `config/tags.yaml` (fallback)
+
+This means users can pull updates without losing personal tagging rules.
 
 #### Structure
 

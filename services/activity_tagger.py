@@ -56,7 +56,10 @@ class ActivityTagger:
     def _load_rules(self, config_path: Path | str | None) -> dict[str, dict[str, Any]]:
         """Load tagging rules from YAML config."""
         if config_path is None:
-            config_path = Path(__file__).parent.parent / "config" / "tags.yaml"
+            config_dir = Path(__file__).parent.parent / "config"
+            custom_path = config_dir / "my-tags.yaml"
+            default_path = config_dir / "tags.yaml"
+            config_path = custom_path if custom_path.exists() else default_path
 
         config_path = Path(config_path)
         if not config_path.exists():
