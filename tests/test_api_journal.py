@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from api.app import app
+from api.app import app, get_summary_stats
 from db.repository import ActivityRepository
 from workgraph.models import ActivitySession
 
@@ -183,6 +183,67 @@ class JournalApiTests(unittest.TestCase):
         self.assertIn("Daily Trend (Last 7 Days)", response.text)
         self.assertIn(">Fri</td>", response.text)
         self.assertNotIn(">2026-07-10</td>", response.text)
+
+    def test_context_switch_rate_uses_session_transitions(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 9, 30, tzinfo=timezone.utc),
+                    duration_sec=1800,
+                    app_name="Code",
+                    process_name="Code",
+                    window_title="main.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=0,
+                    tag="Client Delivery",
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 9, 30, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc),
+                    duration_sec=1800,
+                    app_name="Chrome",
+                    process_name="chrome",
+                    window_title="docs",
+                    browser_domain="docs.python.org",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=0,
+                    tag="Learning",
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 10, 30, tzinfo=timezone.utc),
+                    duration_sec=1800,
+                    app_name="Terminal",
+                    process_name="bash",
+                    window_title="workgraph",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=0,
+                    tag="Operations",
+                )
+            )
+
+        stats = get_summary_stats(self.db_path, days=7)
+        self.assertEqual(stats["total_switches"], 2)
+        self.assertAlmostEqual(stats["switch_rate_per_hour"], 1.33, places=2)
 
 
 if __name__ == "__main__":

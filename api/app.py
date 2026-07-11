@@ -271,16 +271,45 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     )
     tagged_active_seconds = cursor.fetchone()["tagged_active_seconds"] or 0
 
-    # Context switching metrics
-    cursor.execute(
-        """
-        SELECT SUM(context_switches) as total_switches
-        FROM activity_sessions
-        WHERE start_time >= ? AND is_idle = 0
-        """,
-        (start_iso,),
-    )
-    total_switches = cursor.fetchone()["total_switches"] or 0
+    # Context switching metrics (derived from transitions between active sessions).
+    try:
+        cursor.execute(
+            """
+            WITH ordered AS (
+                SELECT
+                    start_time,
+                    app_name,
+                    window_title,
+                    browser_domain,
+                    LAG(app_name) OVER (ORDER BY start_time) as prev_app_name,
+                    LAG(window_title) OVER (ORDER BY start_time) as prev_window_title,
+                    LAG(browser_domain) OVER (ORDER BY start_time) as prev_browser_domain
+                FROM activity_sessions
+                WHERE start_time >= ? AND is_idle = 0
+            )
+            SELECT COUNT(*) as total_switches
+            FROM ordered
+            WHERE prev_app_name IS NOT NULL
+              AND (
+                  COALESCE(app_name, '') != COALESCE(prev_app_name, '')
+                  OR COALESCE(window_title, '') != COALESCE(prev_window_title, '')
+                  OR COALESCE(browser_domain, '') != COALESCE(prev_browser_domain, '')
+              )
+            """,
+            (start_iso,),
+        )
+        total_switches = cursor.fetchone()["total_switches"] or 0
+    except sqlite3.OperationalError:
+        # Fallback for SQLite builds without window function support.
+        cursor.execute(
+            """
+            SELECT SUM(context_switches) as total_switches
+            FROM activity_sessions
+            WHERE start_time >= ? AND is_idle = 0
+            """,
+            (start_iso,),
+        )
+        total_switches = cursor.fetchone()["total_switches"] or 0
 
     # Deep work / focus metrics
     cursor.execute(
@@ -342,13 +371,12 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     )
     repo_stats = {row["git_repo"]: row["total_seconds"] for row in cursor.fetchall()}
 
-    # Daily trend (active time, meeting proxy, switches)
+    # Daily trend (active time and meeting proxy)
     cursor.execute(
         """
         SELECT
             substr(start_time, 1, 10) as day,
             SUM(CASE WHEN is_idle = 0 THEN duration_sec ELSE 0 END) as active_seconds,
-            SUM(CASE WHEN is_idle = 0 THEN context_switches ELSE 0 END) as switches,
             SUM(
                 CASE
                     WHEN is_idle = 0 AND (
@@ -375,11 +403,65 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
         """,
         (start_iso,),
     )
+    daily_rows = list(cursor.fetchall())
+
+    daily_switches: dict[str, int] = {}
+    try:
+        cursor.execute(
+            """
+            WITH ordered AS (
+                SELECT
+                    substr(start_time, 1, 10) as day,
+                    start_time,
+                    app_name,
+                    window_title,
+                    browser_domain,
+                    LAG(app_name) OVER (
+                        PARTITION BY substr(start_time, 1, 10)
+                        ORDER BY start_time
+                    ) as prev_app_name,
+                    LAG(window_title) OVER (
+                        PARTITION BY substr(start_time, 1, 10)
+                        ORDER BY start_time
+                    ) as prev_window_title,
+                    LAG(browser_domain) OVER (
+                        PARTITION BY substr(start_time, 1, 10)
+                        ORDER BY start_time
+                    ) as prev_browser_domain
+                FROM activity_sessions
+                WHERE start_time >= ? AND is_idle = 0
+            )
+            SELECT day, COUNT(*) as switches
+            FROM ordered
+            WHERE prev_app_name IS NOT NULL
+              AND (
+                  COALESCE(app_name, '') != COALESCE(prev_app_name, '')
+                  OR COALESCE(window_title, '') != COALESCE(prev_window_title, '')
+                  OR COALESCE(browser_domain, '') != COALESCE(prev_browser_domain, '')
+              )
+            GROUP BY day
+            """,
+            (start_iso,),
+        )
+        daily_switches = {row["day"]: row["switches"] for row in cursor.fetchall()}
+    except sqlite3.OperationalError:
+        cursor.execute(
+            """
+            SELECT substr(start_time, 1, 10) as day,
+                   SUM(CASE WHEN is_idle = 0 THEN context_switches ELSE 0 END) as switches
+            FROM activity_sessions
+            WHERE start_time >= ?
+            GROUP BY day
+            """,
+            (start_iso,),
+        )
+        daily_switches = {row["day"]: row["switches"] or 0 for row in cursor.fetchall()}
+
     daily_trend = []
-    for row in cursor.fetchall():
+    for row in daily_rows:
         day_value = row["day"]
         active_seconds = row["active_seconds"] or 0
-        switches = row["switches"] or 0
+        switches = daily_switches.get(day_value, 0)
         meeting_day_seconds = row["meeting_seconds"] or 0
         daily_trend.append(
             {
