@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -44,6 +44,38 @@ jinja_env = Environment(
     loader=FileSystemLoader(template_dir),
     autoescape=select_autoescape(["html", "xml"]),
 )
+
+
+def _human_datetime(value: object) -> str:
+    if value is None:
+        return "-"
+
+    if isinstance(value, datetime):
+        return value.strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+
+    if isinstance(value, date):
+        return value.strftime("%b %d, %Y").replace(" 0", " ")
+
+    text = str(value).strip()
+    if not text:
+        return "-"
+
+    if len(text) == 10 and text[4] == "-" and text[7] == "-":
+        try:
+            parsed_date = date.fromisoformat(text)
+        except ValueError:
+            return text
+        return parsed_date.strftime("%b %d, %Y").replace(" 0", " ")
+
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+
+    return parsed.strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+
+
+jinja_env.filters["human_datetime"] = _human_datetime
 
 # Mount static files
 if static_dir.exists():

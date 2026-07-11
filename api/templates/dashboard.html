@@ -34,7 +34,7 @@
             </div>
             <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Last Sync</div>
-                <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at or '-' }}</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at|human_datetime }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     latest checkpoint update
                 </div>
@@ -46,7 +46,7 @@
             <div>
                 <strong>{{ item.device_name or item.device_id }}</strong>
                 {% if item.is_synced %}
-                - last synced: {{ item.last_sync_at }}
+                - last synced: {{ item.last_sync_at|human_datetime }}
                 {% else %}
                 - not synced yet (registered)
                 {% endif %}
@@ -223,7 +223,7 @@
             <tbody>
                 {% for row in stats.daily_trend %}
                 <tr>
-                    <td title="{{ row.day }}">{{ row.day_label or row.day }}</td>
+                    <td title="{{ row.day|human_datetime }}">{{ row.day_label or row.day|human_datetime }}</td>
                     <td>{{ "%.2f"|format(row.active_hours) }}h</td>
                     <td>{{ "%.2f"|format(row.meeting_hours) }}h</td>
                     <td>{{ "%.2f"|format(row.switches_per_hour) }}</td>

@@ -87,7 +87,7 @@
             <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
             <span class="badge text-bg-light border">Synced: {{ sync_health.synced_devices }}</span>
             <span class="badge text-bg-light border">Active Tokens: {{ sync_health.active_tokens }}</span>
-            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at or '-' }}</span>
+            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
         </div>
         {% if sync_health.device_statuses %}
         <div class="muted mt-2" style="font-size: 0.85em;">
@@ -95,7 +95,7 @@
             <div>
                 {{ item.device_name or item.device_id }}:
                 {% if item.is_synced %}
-                last synced {{ item.last_sync_at }}
+                last synced {{ item.last_sync_at|human_datetime }}
                 {% else %}
                 registered, not synced yet
                 {% endif %}
@@ -299,9 +299,9 @@
                 {% for e in entries %}
                 <tr>
                     <td class="time-small">
-                        {{ e.start_time or e.created_at }}
+                        {{ (e.start_time or e.created_at)|human_datetime }}
                         {% if e.end_time %}
-                        <br><span style="color: #999;">to {{ e.end_time }}</span>
+                        <br><span style="color: #999;">to {{ e.end_time|human_datetime }}</span>
                         {% endif %}
                     </td>
                     <td><strong>{{ e.title }}</strong></td>
@@ -349,7 +349,7 @@
             <tbody>
                 {% for r in reflections %}
                 <tr>
-                    <td>{{ r.date }}</td>
+                    <td>{{ r.date|human_datetime }}</td>
                     <td>{{ r.energy or "-" }}</td>
                     <td>{{ r.stress or "-" }}</td>
                     <td>{{ (r.wins or "")[:80] }}{% if r.wins and r.wins|length > 80 %}...{% endif %}</td>
@@ -379,7 +379,7 @@
             <tbody>
                 {% for event in work_events %}
                 <tr>
-                    <td class="time-small">{{ event.event_time or event.created_at }}</td>
+                    <td class="time-small">{{ (event.event_time or event.created_at)|human_datetime }}</td>
                     <td><span class="app-badge">{{ event.event_type }}</span></td>
                     <td>
                         {% if event.impact %}
