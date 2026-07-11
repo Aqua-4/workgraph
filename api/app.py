@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import os
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -2145,4 +2146,6 @@ async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    host = os.getenv("WORKGRAPH_API_HOST", "127.0.0.1")
+    port = int(os.getenv("WORKGRAPH_API_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)

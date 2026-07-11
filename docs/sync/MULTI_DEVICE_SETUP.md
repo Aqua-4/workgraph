@@ -34,7 +34,21 @@ uv sync
 uv run python api/app.py
 ```
 
-Default bind is `127.0.0.1:8000`. For remote devices, run behind a reverse proxy (for example, Nginx) or adjust hosting so devices can reach it.
+By default, this binds to `127.0.0.1:8000` (localhost only).
+
+For LAN discoverability across devices, start with:
+
+```bash
+WORKGRAPH_API_HOST=0.0.0.0 WORKGRAPH_API_PORT=8000 uv run python api/app.py
+```
+
+You can also use Uvicorn directly:
+
+```bash
+uv run uvicorn api.app:app --host 0.0.0.0 --port 8000
+```
+
+For internet exposure, prefer a reverse proxy (for example, Nginx) with HTTPS instead of opening the service directly.
 
 4. Verify server health endpoint:
 
