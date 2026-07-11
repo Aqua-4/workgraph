@@ -106,6 +106,31 @@ class ActivityRepository:
                 CREATE INDEX IF NOT EXISTS idx_daily_reflections_date
                     ON daily_reflections (date)
             """)
+            self._connection.execute("""
+                CREATE TABLE IF NOT EXISTS work_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    event_time TEXT,
+                    event_type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    impact TEXT,
+                    project TEXT,
+                    notes TEXT,
+                    metadata TEXT
+                )
+            """)
+            self._connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_work_events_event_time
+                    ON work_events (event_time)
+            """)
+            self._connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_work_events_type
+                    ON work_events (event_type)
+            """)
+            self._connection.execute("""
+                CREATE INDEX IF NOT EXISTS idx_work_events_impact
+                    ON work_events (impact)
+            """)
             self._connection.commit()
         except sqlite3.OperationalError:
             pass
@@ -351,6 +376,58 @@ class ActivityRepository:
         params.append(limit)
 
         cursor = self._connection.execute(query, params)
+        return list(cursor.fetchall())
+
+    def save_work_event(
+        self,
+        *,
+        created_at: datetime,
+        event_type: str,
+        title: str,
+        event_time: datetime | None = None,
+        impact: str | None = None,
+        project: str | None = None,
+        notes: str | None = None,
+        metadata: dict | None = None,
+    ) -> int:
+        cursor = self._connection.execute(
+            """
+            INSERT INTO work_events (
+                created_at,
+                event_time,
+                event_type,
+                title,
+                impact,
+                project,
+                notes,
+                metadata
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                _format_datetime(created_at),
+                _format_datetime(event_time) if event_time else None,
+                event_type,
+                title,
+                impact,
+                project,
+                notes,
+                json.dumps(metadata) if metadata is not None else None,
+            ),
+        )
+        self._connection.commit()
+        return int(cursor.lastrowid)
+
+    def recent_work_events(self, limit: int = 50) -> list[sqlite3.Row]:
+        cursor = self._connection.execute(
+            """
+            SELECT *
+            FROM work_events
+            ORDER BY COALESCE(event_time, created_at) DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
         return list(cursor.fetchall())
 
     def backup_database(self, backup_dir: str | Path = "backups") -> Path:

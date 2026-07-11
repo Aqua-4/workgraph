@@ -15,6 +15,21 @@ from services.activity_tagger import ActivityTagger
 
 app = FastAPI(title="WorkGraph Dashboard")
 
+WORK_EVENT_TYPES = [
+    "Achievement",
+    "Incident",
+    "Decision",
+    "Risk",
+    "Blocker",
+    "Promotion",
+    "Interview",
+    "Offer",
+    "Resignation",
+    "Release",
+    "Production Outage",
+]
+WORK_EVENT_IMPACTS = ["Low", "Medium", "High", "Critical"]
+
 # Setup Jinja2
 template_dir = Path(__file__).parent / "templates"
 static_dir = Path(__file__).parent / "static"
@@ -67,6 +82,27 @@ def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_daily_reflections_date
             ON daily_reflections (date);
+
+        CREATE TABLE IF NOT EXISTS work_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            event_time TEXT,
+            event_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            impact TEXT,
+            project TEXT,
+            notes TEXT,
+            metadata TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_work_events_event_time
+            ON work_events (event_time);
+
+        CREATE INDEX IF NOT EXISTS idx_work_events_type
+            ON work_events (event_type);
+
+        CREATE INDEX IF NOT EXISTS idx_work_events_impact
+            ON work_events (impact);
         """
     )
     conn.commit()
@@ -112,6 +148,42 @@ class ReflectionUpsert(BaseModel):
     stress: int | None = Field(default=None, ge=1, le=10)
 
 
+class WorkEventCreate(BaseModel):
+    event_time: str | None = None
+    event_type: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=200)
+    impact: str | None = Field(default=None, max_length=32)
+    project: str | None = Field(default=None, max_length=200)
+    notes: str = ""
+    metadata: dict | None = None
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, value: str) -> str:
+        trimmed = value.strip()
+        if trimmed not in WORK_EVENT_TYPES:
+            raise ValueError(f"event_type must be one of: {', '.join(WORK_EVENT_TYPES)}")
+        return trimmed
+
+    @field_validator("impact")
+    @classmethod
+    def validate_impact(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        trimmed = value.strip()
+        if trimmed not in WORK_EVENT_IMPACTS:
+            raise ValueError(f"impact must be one of: {', '.join(WORK_EVENT_IMPACTS)}")
+        return trimmed
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("title cannot be blank")
+        return trimmed
+
+
 def _decode_metadata(raw_value: str | None) -> dict | None:
     if raw_value is None:
         return None
@@ -123,6 +195,12 @@ def _decode_metadata(raw_value: str | None) -> dict | None:
 
 
 def _serialize_journal_row(row: sqlite3.Row) -> dict:
+    item = dict(row)
+    item["metadata"] = _decode_metadata(item.get("metadata"))
+    return item
+
+
+def _serialize_work_event_row(row: sqlite3.Row) -> dict:
     item = dict(row)
     item["metadata"] = _decode_metadata(item.get("metadata"))
     return item
@@ -198,6 +276,25 @@ def query_recent_reflections(db_path: Path, limit: int = 30) -> list[dict]:
         (limit,),
     )
     rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def query_recent_work_events(db_path: Path, limit: int = 30) -> list[dict]:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT *
+        FROM work_events
+        ORDER BY COALESCE(event_time, created_at) DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = [_serialize_work_event_row(row) for row in cursor.fetchall()]
     conn.close()
     return rows
 
@@ -568,6 +665,7 @@ async def journal_page(saved: str | None = Query(None)):
 
     entries = query_recent_journal_entries(db_path, limit=50)
     reflections = query_recent_reflections(db_path, limit=30)
+    work_events = query_recent_work_events(db_path, limit=30)
     available_tags = get_available_tags()
 
     message = None
@@ -575,12 +673,17 @@ async def journal_page(saved: str | None = Query(None)):
         message = "Journal entry saved."
     elif saved == "reflection":
         message = "Reflection saved."
+    elif saved == "work-event":
+        message = "Work event saved."
 
     template = jinja_env.get_template("journal.html")
     return template.render(
         entries=entries,
         reflections=reflections,
+        work_events=work_events,
         available_tags=available_tags,
+        work_event_types=WORK_EVENT_TYPES,
+        work_event_impacts=WORK_EVENT_IMPACTS,
         message=message,
         error=None,
     )
@@ -701,6 +804,95 @@ async def list_journal_entries(
 async def list_journal_tags():
     """List configured tags available for journal tagging."""
     return {"tags": get_available_tags()}
+
+
+@app.get("/api/work-events/types")
+async def list_work_event_types():
+    return {"types": WORK_EVENT_TYPES, "impacts": WORK_EVENT_IMPACTS}
+
+
+@app.post("/api/work-events")
+async def create_work_event(payload: WorkEventCreate):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    event_time_iso = _to_utc_iso(payload.event_time)
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    cursor.execute(
+        """
+        INSERT INTO work_events (
+            created_at,
+            event_time,
+            event_type,
+            title,
+            impact,
+            project,
+            notes,
+            metadata
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            now_iso,
+            event_time_iso,
+            payload.event_type,
+            payload.title,
+            payload.impact,
+            payload.project,
+            payload.notes,
+            json.dumps(payload.metadata) if payload.metadata is not None else None,
+        ),
+    )
+    conn.commit()
+    event_id = int(cursor.lastrowid)
+    conn.close()
+    return {"id": event_id}
+
+
+@app.get("/api/work-events")
+async def list_work_events(
+    from_ts: str | None = Query(None, alias="from"),
+    to_ts: str | None = Query(None, alias="to"),
+    event_type: str | None = Query(None),
+    impact: str | None = Query(None),
+    project: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM work_events WHERE 1=1"
+    params: list[str | int] = []
+
+    if from_ts:
+        query += " AND COALESCE(event_time, created_at) >= ?"
+        params.append(_to_utc_iso(from_ts) or from_ts)
+    if to_ts:
+        query += " AND COALESCE(event_time, created_at) <= ?"
+        params.append(_to_utc_iso(to_ts) or to_ts)
+    if event_type:
+        query += " AND event_type = ?"
+        params.append(event_type)
+    if impact:
+        query += " AND impact = ?"
+        params.append(impact)
+    if project:
+        query += " AND project = ?"
+        params.append(project)
+
+    query += " ORDER BY COALESCE(event_time, created_at) DESC LIMIT ?"
+    params.append(limit)
+
+    cursor.execute(query, params)
+    rows = [_serialize_work_event_row(row) for row in cursor.fetchall()]
+    conn.close()
+    return {"events": rows, "count": len(rows)}
 
 
 @app.get("/api/journal/{journal_id}")

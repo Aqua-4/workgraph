@@ -130,6 +130,28 @@ class ActivityRepositoryTests(unittest.TestCase):
         self.assertEqual(reflections[0]["energy"], 7)
         self.assertIn("tests", reflections[0]["wins"])
 
+    def test_repository_saves_work_event(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            with ActivityRepository(db_path) as repository:
+                event_id = repository.save_work_event(
+                    created_at=datetime(2026, 7, 10, 15, 0, tzinfo=timezone.utc),
+                    event_time=datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc),
+                    event_type="Incident",
+                    title="Demo failure",
+                    impact="High",
+                    project="MCP Platform",
+                    notes="Auth service timeout.",
+                    metadata={"labels": ["prod", "customer"]},
+                )
+                events = repository.recent_work_events(limit=10)
+
+        self.assertEqual(event_id, 1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "Incident")
+        self.assertEqual(events[0]["impact"], "High")
+
 
 if __name__ == "__main__":
     unittest.main()

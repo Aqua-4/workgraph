@@ -116,6 +116,7 @@ For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STA
 * Local web dashboard
 * Timeline view
 * Journal view and APIs (entries, correlation, reflections)
+* Structured work events (Achievement, Incident, Decision, Risk, Blocker, etc.)
 * Weekly report generator (`workgraph report weekly`)
 * Goal allocation drift analysis (`workgraph goals analyze`)
 * Activity export (`workgraph export csv|json|markdown`)
@@ -522,6 +523,10 @@ For more details, see [DASHBOARD.md](DASHBOARD.md).
 Run the v1 tests:
 
 ```bash
+# Install dev dependencies (includes pytest, ruff, and httpx2 required by FastAPI TestClient)
+uv sync --extra dev
+
+# Run tests
 uv run python -m unittest discover -s tests
 ```
 

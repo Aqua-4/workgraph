@@ -157,6 +157,40 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["reflections"][0]["energy"], 7)
 
+    def test_create_and_filter_work_events(self) -> None:
+        create_response = self.client.post(
+            "/api/work-events",
+            json={
+                "event_time": "2026-07-10T11:00:00+00:00",
+                "event_type": "Incident",
+                "title": "Demo auth outage",
+                "impact": "High",
+                "project": "MCP Platform",
+                "notes": "Login service timed out under load",
+                "metadata": {"labels": ["auth", "customer"]},
+            },
+        )
+        self.assertEqual(create_response.status_code, 200)
+
+        list_response = self.client.get(
+            "/api/work-events",
+            params={"event_type": "Incident", "impact": "High", "project": "MCP Platform"},
+        )
+        self.assertEqual(list_response.status_code, 200)
+        payload = list_response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["events"][0]["title"], "Demo auth outage")
+
+    def test_work_event_type_validation(self) -> None:
+        response = self.client.post(
+            "/api/work-events",
+            json={
+                "event_type": "UnknownType",
+                "title": "Something happened",
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+
     def test_dashboard_daily_trend_shows_weekday_labels(self) -> None:
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(

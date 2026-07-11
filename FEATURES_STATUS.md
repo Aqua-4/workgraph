@@ -44,6 +44,7 @@ Verification basis:
 | Timeline view | Implemented | Timeline route with filters |
 | REST API for sessions and stats | Implemented | `/api/sessions` and `/api/stats` |
 | Journal entries API | Implemented | Create, list, get, update endpoints |
+| Structured work events API | Implemented | Create/list typed events with impact and project context |
 | Correlated sessions for journal windows | Implemented | Correlation endpoint with overlap summary |
 | Daily reflections API | Implemented | Upsert and list reflections |
 | Weekly reports | Implemented | CLI report generator with deterministic markdown output |

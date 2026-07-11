@@ -204,6 +204,58 @@
         </form>
     </div>
 
+    <div class="card journal-card p-3 p-md-4">
+        <h3 class="mb-1">Structured Work Events</h3>
+        <p class="muted mb-3">Capture high-signal milestones like incidents, decisions, blockers, and releases.</p>
+        <div id="work-event-feedback" style="display: none;"></div>
+        <form id="work-event-form" class="form-grid">
+            <div class="field">
+                <label for="work-event-date">Date</label>
+                <input type="date" id="work-event-date" required>
+            </div>
+            <div class="field">
+                <label for="work-event-time">Time (optional)</label>
+                <input type="time" id="work-event-time">
+            </div>
+            <div class="field">
+                <label for="work-event-type">Event Type</label>
+                <select id="work-event-type" required>
+                    {% for event_type in work_event_types %}
+                    <option value="{{ event_type }}">{{ event_type }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="work-event-impact">Impact</label>
+                <select id="work-event-impact">
+                    <option value="">Not set</option>
+                    {% for impact in work_event_impacts %}
+                    <option value="{{ impact }}">{{ impact }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="work-event-title">Title</label>
+                <input type="text" id="work-event-title" maxlength="200" placeholder="Example: Demo failed due to auth outage" required>
+            </div>
+            <div class="field">
+                <label for="work-event-project">Project (optional)</label>
+                <input type="text" id="work-event-project" maxlength="200" placeholder="Example: MCP Platform">
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="work-event-notes">Notes</label>
+                <textarea id="work-event-notes" rows="3" placeholder="Impact, context, decision made, follow-up owner."></textarea>
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="work-event-labels">Labels (comma-separated)</label>
+                <input type="text" id="work-event-labels" placeholder="customer-facing,auth,postmortem">
+            </div>
+            <div style="grid-column: 1 / -1;" class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save Work Event</button>
+            </div>
+        </form>
+    </div>
+
     <h2 class="mb-0">Recent Journal Entries</h2>
     <div class="card journal-card p-3 p-md-4">
         {% if entries %}
@@ -283,6 +335,47 @@
         <p class="muted">No reflections yet.</p>
         {% endif %}
     </div>
+
+    <h2 class="mb-0">Recent Work Events</h2>
+    <div class="card journal-card p-3 p-md-4">
+        {% if work_events %}
+        <table>
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Type</th>
+                    <th>Impact</th>
+                    <th>Title</th>
+                    <th>Project</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in work_events %}
+                <tr>
+                    <td class="time-small">{{ event.event_time or event.created_at }}</td>
+                    <td><span class="app-badge">{{ event.event_type }}</span></td>
+                    <td>
+                        {% if event.impact %}
+                        <span class="tag-badge">{{ event.impact }}</span>
+                        {% else %}
+                        <span class="muted">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <strong>{{ event.title }}</strong>
+                        {% if event.notes %}
+                        <br><span class="muted">{{ event.notes[:100] }}{% if event.notes|length > 100 %}...{% endif %}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ event.project or "-" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No work events yet.</p>
+        {% endif %}
+    </div>
 </div>
 
 <script>
@@ -304,9 +397,14 @@
     const tagDropdownToggle = document.getElementById("tag-dropdown-toggle");
     const journalFeedback = document.getElementById("journal-feedback");
     const reflectionFeedback = document.getElementById("reflection-feedback");
+    const workEventFeedback = document.getElementById("work-event-feedback");
     const correlationPanel = document.getElementById("correlation-panel");
     dateInput.value = dateValue;
     reflectionDate.value = dateValue;
+    const workEventDate = document.getElementById("work-event-date");
+    if (workEventDate) {
+        workEventDate.value = dateValue;
+    }
 
     function setFeedback(element, kind, message) {
         if (!element) {
@@ -543,6 +641,56 @@
 
         setFeedback(reflectionFeedback, "success", "Reflection saved.");
         window.location.href = "/journal?saved=reflection";
+    });
+
+    document.getElementById("work-event-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        clearFeedback(workEventFeedback);
+
+        const title = document.getElementById("work-event-title").value.trim();
+        if (!title) {
+            setFeedback(workEventFeedback, "error", "Work event title is required.");
+            return;
+        }
+
+        const payload = {
+            event_time: buildDateTime(
+                document.getElementById("work-event-date").value,
+                document.getElementById("work-event-time").value
+            ),
+            event_type: document.getElementById("work-event-type").value,
+            impact: document.getElementById("work-event-impact").value || null,
+            title,
+            project: document.getElementById("work-event-project").value.trim() || null,
+            notes: document.getElementById("work-event-notes").value,
+            metadata: {
+                labels: document.getElementById("work-event-labels").value
+                    .split(",")
+                    .map((v) => v.trim())
+                    .filter((v) => v.length > 0)
+            }
+        };
+
+        const response = await fetch("/api/work-events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            let detail = "Unable to save work event.";
+            try {
+                const errorPayload = await response.json();
+                detail = errorPayload.detail || detail;
+            } catch (_err) {
+                // ignore JSON parse errors and show default detail.
+            }
+            setFeedback(workEventFeedback, "error", detail);
+            return;
+        }
+
+        setFeedback(workEventFeedback, "success", "Work event saved.");
+        window.location.href = "/journal?saved=work-event";
     });
 
     document.querySelectorAll(".correlate-btn").forEach((button) => {

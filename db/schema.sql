@@ -76,3 +76,24 @@ CREATE TABLE IF NOT EXISTS daily_reflections (
 
 CREATE INDEX IF NOT EXISTS idx_daily_reflections_date
     ON daily_reflections (date);
+
+CREATE TABLE IF NOT EXISTS work_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    event_time TEXT,
+    event_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    impact TEXT,
+    project TEXT,
+    notes TEXT,
+    metadata TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_events_event_time
+    ON work_events (event_time);
+
+CREATE INDEX IF NOT EXISTS idx_work_events_type
+    ON work_events (event_type);
+
+CREATE INDEX IF NOT EXISTS idx_work_events_impact
+    ON work_events (impact);
