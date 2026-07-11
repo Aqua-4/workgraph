@@ -43,6 +43,16 @@ Explicit override still works:
 uv run python main.py sync once --config config/settings.yaml
 ```
 
+Identity file precedence (matching personal override pattern):
+
+1. If `identity_path` resolves to `config/identity.json` and `config/my-identity.json` exists, WorkGraph uses `config/my-identity.json`.
+2. Otherwise it uses the configured `identity_path` value.
+
+Recommended:
+
+- Use `identity_path: config/my-identity.json` in `config/my-settings.yaml`.
+- Keep `config/my-identity.json` per-device and untracked.
+
 **Example: Reduce CPU usage by polling less frequently**
 
 ```yaml

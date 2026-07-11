@@ -58,6 +58,22 @@ curl http://<SERVER_HOST>:8000/api/sync/health
 
 You should receive a JSON response with sync health counters.
 
+5. Determine server IP for client devices:
+
+```bash
+hostname -I
+```
+
+Use one reachable LAN IP from that output as `<SERVER_HOST>` in all client configuration.
+
+6. Confirm port is reachable from another device:
+
+```bash
+curl http://<SERVER_HOST>:8000/api/sync/health
+```
+
+If this fails, open firewall access for TCP 8000 on the server and verify both devices are on the same network.
+
 ## 4. Device Setup (Repeat per device)
 
 ### 4.1 Install and prepare local DB
@@ -74,13 +90,27 @@ uv sync
 cp config/settings.yaml config/my-settings.yaml
 ```
 
-3. Run local sync migration once:
+3. (Recommended) Let identity use per-user override path by default.
+
+If your `config/my-settings.yaml` contains `identity_path: config/identity.json`, either remove that line or change it to `identity_path: config/my-identity.json`.
+
+When identity path resolves to the default `config/identity.json`, WorkGraph now prefers `config/my-identity.json` automatically if that file exists.
+
+4. Run local sync migration once:
 
 ```bash
 uv run python main.py sync migrate
 ```
 
-This upgrades or backfills local schema metadata required for sync.
+This upgrades or backfills local schema metadata required for sync and creates the identity file if missing.
+
+5. Validate identity file path and device ID:
+
+```bash
+cat config/my-identity.json
+```
+
+The file should contain a stable device identity JSON object. Do not reuse one device's identity file on another device.
 
 ### 4.2 Create stable user and device IDs
 
@@ -125,7 +155,7 @@ In `config/my-settings.yaml` on that device, set:
 
 ```yaml
 database_path: activity.db
-identity_path: config/identity.json
+identity_path: config/my-identity.json
 sync_base_url: http://<SERVER_HOST>:8000
 sync_token: <DEVICE_TOKEN>
 sync_batch_size: 1000
@@ -138,8 +168,16 @@ sync_backoff_max_seconds: 60
 ```
 
 Notes:
-- Keep `identity_path` unique per local install (default is fine).
+- Keep `identity_path` unique per local install.
 - `sync_token` must match the token from register response.
+
+Example final per-device validation:
+
+```bash
+uv run python main.py sync once --base-url http://<SERVER_HOST>:8000 --token <DEVICE_TOKEN>
+```
+
+This verifies connectivity and credentials even before you persist values in settings.
 
 ## 5. First Sync Workflow
 
@@ -224,6 +262,22 @@ Fix:
 - Verify firewall and network routing.
 - Expose API through reverse proxy or host networking so clients can access it.
 
+### Device identity mismatch after cloning or copying config
+
+Symptoms:
+- A device appears as another machine in server device listings.
+- Sync writes look like they come from the wrong host.
+
+Fix:
+- Ensure each device has its own `config/my-identity.json`.
+- Do not copy identity files between devices.
+- If needed, remove local identity and rerun migration/sync to regenerate:
+
+```bash
+rm -f config/my-identity.json
+uv run python main.py sync migrate
+```
+
 ## 9. Operational Notes
 
 - Keep sync optional: devices can still run local-only if sync is disabled.
@@ -231,3 +285,4 @@ Fix:
 - Treat `sync_token` as secret credential.
 - Use HTTPS when exposing sync over non-local networks.
 - Keep secrets and per-device values in local config files (for example, `config/my-settings.yaml`) rather than committed shared files.
+- Keep per-device identity in `config/my-identity.json` (gitignored), not in shared tracked files.

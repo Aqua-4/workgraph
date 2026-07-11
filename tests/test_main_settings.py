@@ -188,6 +188,64 @@ class MainSettingsTests(unittest.TestCase):
         self.assertEqual(settings.database_path, "explicit.db")
         self.assertEqual(settings.identity_path, "config/explicit-identity.json")
 
+    def test_load_settings_prefers_my_identity_when_default_identity_used(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            config_dir = temp / "config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+
+            (config_dir / "settings.yaml").write_text(
+                "\n".join(
+                    [
+                        "database_path: shared.db",
+                        "identity_path: config/identity.json",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (config_dir / "my-identity.json").write_text(
+                '{"device_id":"my-device-id"}',
+                encoding="utf-8",
+            )
+
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(temp)
+                settings = load_settings("config/settings.yaml")
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(settings.identity_path, "config/my-identity.json")
+
+    def test_load_settings_keeps_explicit_identity_path_even_when_my_identity_exists(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            config_dir = temp / "config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+
+            (config_dir / "settings.yaml").write_text(
+                "\n".join(
+                    [
+                        "database_path: shared.db",
+                        "identity_path: config/team-identity.json",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (config_dir / "my-identity.json").write_text(
+                '{"device_id":"my-device-id"}',
+                encoding="utf-8",
+            )
+
+            original_cwd = Path.cwd()
+            try:
+                os.chdir(temp)
+                settings = load_settings("config/settings.yaml")
+            finally:
+                os.chdir(original_cwd)
+
+        self.assertEqual(settings.identity_path, "config/team-identity.json")
+
 
 if __name__ == "__main__":
     unittest.main()

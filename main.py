@@ -27,6 +27,8 @@ from workgraph.models import ActivitySession
 
 DEFAULT_SETTINGS_PATH = Path("config/settings.yaml")
 PERSONAL_SETTINGS_PATH = Path("config/my-settings.yaml")
+DEFAULT_IDENTITY_PATH = Path("config/identity.json")
+PERSONAL_IDENTITY_PATH = Path("config/my-identity.json")
 
 
 def main() -> None:
@@ -464,6 +466,7 @@ def load_settings(path: str) -> CollectorSettings:
     config_path = _resolve_settings_path(path)
     if config_path.exists():
         values.update(_read_simple_yaml(config_path))
+    resolved_identity_path = _resolve_identity_path(str(values["identity_path"]))
     return CollectorSettings(
         database_path=str(values["database_path"]),
         poll_interval_seconds=float(values["poll_interval_seconds"]),
@@ -471,7 +474,7 @@ def load_settings(path: str) -> CollectorSettings:
         session_gap_seconds=int(values["session_gap_seconds"]),
         browser_history_lookback_seconds=int(values["browser_history_lookback_seconds"]),
         log_path=str(values["log_path"]),
-        identity_path=str(values["identity_path"]),
+        identity_path=resolved_identity_path,
     )
 
 
@@ -480,6 +483,13 @@ def _resolve_settings_path(path: str) -> Path:
     if config_path == DEFAULT_SETTINGS_PATH and PERSONAL_SETTINGS_PATH.exists():
         return PERSONAL_SETTINGS_PATH
     return config_path
+
+
+def _resolve_identity_path(path: str) -> str:
+    identity_path = Path(path)
+    if identity_path == DEFAULT_IDENTITY_PATH and PERSONAL_IDENTITY_PATH.exists():
+        return str(PERSONAL_IDENTITY_PATH)
+    return str(identity_path)
 
 
 def _read_simple_yaml(path: Path) -> dict[str, str]:

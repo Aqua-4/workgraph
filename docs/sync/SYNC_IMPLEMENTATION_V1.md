@@ -383,6 +383,11 @@ All write methods must set `updated_at = now_utc()`.
 2. Add registration flow against server.
 3. Persist token and sync cursors.
 
+Implementation note (2026-07-11):
+- Personal settings precedence is supported: `config/my-settings.yaml` is used when default `config/settings.yaml` is requested and personal settings exist.
+- Personal identity precedence is supported: when effective `identity_path` is `config/identity.json` and `config/my-identity.json` exists, WorkGraph uses `config/my-identity.json`.
+- Explicit non-default paths continue to take precedence when passed directly in settings.
+
 ### Phase C: Sync service (Pi)
 
 1. Implement server SQLite schema.
