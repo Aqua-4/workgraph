@@ -49,12 +49,26 @@
             </div>
             <div class="field" style="grid-column: 1 / -1;">
                 <label for="journal-tags">Available Tags</label>
-                <select id="journal-tags" multiple size="6">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                    <input
+                        type="text"
+                        id="journal-tags-search"
+                        placeholder="Search tags..."
+                        style="flex: 1; min-width: 220px; border: 1px solid #ddd; border-radius: 6px; padding: 8px;"
+                    >
+                    <button class="btn" id="tags-select-all" type="button" style="padding: 8px 10px; background: #444;">Select All</button>
+                    <button class="btn" id="tags-select-visible" type="button" style="padding: 8px 10px; background: #666;">Select Visible</button>
+                    <button class="btn" id="tags-clear-all" type="button" style="padding: 8px 10px; background: #888;">Clear All</button>
+                </div>
+                <div id="journal-tags" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; border: 1px solid #ddd; border-radius: 6px; padding: 10px; max-height: 220px; overflow-y: auto;">
                     {% for tag in available_tags %}
-                    <option value="{{ tag }}">{{ tag }}</option>
+                    <label class="journal-tag-row" data-tag-name="{{ tag|lower }}" style="display: flex; align-items: center; gap: 8px; font-size: 0.92em; color: #333;">
+                        <input type="checkbox" class="journal-tag-option" value="{{ tag }}">
+                        <span>{{ tag }}</span>
+                    </label>
                     {% endfor %}
-                </select>
-                <p class="muted">Select one or more configured tags to associate with this entry.</p>
+                </div>
+                <p class="muted">Pick one or more configured tags to associate with this entry.</p>
             </div>
             <div style="grid-column: 1 / -1;">
                 <button class="btn" id="journal-submit" type="submit">Save Journal Entry</button>
@@ -190,6 +204,10 @@
     const journalSubmitButton = document.getElementById("journal-submit");
     const journalCancelButton = document.getElementById("journal-cancel");
     const journalFormTitle = document.getElementById("journal-form-title");
+    const tagsSearchInput = document.getElementById("journal-tags-search");
+    const tagsSelectAllButton = document.getElementById("tags-select-all");
+    const tagsSelectVisibleButton = document.getElementById("tags-select-visible");
+    const tagsClearAllButton = document.getElementById("tags-clear-all");
     const journalFeedback = document.getElementById("journal-feedback");
     const reflectionFeedback = document.getElementById("reflection-feedback");
     const correlationPanel = document.getElementById("correlation-panel");
@@ -241,19 +259,40 @@
         document.getElementById("journal-title").value = "";
         document.getElementById("journal-notes").value = "";
         document.getElementById("journal-labels").value = "";
-        Array.from(document.getElementById("journal-tags").options).forEach((opt) => {
-            opt.selected = false;
+        Array.from(document.querySelectorAll(".journal-tag-option")).forEach((opt) => {
+            opt.checked = false;
         });
     }
 
     function getSelectedTags() {
-        return Array.from(document.getElementById("journal-tags").selectedOptions).map((opt) => opt.value);
+        return Array.from(document.querySelectorAll(".journal-tag-option:checked")).map((opt) => opt.value);
     }
 
     function setSelectedTags(tags) {
         const selected = new Set(tags || []);
-        Array.from(document.getElementById("journal-tags").options).forEach((opt) => {
-            opt.selected = selected.has(opt.value);
+        Array.from(document.querySelectorAll(".journal-tag-option")).forEach((opt) => {
+            opt.checked = selected.has(opt.value);
+        });
+    }
+
+    function filterTags(searchTerm) {
+        const normalized = (searchTerm || "").trim().toLowerCase();
+        Array.from(document.querySelectorAll(".journal-tag-row")).forEach((row) => {
+            const tagName = row.getAttribute("data-tag-name") || "";
+            const visible = !normalized || tagName.includes(normalized);
+            row.style.display = visible ? "flex" : "none";
+        });
+    }
+
+    function setTagsChecked(checked, onlyVisible) {
+        Array.from(document.querySelectorAll(".journal-tag-row")).forEach((row) => {
+            if (onlyVisible && row.style.display === "none") {
+                return;
+            }
+            const checkbox = row.querySelector(".journal-tag-option");
+            if (checkbox) {
+                checkbox.checked = checked;
+            }
         });
     }
 
@@ -481,6 +520,22 @@
     journalCancelButton.addEventListener("click", () => {
         clearFeedback(journalFeedback);
         resetJournalForm();
+    });
+
+    tagsSearchInput.addEventListener("input", () => {
+        filterTags(tagsSearchInput.value);
+    });
+
+    tagsSelectAllButton.addEventListener("click", () => {
+        setTagsChecked(true, false);
+    });
+
+    tagsSelectVisibleButton.addEventListener("click", () => {
+        setTagsChecked(true, true);
+    });
+
+    tagsClearAllButton.addEventListener("click", () => {
+        setTagsChecked(false, false);
     });
 })();
 </script>
