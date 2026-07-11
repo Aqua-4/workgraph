@@ -51,7 +51,8 @@ def _human_datetime(value: object) -> str:
         return "-"
 
     if isinstance(value, datetime):
-        return value.strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+        dt = value.astimezone() if value.tzinfo is not None else value
+        return dt.strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
 
     if isinstance(value, date):
         return value.strftime("%b %d, %Y").replace(" 0", " ")
@@ -72,7 +73,8 @@ def _human_datetime(value: object) -> str:
     except ValueError:
         return text
 
-    return parsed.strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+    dt = parsed.astimezone() if parsed.tzinfo is not None else parsed
+    return dt.strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
 
 
 jinja_env.filters["human_datetime"] = _human_datetime

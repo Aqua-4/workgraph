@@ -49,10 +49,9 @@ class JournalApiTests(unittest.TestCase):
 
     def test_human_datetime_formats_dates_and_timestamps(self) -> None:
         self.assertEqual(_human_datetime("2026-07-10"), "Jul 10, 2026")
-        self.assertEqual(
-            _human_datetime("2026-07-10T15:30:00+00:00"),
-            "Jul 10, 2026, 3:30 PM",
-        )
+        expected = datetime(2026, 7, 10, 15, 30, tzinfo=timezone.utc)
+        expected_text = expected.astimezone().strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+        self.assertEqual(_human_datetime("2026-07-10T15:30:00+00:00"), expected_text)
 
     def test_update_journal_entry(self) -> None:
         create_response = self.client.post(
