@@ -1,18 +1,34 @@
 from __future__ import annotations
 
 import json
+import platform
 import shutil
 import sqlite3
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import NAMESPACE_DNS, uuid4, uuid5
 
 from workgraph.models import ActivitySession
 
 
 class ActivityRepository:
-    def __init__(self, db_path: str | Path = "activity.db") -> None:
+    def __init__(
+        self,
+        db_path: str | Path = "activity.db",
+        *,
+        user_id: str | None = None,
+        device_id: str | None = None,
+        user_name: str = "Local User",
+        device_name: str = "Local Device",
+        device_type: str = "desktop",
+    ) -> None:
         self.db_path = Path(db_path)
+        self._user_id = user_id or _default_user_id()
+        self._device_id = device_id or _default_device_id()
+        self._user_name = user_name
+        self._device_name = device_name
+        self._device_type = device_type
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.db_path)
         self._connection.row_factory = sqlite3.Row
@@ -33,6 +49,20 @@ class ActivityRepository:
             "ALTER TABLE activity_sessions ADD COLUMN tag TEXT",
             "ALTER TABLE activity_sessions ADD COLUMN git_commit_hash TEXT",
             "ALTER TABLE activity_sessions ADD COLUMN git_modified_files TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN uuid TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN user_id TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN device_id TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN updated_at TEXT",
+            "ALTER TABLE activity_sessions ADD COLUMN deleted_at TEXT",
+            "ALTER TABLE journal_entries ADD COLUMN uuid TEXT",
+            "ALTER TABLE journal_entries ADD COLUMN user_id TEXT",
+            "ALTER TABLE journal_entries ADD COLUMN device_id TEXT",
+            "ALTER TABLE journal_entries ADD COLUMN updated_at TEXT",
+            "ALTER TABLE journal_entries ADD COLUMN deleted_at TEXT",
+            "ALTER TABLE daily_reflections ADD COLUMN uuid TEXT",
+            "ALTER TABLE daily_reflections ADD COLUMN user_id TEXT",
+            "ALTER TABLE daily_reflections ADD COLUMN device_id TEXT",
+            "ALTER TABLE daily_reflections ADD COLUMN deleted_at TEXT",
         ]
         for migration in migrations:
             try:
@@ -67,6 +97,100 @@ class ActivityRepository:
             self._connection.commit()
         except sqlite3.OperationalError:
             pass
+
+        try:
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS devices (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    hostname TEXT,
+                    category TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_seen_at TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_devices_user_id
+                    ON devices (user_id)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sync_state (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    device_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    last_push_cursor TEXT,
+                    last_pull_cursor TEXT,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_activity_sessions_uuid
+                    ON activity_sessions (uuid)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_activity_sessions_device_updated
+                    ON activity_sessions (device_id, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_activity_sessions_user_updated
+                    ON activity_sessions (user_id, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_journal_entries_uuid
+                    ON journal_entries (uuid)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_journal_entries_user_updated
+                    ON journal_entries (user_id, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_daily_reflections_uuid
+                    ON daily_reflections (uuid)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_daily_reflections_user_date
+                    ON daily_reflections (user_id, date)
+                """
+            )
+            self._connection.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        self._initialize_identity()
+        self._backfill_sync_metadata()
 
         # Create journal and reflection tables used by v1.2 features.
         try:
@@ -136,9 +260,13 @@ class ActivityRepository:
             pass
 
     def save_session(self, session: ActivitySession) -> int:
+        now = _format_datetime(datetime.now(UTC))
         cursor = self._connection.execute(
             """
             INSERT INTO activity_sessions (
+                uuid,
+                user_id,
+                device_id,
                 start_time,
                 end_time,
                 duration_sec,
@@ -152,11 +280,16 @@ class ActivityRepository:
                 git_branch,
                 context_switches,
                 tag,
-                platform
+                platform,
+                created_at,
+                updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                str(uuid4()),
+                self._user_id,
+                self._device_id,
                 _format_datetime(session.start_time),
                 _format_datetime(session.end_time),
                 session.duration_sec,
@@ -171,6 +304,8 @@ class ActivityRepository:
                 session.context_switches,
                 session.tag,
                 session.platform,
+                now,
+                now,
             ),
         )
         self._connection.commit()
@@ -223,20 +358,29 @@ class ActivityRepository:
         notes: str,
         metadata: dict | None = None,
     ) -> int:
+        updated_at = _format_datetime(datetime.now(UTC))
         cursor = self._connection.execute(
             """
             INSERT INTO journal_entries (
+                uuid,
+                user_id,
+                device_id,
                 created_at,
+                updated_at,
                 start_time,
                 end_time,
                 title,
                 notes,
                 metadata
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                str(uuid4()),
+                self._user_id,
+                self._device_id,
                 _format_datetime(created_at),
+                updated_at,
                 _format_datetime(start_time) if start_time else None,
                 _format_datetime(end_time) if end_time else None,
                 title,
@@ -330,6 +474,9 @@ class ActivityRepository:
         self._connection.execute(
             """
             INSERT INTO daily_reflections (
+                uuid,
+                user_id,
+                device_id,
                 date,
                 wins,
                 problems,
@@ -337,18 +484,79 @@ class ActivityRepository:
                 energy,
                 stress,
                 created_at,
-                updated_at
+                updated_at,
+                deleted_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(date) DO UPDATE SET
                 wins = excluded.wins,
                 problems = excluded.problems,
                 tomorrow = excluded.tomorrow,
                 energy = excluded.energy,
                 stress = excluded.stress,
+                user_id = excluded.user_id,
+                device_id = excluded.device_id,
                 updated_at = excluded.updated_at
             """,
-            (date, wins, problems, tomorrow, energy, stress, now, now),
+            (
+                str(uuid4()),
+                self._user_id,
+                self._device_id,
+                date,
+                wins,
+                problems,
+                tomorrow,
+                energy,
+                stress,
+                now,
+                now,
+                None,
+            ),
+        )
+        self._connection.commit()
+
+    def get_sync_state(self) -> sqlite3.Row | None:
+        cursor = self._connection.execute(
+            """
+            SELECT *
+            FROM sync_state
+            WHERE id = 1
+            """
+        )
+        return cursor.fetchone()
+
+    def update_sync_state(
+        self,
+        *,
+        last_push_cursor: str | None,
+        last_pull_cursor: str | None,
+    ) -> None:
+        now = _format_datetime(datetime.now(UTC))
+        self._connection.execute(
+            """
+            INSERT INTO sync_state (
+                id,
+                device_id,
+                user_id,
+                last_push_cursor,
+                last_pull_cursor,
+                updated_at
+            )
+            VALUES (1, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                device_id = excluded.device_id,
+                user_id = excluded.user_id,
+                last_push_cursor = excluded.last_push_cursor,
+                last_pull_cursor = excluded.last_pull_cursor,
+                updated_at = excluded.updated_at
+            """,
+            (
+                self._device_id,
+                self._user_id,
+                last_push_cursor,
+                last_pull_cursor,
+                now,
+            ),
         )
         self._connection.commit()
 
@@ -454,9 +662,144 @@ class ActivityRepository:
     def __exit__(self, *args) -> None:
         self.close()
 
+    def _initialize_identity(self) -> None:
+        now = _format_datetime(datetime.now(UTC))
+        self._connection.execute(
+            """
+            INSERT INTO users (id, name, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                updated_at = excluded.updated_at
+            """,
+            (self._user_id, self._user_name, now, now),
+        )
+        self._connection.execute(
+            """
+            INSERT INTO devices (
+                id,
+                user_id,
+                name,
+                type,
+                hostname,
+                category,
+                created_at,
+                updated_at,
+                last_seen_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                user_id = excluded.user_id,
+                name = excluded.name,
+                type = excluded.type,
+                hostname = excluded.hostname,
+                updated_at = excluded.updated_at,
+                last_seen_at = excluded.last_seen_at
+            """,
+            (
+                self._device_id,
+                self._user_id,
+                self._device_name,
+                self._device_type,
+                platform.node() or None,
+                None,
+                now,
+                now,
+                now,
+            ),
+        )
+        self._connection.execute(
+            """
+            INSERT INTO sync_state (
+                id,
+                device_id,
+                user_id,
+                last_push_cursor,
+                last_pull_cursor,
+                updated_at
+            )
+            VALUES (1, ?, ?, NULL, NULL, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                device_id = excluded.device_id,
+                user_id = excluded.user_id,
+                updated_at = excluded.updated_at
+            """,
+            (self._device_id, self._user_id, now),
+        )
+        self._connection.commit()
+
+    def _backfill_sync_metadata(self) -> None:
+        now = _format_datetime(datetime.now(UTC))
+        self._backfill_table(
+            table_name="activity_sessions",
+            created_column="created_at",
+            date_key_column=None,
+        )
+        self._backfill_table(
+            table_name="journal_entries",
+            created_column="created_at",
+            date_key_column=None,
+        )
+        self._backfill_table(
+            table_name="daily_reflections",
+            created_column="created_at",
+            date_key_column="date",
+        )
+        self._connection.execute(
+            """
+            UPDATE devices
+            SET last_seen_at = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (now, now, self._device_id),
+        )
+        self._connection.commit()
+
+    def _backfill_table(
+        self,
+        *,
+        table_name: str,
+        created_column: str,
+        date_key_column: str | None,
+    ) -> None:
+        rows = self._connection.execute(
+            f"""
+            SELECT id, uuid, user_id, device_id, updated_at, deleted_at, {created_column}{', ' + date_key_column if date_key_column else ''}
+            FROM {table_name}
+            """
+        ).fetchall()
+
+        for row in rows:
+            row_uuid = row["uuid"] or str(uuid4())
+            created_at_value = row[created_column]
+            if not created_at_value and date_key_column:
+                created_at_value = f"{row[date_key_column]}T00:00:00+00:00"
+            updated_at_value = row["updated_at"] or created_at_value or _format_datetime(datetime.now(UTC))
+            self._connection.execute(
+                f"""
+                UPDATE {table_name}
+                SET uuid = ?,
+                    user_id = COALESCE(user_id, ?),
+                    device_id = COALESCE(device_id, ?),
+                    updated_at = COALESCE(updated_at, ?),
+                    deleted_at = COALESCE(deleted_at, NULL)
+                WHERE id = ?
+                """,
+                (row_uuid, self._user_id, self._device_id, updated_at_value, row["id"]),
+            )
+
 
 def _format_datetime(value: datetime) -> str:
     return value.isoformat(timespec="seconds")
+
+
+def _default_user_id() -> str:
+    return str(uuid5(NAMESPACE_DNS, "workgraph.local.user"))
+
+
+def _default_device_id() -> str:
+    node_name = platform.node() or "unknown-device"
+    return str(uuid5(NAMESPACE_DNS, f"workgraph.local.device.{node_name}"))
 
 
 def restore_database_from_backup(db_path: str | Path, backup_path: str | Path) -> None:
