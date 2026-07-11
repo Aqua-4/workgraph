@@ -174,7 +174,7 @@
             <tbody>
                 {% for row in stats.daily_trend %}
                 <tr>
-                    <td>{{ row.day }}</td>
+                    <td title="{{ row.day }}">{{ row.day_label or row.day }}</td>
                     <td>{{ "%.2f"|format(row.active_hours) }}h</td>
                     <td>{{ "%.2f"|format(row.meeting_hours) }}h</td>
                     <td>{{ "%.2f"|format(row.switches_per_hour) }}</td>

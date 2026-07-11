@@ -157,6 +157,33 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["reflections"][0]["energy"], 7)
 
+    def test_dashboard_daily_trend_shows_weekday_labels(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc),
+                    duration_sec=3600,
+                    app_name="Code",
+                    process_name="Code",
+                    window_title="dashboard.html",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=3,
+                    tag="Client Delivery",
+                )
+            )
+
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Daily Trend (Last 7 Days)", response.text)
+        self.assertIn(">Fri</td>", response.text)
+        self.assertNotIn(">2026-07-10</td>", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

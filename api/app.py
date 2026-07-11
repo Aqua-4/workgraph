@@ -377,12 +377,14 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     )
     daily_trend = []
     for row in cursor.fetchall():
+        day_value = row["day"]
         active_seconds = row["active_seconds"] or 0
         switches = row["switches"] or 0
         meeting_day_seconds = row["meeting_seconds"] or 0
         daily_trend.append(
             {
-                "day": row["day"],
+                "day": day_value,
+                "day_label": datetime.strptime(day_value, "%Y-%m-%d").strftime("%a"),
                 "active_hours": round(active_seconds / 3600, 2),
                 "meeting_hours": round(meeting_day_seconds / 3600, 2),
                 "switches_per_hour": round(switches / max(active_seconds / 3600, 0.001), 2),
