@@ -19,6 +19,9 @@ class MainSettingsTests(unittest.TestCase):
                         "browser_history_lookback_seconds: 300",
                         "log_path: logs/test.log",
                         "identity_path: config/custom-identity.json",
+                        "sync_interval_seconds: 30",
+                        "sync_backoff_base_seconds: 2",
+                        "sync_backoff_max_seconds: 45",
                     ]
                 ),
                 encoding="utf-8",

@@ -11,6 +11,7 @@ from services.reporting import (
     generate_weekly_report_markdown,
     write_weekly_report,
 )
+from services.sync_daemon import SyncDaemon, SyncDaemonSettings
 from services.sync_worker import HttpSyncClient, SyncWorker, SyncWorkerSettings
 
 from db.repository import ActivityRepository
@@ -146,6 +147,61 @@ def main() -> None:
         default=None,
         help="HTTP timeout for sync requests (fallback: sync_timeout_seconds in config or default 10).",
     )
+    sync_daemon_parser = sync_subparsers.add_parser(
+        "daemon", help="Run continuous sync loop with retry/backoff."
+    )
+    sync_daemon_parser.add_argument(
+        "--base-url",
+        default=None,
+        help="Sync service base URL (fallback: sync_base_url in config).",
+    )
+    sync_daemon_parser.add_argument(
+        "--token",
+        default=None,
+        help="Device token for sync API (fallback: sync_token in config).",
+    )
+    sync_daemon_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Push batch size (fallback: sync_batch_size in config or default 1000).",
+    )
+    sync_daemon_parser.add_argument(
+        "--pull-limit",
+        type=int,
+        default=None,
+        help="Pull page size (fallback: sync_pull_limit in config or default 1000).",
+    )
+    sync_daemon_parser.add_argument(
+        "--max-pull-pages",
+        type=int,
+        default=None,
+        help="Max pull pages per cycle (fallback: sync_max_pull_pages in config or default 20).",
+    )
+    sync_daemon_parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=None,
+        help="HTTP timeout for sync requests (fallback: sync_timeout_seconds in config or default 10).",
+    )
+    sync_daemon_parser.add_argument(
+        "--interval-seconds",
+        type=float,
+        default=None,
+        help="Seconds between successful sync cycles (fallback: sync_interval_seconds in config or default 60).",
+    )
+    sync_daemon_parser.add_argument(
+        "--backoff-base-seconds",
+        type=float,
+        default=None,
+        help="Initial retry backoff seconds (fallback: sync_backoff_base_seconds in config or default 1).",
+    )
+    sync_daemon_parser.add_argument(
+        "--backoff-max-seconds",
+        type=float,
+        default=None,
+        help="Maximum retry backoff seconds (fallback: sync_backoff_max_seconds in config or default 60).",
+    )
     args = parser.parse_args()
 
     if args.command == "export":
@@ -156,6 +212,8 @@ def main() -> None:
         run_goals_analyze_command(args)
     elif args.command == "sync" and args.sync_command == "once":
         run_sync_once_command(args)
+    elif args.command == "sync" and args.sync_command == "daemon":
+        run_sync_daemon_command(args)
     elif args.retag_existing:
         retag_existing_sessions(args.config)
     elif args.web:
@@ -256,6 +314,44 @@ def run_sync_once_command(args: argparse.Namespace) -> None:
     print("Sync complete")
     print(f"Push: {summary['push']}")
     print(f"Pull: {summary['pull']}")
+
+
+def run_sync_daemon_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    raw_values = _read_simple_yaml(Path(args.config)) if Path(args.config).exists() else {}
+
+    base_url = args.base_url or raw_values.get("sync_base_url")
+    token = args.token or raw_values.get("sync_token")
+    if not base_url:
+        print("sync_base_url missing. Pass --base-url or set sync_base_url in config.")
+        return
+    if not token:
+        print("sync_token missing. Pass --token or set sync_token in config.")
+        return
+
+    worker_settings = SyncWorkerSettings(
+        batch_size=int(args.batch_size or raw_values.get("sync_batch_size", 1000)),
+        pull_limit=int(args.pull_limit or raw_values.get("sync_pull_limit", 1000)),
+        max_pull_pages=int(args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20)),
+    )
+    daemon_settings = SyncDaemonSettings(
+        interval_seconds=float(args.interval_seconds or raw_values.get("sync_interval_seconds", 60.0)),
+        backoff_base_seconds=float(
+            args.backoff_base_seconds or raw_values.get("sync_backoff_base_seconds", 1.0)
+        ),
+        backoff_max_seconds=float(
+            args.backoff_max_seconds or raw_values.get("sync_backoff_max_seconds", 60.0)
+        ),
+    )
+    timeout_seconds = float(args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0))
+
+    client = HttpSyncClient(base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds)
+
+    print("Starting sync daemon. Press Ctrl+C to stop.")
+    with ActivityRepository(settings.database_path, identity_path=settings.identity_path) as repository:
+        worker = SyncWorker(repository, client, worker_settings)
+        daemon = SyncDaemon(worker, daemon_settings)
+        daemon.run_forever()
 
 
 def retag_existing_sessions(config_path: str) -> None:

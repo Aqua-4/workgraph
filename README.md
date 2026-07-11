@@ -120,7 +120,7 @@ For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STA
 * Weekly report generator (`workgraph report weekly`)
 * Goal allocation drift analysis (`workgraph goals analyze`)
 * Activity export (`workgraph export csv|json|markdown`)
-* PostgreSQL backend for multi-device sync *(planned)*
+* Server SQLite backend for multi-device sync via sync API *(in progress)*
 
 ### Version 2.0 — Analytics Engine
 
@@ -140,7 +140,8 @@ For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STA
 ### Future
 
 * **Meeting detection** — Automatically detect meeting time from Teams, Zoom, Google Meet, and Webex windows
-* Raspberry Pi server for centralized sync
+* Raspberry Pi sync API server with server-side SQLite (default)
+* PostgreSQL backend as optional v3 storage upgrade
 * Mobile companion app
 
 ---

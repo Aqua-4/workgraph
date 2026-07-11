@@ -48,7 +48,8 @@ Verification basis:
 | Correlated sessions for journal windows | Implemented | Correlation endpoint with overlap summary |
 | Daily reflections API | Implemented | Upsert and list reflections |
 | Weekly reports | Implemented | CLI report generator with deterministic markdown output |
-| PostgreSQL backend for multi-device sync | Planned | SQLite is the active backend |
+| Server SQLite sync backend (via API) | Partial | Client-side sync worker and daemon exist; server sync API/storage still pending |
+| PostgreSQL backend for multi-device sync | Planned | Deferred to optional v3 backend after SQLite sync service is stable |
 | Activity export (JSON, CSV, Markdown) | Implemented | CLI exports session data in multiple formats |
 
 ## v2.0 Analytics Engine

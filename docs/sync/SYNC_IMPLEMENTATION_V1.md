@@ -8,7 +8,7 @@ Last updated: 2026-07-11
 
 Define an implementation-ready design for multi-device sync using:
 - Local SQLite per device as the collection source.
-- Raspberry Pi PostgreSQL as the aggregation layer.
+- Raspberry Pi sync API with server-side SQLite as the aggregation layer.
 - Device-first behavior (offline-safe, eventually consistent).
 
 This document translates architecture ideas into concrete schema, API, and migration requirements.
@@ -33,7 +33,7 @@ Out of scope (v1):
 WorkGraph supports two valid operating modes:
 
 - Single-device mode (default): local SQLite only, no sync service required.
-- Multi-device mode (optional): local SQLite on each device plus sync to Raspberry Pi PostgreSQL.
+- Multi-device mode (optional): local SQLite on each device plus sync to Raspberry Pi sync API and server SQLite.
 
 Single-device mode must remain fully functional for collection, dashboard, journal, and reports. Multi-device sync is an additive capability for users who want aggregated tracking across devices.
 
@@ -43,7 +43,7 @@ Current implementation is single-node SQLite:
 - `activity_sessions`, `journal_entries`, `daily_reflections` are local-only.
 - Primary IDs are mostly INTEGER AUTOINCREMENT.
 - No `device_id`, no per-row UUIDs, no sync metadata.
-- PostgreSQL backend is planned, not implemented.
+- Server sync backend is not implemented yet (v1 target: SQLite on server).
 
 Implication: schema and repository APIs must be upgraded before sync API can be reliable.
 
@@ -69,7 +69,7 @@ Notes:
 - Do not use local integer IDs as cross-device identity.
 - `deleted_at IS NOT NULL` means soft-deleted and must sync.
 
-## 6) Schema Changes (SQLite and PostgreSQL)
+## 6) Schema Changes (SQLite)
 
 ### 6.1 users
 
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS sync_state (
 );
 ```
 
-### 7.2 Server-side checkpoints (PostgreSQL)
+### 7.2 Server-side checkpoints (SQLite)
 
 ```sql
 CREATE TABLE IF NOT EXISTS sync_checkpoints (
@@ -193,7 +193,7 @@ CREATE TABLE IF NOT EXISTS sync_checkpoints (
     user_id TEXT NOT NULL,
     last_push_cursor TEXT,
     last_pull_cursor TEXT,
-    updated_at TIMESTAMPTZ NOT NULL
+  updated_at TEXT NOT NULL
 );
 ```
 
@@ -385,7 +385,7 @@ All write methods must set `updated_at = now_utc()`.
 
 ### Phase C: Sync service (Pi)
 
-1. Implement PostgreSQL schema.
+1. Implement server SQLite schema.
 2. Implement `/devices/register`, `/push`, `/pull`.
 3. Implement idempotency (`sync_batches`) and checkpointing.
 
@@ -422,7 +422,7 @@ Load/safety tests:
 
 ## 14) Operational Considerations
 
-- PostgreSQL constraints enforce UUID uniqueness.
+- Server SQLite constraints enforce UUID uniqueness.
 - Keep API payload size caps and max batch size.
 - Structured logging per request: `device_id`, `user_id`, `batch_id`, counts, latency.
 - Metrics: push success rate, conflict rate, lag seconds, pending local changes.
@@ -432,7 +432,7 @@ Load/safety tests:
 1. Add UUID + sync metadata columns in local schema.
 2. Implement migration/backfill command for existing local DB.
 3. Add identity config and device registration.
-4. Build PostgreSQL schema on Pi.
+4. Build server SQLite schema on Pi.
 5. Build sync endpoints with idempotency and cursors.
 6. Implement client sync worker with push/pull loops.
 7. Add deterministic conflict handling and tombstones.
@@ -452,6 +452,7 @@ Load/safety tests:
 
 - Encryption of payloads at rest and in transit beyond TLS.
 - Per-field merge for journal text conflicts.
+- PostgreSQL backend as optional v3 upgrade for higher scale analytics and ops.
 - Cross-user sharing and team analytics.
 - CRDT-based conflict-free edits.
 

@@ -1,10 +1,12 @@
 """FastAPI web server for WorkGraph dashboard."""
 
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -108,6 +110,97 @@ def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS sync_users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_devices (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            hostname TEXT,
+            category TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_seen_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_tokens (
+            token TEXT PRIMARY KEY,
+            device_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            revoked_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_batches (
+            batch_id TEXT PRIMARY KEY,
+            device_id TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            response_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_checkpoints (
+            device_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            last_push_cursor TEXT,
+            last_pull_cursor TEXT,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_sessions (
+            uuid TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT,
+            payload_json TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_journal_entries (
+            uuid TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT,
+            payload_json TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_daily_reflections (
+            uuid TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            date TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT,
+            payload_json TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_updated
+            ON sync_sessions (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_journal_user_updated
+            ON sync_journal_entries (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_updated
+            ON sync_daily_reflections (user_id, updated_at, uuid);
+        """
+    )
+    conn.commit()
+
+
 def _to_utc_iso(value: datetime | str | None) -> str | None:
     if value is None:
         return None
@@ -184,6 +277,39 @@ class WorkEventCreate(BaseModel):
         return trimmed
 
 
+class SyncRegisterUser(BaseModel):
+    id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=200)
+
+
+class SyncRegisterDevice(BaseModel):
+    id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=200)
+    type: str = Field(min_length=1, max_length=64)
+    hostname: str | None = None
+    category: str | None = None
+
+
+class SyncRegisterRequest(BaseModel):
+    user: SyncRegisterUser
+    device: SyncRegisterDevice
+
+
+class SyncPushRequest(BaseModel):
+    device_id: str = Field(min_length=1)
+    user_id: str = Field(min_length=1)
+    client_cursor: str | None = None
+    batch_id: str = Field(min_length=1)
+    changes: dict[str, list[dict]] = Field(default_factory=dict)
+
+
+class SyncPullRequest(BaseModel):
+    device_id: str = Field(min_length=1)
+    user_id: str = Field(min_length=1)
+    cursor: str | None = None
+    limit: int = Field(default=1000, ge=1, le=5000)
+
+
 def _decode_metadata(raw_value: str | None) -> dict | None:
     if raw_value is None:
         return None
@@ -204,6 +330,299 @@ def _serialize_work_event_row(row: sqlite3.Row) -> dict:
     item = dict(row)
     item["metadata"] = _decode_metadata(item.get("metadata"))
     return item
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _request_hash(payload: dict) -> str:
+    body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def _parse_cursor(cursor: str | None) -> tuple[str | None, str | None]:
+    if not cursor:
+        return None, None
+    if "|" not in cursor:
+        return cursor, ""
+    updated_at, row_uuid = cursor.split("|", 1)
+    return updated_at or None, row_uuid or ""
+
+
+def _build_cursor(updated_at: str | None, row_uuid: str | None) -> str | None:
+    if not updated_at or not row_uuid:
+        return None
+    return f"{updated_at}|{row_uuid}"
+
+
+def _is_incoming_newer(
+    *,
+    incoming_updated_at: str,
+    incoming_uuid: str,
+    existing_updated_at: str,
+    existing_uuid: str,
+) -> bool:
+    if incoming_updated_at > existing_updated_at:
+        return True
+    if incoming_updated_at < existing_updated_at:
+        return False
+    return incoming_uuid >= existing_uuid
+
+
+def _auth_token_from_header(authorization: str | None) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    prefix = "Bearer "
+    if not authorization.startswith(prefix):
+        raise HTTPException(status_code=401, detail="Authorization must be Bearer token")
+    token = authorization[len(prefix):].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Empty Bearer token")
+    return token
+
+
+def _require_sync_auth(
+    conn: sqlite3.Connection,
+    *,
+    authorization: str | None,
+    device_id: str,
+    user_id: str,
+) -> None:
+    token = _auth_token_from_header(authorization)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT device_id, user_id
+        FROM sync_tokens
+        WHERE token = ? AND revoked_at IS NULL
+        """,
+        (token,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if row["device_id"] != device_id or row["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Token does not match device/user")
+
+
+def _upsert_sync_payload_row(
+    conn: sqlite3.Connection,
+    *,
+    table_name: str,
+    user_id: str,
+    device_id: str,
+    payload: dict,
+) -> tuple[str | None, str | None]:
+    row_uuid = str(payload.get("uuid") or payload.get("id") or "").strip()
+    if not row_uuid:
+        return None, None
+
+    updated_at = str(payload.get("updated_at") or payload.get("created_at") or _now_iso())
+    created_at = str(payload.get("created_at") or updated_at)
+    deleted_at = payload.get("deleted_at")
+    date_value = payload.get("date") if table_name == "sync_daily_reflections" else None
+
+    cursor = conn.cursor()
+    cursor.execute(
+        f"SELECT uuid, updated_at FROM {table_name} WHERE uuid = ?",
+        (row_uuid,),
+    )
+    existing = cursor.fetchone()
+
+    if existing is not None:
+        if not _is_incoming_newer(
+            incoming_updated_at=updated_at,
+            incoming_uuid=row_uuid,
+            existing_updated_at=str(existing["updated_at"]),
+            existing_uuid=str(existing["uuid"]),
+        ):
+            return str(existing["updated_at"]), str(existing["uuid"])
+
+        cursor.execute(
+            f"""
+            UPDATE {table_name}
+            SET user_id = ?,
+                device_id = ?,
+                created_at = ?,
+                updated_at = ?,
+                deleted_at = ?,
+                payload_json = ?,
+                date = COALESCE(?, date)
+            WHERE uuid = ?
+            """
+            if table_name == "sync_daily_reflections"
+            else f"""
+            UPDATE {table_name}
+            SET user_id = ?,
+                device_id = ?,
+                created_at = ?,
+                updated_at = ?,
+                deleted_at = ?,
+                payload_json = ?
+            WHERE uuid = ?
+            """,
+            (
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                deleted_at,
+                json.dumps(payload, separators=(",", ":")),
+                date_value,
+                row_uuid,
+            )
+            if table_name == "sync_daily_reflections"
+            else (
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                deleted_at,
+                json.dumps(payload, separators=(",", ":")),
+                row_uuid,
+            ),
+        )
+        return updated_at, row_uuid
+
+    cursor.execute(
+        f"""
+        INSERT INTO {table_name} (
+            uuid,
+            user_id,
+            device_id,
+            date,
+            created_at,
+            updated_at,
+            deleted_at,
+            payload_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        if table_name == "sync_daily_reflections"
+        else f"""
+        INSERT INTO {table_name} (
+            uuid,
+            user_id,
+            device_id,
+            created_at,
+            updated_at,
+            deleted_at,
+            payload_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            row_uuid,
+            user_id,
+            device_id,
+            date_value,
+            created_at,
+            updated_at,
+            deleted_at,
+            json.dumps(payload, separators=(",", ":")),
+        )
+        if table_name == "sync_daily_reflections"
+        else (
+            row_uuid,
+            user_id,
+            device_id,
+            created_at,
+            updated_at,
+            deleted_at,
+            json.dumps(payload, separators=(",", ":")),
+        ),
+    )
+    return updated_at, row_uuid
+
+
+def _list_sync_changes(
+    conn: sqlite3.Connection,
+    *,
+    table_name: str,
+    cursor_value: str | None,
+    limit: int,
+) -> list[dict]:
+    updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
+    query = f"""
+        SELECT payload_json, updated_at, uuid
+        FROM {table_name}
+        WHERE 1=1
+    """
+    params: list[str | int] = []
+    if updated_at_cursor is not None:
+        query += """
+          AND (
+                updated_at > ?
+                OR (updated_at = ? AND uuid > ?)
+              )
+        """
+        params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+
+    query += " ORDER BY updated_at ASC, uuid ASC LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(query, params).fetchall()
+    return [json.loads(row["payload_json"]) for row in rows if row["payload_json"]]
+
+
+def _list_sync_tombstones(
+    conn: sqlite3.Connection,
+    *,
+    cursor_value: str | None,
+    limit: int,
+) -> list[dict]:
+    updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
+    mappings = [
+        ("sync_sessions", "sessions"),
+        ("sync_journal_entries", "journal_entries"),
+        ("sync_daily_reflections", "daily_reflections"),
+    ]
+    tombstones: list[dict] = []
+    for table_name, entity_name in mappings:
+        query = f"""
+            SELECT uuid, deleted_at, updated_at
+            FROM {table_name}
+            WHERE deleted_at IS NOT NULL
+        """
+        params: list[str | int] = []
+        if updated_at_cursor is not None:
+            query += """
+              AND (
+                    updated_at > ?
+                    OR (updated_at = ? AND uuid > ?)
+                  )
+            """
+            params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+        query += " ORDER BY updated_at ASC, uuid ASC LIMIT ?"
+        params.append(limit)
+
+        rows = conn.execute(query, params).fetchall()
+        for row in rows:
+            tombstones.append(
+                {
+                    "entity": entity_name,
+                    "id": row["uuid"],
+                    "deleted_at": row["deleted_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+    tombstones.sort(key=lambda x: (x.get("updated_at") or "", x.get("id") or ""))
+    return tombstones[:limit]
+
+
+def _max_cursor_from_changes(changes: list[dict]) -> str | None:
+    candidates: list[tuple[str, str]] = []
+    for row in changes:
+        updated_at = row.get("updated_at") or row.get("created_at")
+        row_uuid = row.get("uuid") or row.get("id")
+        if not updated_at or not row_uuid:
+            continue
+        candidates.append((str(updated_at), str(row_uuid)))
+    if not candidates:
+        return None
+    top = max(candidates)
+    return f"{top[0]}|{top[1]}"
 
 
 def get_available_tags() -> list[str]:
@@ -1110,6 +1529,301 @@ async def list_reflections(
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return {"reflections": rows, "count": len(rows)}
+
+
+@app.post("/api/sync/v1/devices/register")
+async def sync_register_device(payload: SyncRegisterRequest):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    cursor = conn.cursor()
+    now_iso = _now_iso()
+
+    cursor.execute(
+        """
+        INSERT INTO sync_users (id, name, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            updated_at = excluded.updated_at
+        """,
+        (payload.user.id, payload.user.name, now_iso, now_iso),
+    )
+    cursor.execute(
+        """
+        INSERT INTO sync_devices (
+            id,
+            user_id,
+            name,
+            type,
+            hostname,
+            category,
+            created_at,
+            updated_at,
+            last_seen_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            user_id = excluded.user_id,
+            name = excluded.name,
+            type = excluded.type,
+            hostname = excluded.hostname,
+            category = excluded.category,
+            updated_at = excluded.updated_at,
+            last_seen_at = excluded.last_seen_at
+        """,
+        (
+            payload.device.id,
+            payload.user.id,
+            payload.device.name,
+            payload.device.type,
+            payload.device.hostname,
+            payload.device.category,
+            now_iso,
+            now_iso,
+            now_iso,
+        ),
+    )
+
+    token = str(uuid4())
+    cursor.execute(
+        """
+        INSERT INTO sync_tokens (token, device_id, user_id, created_at, revoked_at)
+        VALUES (?, ?, ?, ?, NULL)
+        """,
+        (token, payload.device.id, payload.user.id, now_iso),
+    )
+    conn.commit()
+    conn.close()
+    return {"device_token": token, "server_time": now_iso}
+
+
+@app.post("/api/sync/v1/push")
+async def sync_push_changes(payload: SyncPushRequest, authorization: str | None = Header(default=None)):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    _require_sync_auth(
+        conn,
+        authorization=authorization,
+        device_id=payload.device_id,
+        user_id=payload.user_id,
+    )
+    cursor = conn.cursor()
+
+    raw_payload = payload.model_dump(mode="python")
+    req_hash = _request_hash(raw_payload)
+
+    cursor.execute(
+        "SELECT request_hash, response_json FROM sync_batches WHERE batch_id = ?",
+        (payload.batch_id,),
+    )
+    existing_batch = cursor.fetchone()
+    if existing_batch is not None:
+        if existing_batch["request_hash"] != req_hash:
+            conn.close()
+            raise HTTPException(status_code=409, detail="batch_id already exists with different payload")
+        response_json = existing_batch["response_json"]
+        conn.close()
+        return json.loads(response_json)
+
+    sessions = payload.changes.get("sessions") or []
+    journal_entries = payload.changes.get("journal_entries") or []
+    reflections = payload.changes.get("daily_reflections") or []
+
+    cursors: list[tuple[str, str]] = []
+    for row in sessions:
+        updated_at, row_uuid = _upsert_sync_payload_row(
+            conn,
+            table_name="sync_sessions",
+            user_id=payload.user_id,
+            device_id=payload.device_id,
+            payload=row,
+        )
+        if updated_at and row_uuid:
+            cursors.append((updated_at, row_uuid))
+    for row in journal_entries:
+        updated_at, row_uuid = _upsert_sync_payload_row(
+            conn,
+            table_name="sync_journal_entries",
+            user_id=payload.user_id,
+            device_id=payload.device_id,
+            payload=row,
+        )
+        if updated_at and row_uuid:
+            cursors.append((updated_at, row_uuid))
+    for row in reflections:
+        updated_at, row_uuid = _upsert_sync_payload_row(
+            conn,
+            table_name="sync_daily_reflections",
+            user_id=payload.user_id,
+            device_id=payload.device_id,
+            payload=row,
+        )
+        if updated_at and row_uuid:
+            cursors.append((updated_at, row_uuid))
+
+    now_iso = _now_iso()
+    next_push_cursor = payload.client_cursor
+    if cursors:
+        max_updated_at, max_uuid = max(cursors)
+        next_push_cursor = _build_cursor(max_updated_at, max_uuid)
+
+    response_body = {
+        "accepted": {
+            "sessions": len(sessions),
+            "journal_entries": len(journal_entries),
+            "daily_reflections": len(reflections),
+        },
+        "conflicts": [],
+        "next_push_cursor": next_push_cursor,
+        "server_time": now_iso,
+    }
+
+    cursor.execute(
+        """
+        INSERT INTO sync_checkpoints (
+            device_id,
+            user_id,
+            last_push_cursor,
+            last_pull_cursor,
+            updated_at
+        )
+        VALUES (
+            ?,
+            ?,
+            ?,
+            COALESCE((SELECT last_pull_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
+            ?
+        )
+        ON CONFLICT(device_id) DO UPDATE SET
+            user_id = excluded.user_id,
+            last_push_cursor = excluded.last_push_cursor,
+            updated_at = excluded.updated_at
+        """,
+        (payload.device_id, payload.user_id, next_push_cursor, payload.device_id, now_iso),
+    )
+
+    cursor.execute(
+        """
+        INSERT INTO sync_batches (
+            batch_id,
+            device_id,
+            user_id,
+            request_hash,
+            response_json,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            payload.batch_id,
+            payload.device_id,
+            payload.user_id,
+            req_hash,
+            json.dumps(response_body, separators=(",", ":")),
+            now_iso,
+        ),
+    )
+
+    conn.commit()
+    conn.close()
+    return response_body
+
+
+@app.post("/api/sync/v1/pull")
+async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None = Header(default=None)):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    _require_sync_auth(
+        conn,
+        authorization=authorization,
+        device_id=payload.device_id,
+        user_id=payload.user_id,
+    )
+
+    sessions = _list_sync_changes(
+        conn,
+        table_name="sync_sessions",
+        cursor_value=payload.cursor,
+        limit=payload.limit,
+    )
+    journal_entries = _list_sync_changes(
+        conn,
+        table_name="sync_journal_entries",
+        cursor_value=payload.cursor,
+        limit=payload.limit,
+    )
+    daily_reflections = _list_sync_changes(
+        conn,
+        table_name="sync_daily_reflections",
+        cursor_value=payload.cursor,
+        limit=payload.limit,
+    )
+    tombstones = _list_sync_tombstones(
+        conn,
+        cursor_value=payload.cursor,
+        limit=payload.limit,
+    )
+
+    active_sessions = [row for row in sessions if not row.get("deleted_at")]
+    active_journal_entries = [row for row in journal_entries if not row.get("deleted_at")]
+    active_daily_reflections = [row for row in daily_reflections if not row.get("deleted_at")]
+
+    all_changes = active_sessions + active_journal_entries + active_daily_reflections
+    next_cursor = _max_cursor_from_changes(all_changes)
+    if next_cursor is None:
+        next_cursor = payload.cursor
+
+    has_more = (
+        len(sessions) >= payload.limit
+        or len(journal_entries) >= payload.limit
+        or len(daily_reflections) >= payload.limit
+        or len(tombstones) >= payload.limit
+    )
+
+    now_iso = _now_iso()
+    conn.execute(
+        """
+        INSERT INTO sync_checkpoints (
+            device_id,
+            user_id,
+            last_push_cursor,
+            last_pull_cursor,
+            updated_at
+        )
+        VALUES (
+            ?,
+            ?,
+            COALESCE((SELECT last_push_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
+            ?,
+            ?
+        )
+        ON CONFLICT(device_id) DO UPDATE SET
+            user_id = excluded.user_id,
+            last_pull_cursor = excluded.last_pull_cursor,
+            updated_at = excluded.updated_at
+        """,
+        (payload.device_id, payload.user_id, payload.device_id, next_cursor, now_iso),
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "changes": {
+            "sessions": active_sessions,
+            "journal_entries": active_journal_entries,
+            "daily_reflections": active_daily_reflections,
+            "tombstones": tombstones,
+        },
+        "next_cursor": next_cursor,
+        "has_more": has_more,
+        "server_time": now_iso,
+    }
 
 
 if __name__ == "__main__":
