@@ -36,6 +36,13 @@ class GoalDrift:
     relative_gap_pct: float
 
 
+def default_goals_path() -> Path:
+    config_dir = Path(__file__).parent.parent / "config"
+    custom_path = config_dir / "my-goals.yaml"
+    default_path = config_dir / "goals.yaml"
+    return custom_path if custom_path.exists() else default_path
+
+
 def export_activity_sessions(
     *,
     db_path: str | Path,
@@ -292,7 +299,11 @@ def _status_for_drift(delta_pct_points: float) -> str:
 
 
 def _load_goals(goals_path: str | Path) -> dict[str, float]:
-    raw = Path(goals_path).read_text(encoding="utf-8")
+    path = Path(goals_path)
+    if not path.exists():
+        return {}
+
+    raw = path.read_text(encoding="utf-8")
     parsed = yaml.safe_load(raw) or {}
 
     goals_obj = parsed.get("goals") if isinstance(parsed, dict) else parsed

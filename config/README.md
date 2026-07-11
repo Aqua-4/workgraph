@@ -49,6 +49,48 @@ Load order used by the app:
 
 This means users can pull updates without losing personal tagging rules.
 
+---
+
+### `goals.yaml` and `my-goals.yaml` — Goal Allocation Targets
+
+Defines planned percentage allocation used by weekly reports and goal drift analysis.
+
+#### Personal Override (recommended)
+
+To keep personal goals safe from git pulls/merges:
+
+- Create `config/my-goals.yaml` with your own goal targets
+- Keep `config/goals.yaml` as the shared sample/default in the repo
+
+Load order used by the app:
+
+1. `config/my-goals.yaml` (if present)
+2. `config/goals.yaml` (fallback)
+
+#### Structure
+
+```yaml
+goals:
+  Client Delivery: 70
+  Learning: 10
+  Strategic Planning: 10
+  Personal Projects: 10
+```
+
+Use with CLI:
+
+```bash
+uv run workgraph report weekly
+uv run workgraph goals analyze
+```
+
+You can still override the file explicitly:
+
+```bash
+uv run workgraph report weekly --goals config/goals.yaml
+uv run workgraph goals analyze --goals config/my-goals.yaml
+```
+
 #### Structure
 
 ```yaml

@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from services.reporting import (
+    default_goals_path,
     export_activity_sessions,
     goal_drift_markdown,
     generate_weekly_report_markdown,
@@ -87,7 +88,7 @@ def main() -> None:
     )
     weekly_parser.add_argument(
         "--goals",
-        default="config/goals.yaml",
+        default=str(default_goals_path()),
         help="Path to goals yaml used for drift analysis.",
     )
 
@@ -104,7 +105,7 @@ def main() -> None:
     )
     goals_analyze_parser.add_argument(
         "--goals",
-        default="config/goals.yaml",
+        default=str(default_goals_path()),
         help="Path to goals yaml file.",
     )
     args = parser.parse_args()
@@ -172,7 +173,7 @@ def run_goals_analyze_command(args: argparse.Namespace) -> None:
     goals_path = Path(args.goals)
     if not goals_path.exists():
         print(f"Goals file not found: {goals_path}")
-        print("Create config/goals.yaml with a top-level 'goals' mapping.")
+        print("Create config/my-goals.yaml or config/goals.yaml with a top-level 'goals' mapping.")
         return
 
     report = goal_drift_markdown(

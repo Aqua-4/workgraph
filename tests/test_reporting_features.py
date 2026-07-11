@@ -8,6 +8,7 @@ import unittest
 from db.repository import ActivityRepository
 from services.reporting import (
     analyze_goal_allocation,
+    default_goals_path,
     export_activity_sessions,
     generate_weekly_report_markdown,
 )
@@ -15,6 +16,41 @@ from workgraph.models import ActivitySession
 
 
 class ReportingFeaturesTests(unittest.TestCase):
+    def test_default_goals_path_prefers_my_goals(self) -> None:
+        config_dir = Path(__file__).resolve().parent.parent / "config"
+        custom = config_dir / "my-goals.yaml"
+        backup = config_dir / "my-goals.yaml.test-backup"
+
+        had_existing = custom.exists()
+        if had_existing:
+            custom.rename(backup)
+
+        try:
+            custom.write_text("goals:\n  Learning: 100\n", encoding="utf-8")
+            selected = default_goals_path()
+            self.assertEqual(selected.name, "my-goals.yaml")
+        finally:
+            if custom.exists():
+                custom.unlink()
+            if had_existing and backup.exists():
+                backup.rename(custom)
+
+    def test_default_goals_path_falls_back_to_goals(self) -> None:
+        config_dir = Path(__file__).resolve().parent.parent / "config"
+        custom = config_dir / "my-goals.yaml"
+        backup = config_dir / "my-goals.yaml.test-backup"
+
+        had_existing = custom.exists()
+        if had_existing:
+            custom.rename(backup)
+
+        try:
+            selected = default_goals_path()
+            self.assertEqual(selected.name, "goals.yaml")
+        finally:
+            if had_existing and backup.exists():
+                backup.rename(custom)
+
     def test_export_activity_sessions_all_formats(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
