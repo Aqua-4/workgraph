@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -48,26 +49,46 @@ class ActivityTagger:
                 + " "
                 + (session.browser_domain or "").lower()
             )
-            if any(keyword.lower() in text_to_search for keyword in rule["keywords"]):
+            if any(
+                _keyword_matches(text_to_search, keyword)
+                for keyword in rule["keywords"]
+            ):
                 return True
 
         return False
 
     def _load_rules(self, config_path: Path | str | None) -> dict[str, dict[str, Any]]:
         """Load tagging rules from YAML config."""
-        if config_path is None:
-            config_dir = Path(__file__).parent.parent / "config"
-            custom_path = config_dir / "my-tags.yaml"
-            default_path = config_dir / "tags.yaml"
-            config_path = custom_path if custom_path.exists() else default_path
+        config_dir = Path(__file__).parent.parent / "config"
+        default_path = config_dir / "tags.yaml"
+        custom_path = config_dir / "my-tags.yaml"
 
-        config_path = Path(config_path)
+        default_rules = self._load_yaml_tags(default_path)
+        custom_rules = self._load_yaml_tags(custom_path) if custom_path.exists() else {}
+
+        default_rules.update(custom_rules)
+        return default_rules
+
+    def _load_yaml_tags(self, path: Path) -> dict[str, dict[str, Any]]:
+        config_path = Path(path)
         if not config_path.exists():
             return {}
 
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(config_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
                 return data.get("tags", {}) if data else {}
         except Exception:
             return {}
+
+
+def _keyword_matches(text: str, keyword: str) -> bool:
+    if not keyword:
+        return False
+
+    keyword = keyword.lower().strip()
+    if not keyword:
+        return False
+
+    pattern = rf"\b{re.escape(keyword)}\b"
+    return bool(re.search(pattern, text))

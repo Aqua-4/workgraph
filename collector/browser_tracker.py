@@ -5,12 +5,11 @@ import re
 import shutil
 import sqlite3
 import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
 from workgraph.models import ActiveWindow
-
 
 BROWSER_PROCESSES = {
     "arc",
@@ -105,8 +104,12 @@ def history_paths(process_name: str | None, active_platform: str) -> list[Path]:
 
 def _browser_base_paths(process: str, active_platform: str) -> list[Path]:
     if active_platform == "windows":
-        local_app_data = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        roaming_app_data = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        local_app_data = Path(
+            os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")
+        )
+        roaming_app_data = Path(
+            os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")
+        )
         if process in {"brave.exe", "brave"}:
             return [local_app_data / "BraveSoftware" / "Brave-Browser" / "User Data"]
         if process in {"chrome.exe", "chrome"}:
@@ -196,11 +199,19 @@ def _domain_from_history_file(
     matched_domain = _domain_matching_title(rows, window_title)
     if matched_domain:
         return matched_domain
-    return _clean_host(urlparse(rows[0][0]).hostname)
+
+    if not window_title:
+        return _clean_host(urlparse(rows[0][0]).hostname)
+
+    return None
 
 
-def _read_chromium_history(history_path: Path, lookback_seconds: int) -> list[tuple[str, str | None]]:
-    threshold = _chromium_timestamp(datetime.now(timezone.utc) - timedelta(seconds=lookback_seconds))
+def _read_chromium_history(
+    history_path: Path, lookback_seconds: int
+) -> list[tuple[str, str | None]]:
+    threshold = _chromium_timestamp(
+        datetime.now(UTC) - timedelta(seconds=lookback_seconds)
+    )
     try:
         with sqlite3.connect(f"file:{history_path}?mode=ro", uri=True) as connection:
             cursor = connection.execute(
@@ -218,8 +229,13 @@ def _read_chromium_history(history_path: Path, lookback_seconds: int) -> list[tu
         return []
 
 
-def _read_firefox_history(history_path: Path, lookback_seconds: int) -> list[tuple[str, str | None]]:
-    threshold = int((datetime.now(timezone.utc) - timedelta(seconds=lookback_seconds)).timestamp() * 1_000_000)
+def _read_firefox_history(
+    history_path: Path, lookback_seconds: int
+) -> list[tuple[str, str | None]]:
+    threshold = int(
+        (datetime.now(UTC) - timedelta(seconds=lookback_seconds)).timestamp()
+        * 1_000_000
+    )
     try:
         with sqlite3.connect(f"file:{history_path}?mode=ro", uri=True) as connection:
             cursor = connection.execute(
@@ -239,7 +255,9 @@ def _read_firefox_history(history_path: Path, lookback_seconds: int) -> list[tup
         return []
 
 
-def _domain_matching_title(rows: list[tuple[str, str | None]], window_title: str | None) -> str | None:
+def _domain_matching_title(
+    rows: list[tuple[str, str | None]], window_title: str | None
+) -> str | None:
     if not window_title:
         return None
     normalized_window_title = _normalize_title(window_title)
@@ -259,12 +277,14 @@ def _domain_matching_title(rows: list[tuple[str, str | None]], window_title: str
 def _normalize_title(value: str | None) -> str:
     if not value:
         return ""
-    value = re.sub(r"\s+-\s+(Brave|Google Chrome|Microsoft Edge|Mozilla Firefox)$", "", value)
+    value = re.sub(
+        r"\s+-\s+(Brave|Google Chrome|Microsoft Edge|Mozilla Firefox)$", "", value
+    )
     return " ".join(value.casefold().split())
 
 
 def _chromium_timestamp(value: datetime) -> int:
-    epoch = datetime(1601, 1, 1, tzinfo=timezone.utc)
+    epoch = datetime(1601, 1, 1, tzinfo=UTC)
     return int((value - epoch).total_seconds() * 1_000_000)
 
 

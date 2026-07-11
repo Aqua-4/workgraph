@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -37,7 +37,9 @@ class BrowserTrackerTests(unittest.TestCase):
                 "sqlite3 - DB-API 2.0 interface",
             )
 
-            with patch("collector.browser_tracker.history_paths", return_value=[history_path]):
+            with patch(
+                "collector.browser_tracker.history_paths", return_value=[history_path]
+            ):
                 domain = domain_from_browser_history(
                     "brave.exe",
                     "sqlite3 - DB-API 2.0 interface - Brave",
@@ -46,6 +48,27 @@ class BrowserTrackerTests(unittest.TestCase):
                 )
 
             self.assertEqual(domain, "docs.python.org")
+
+    def test_domain_from_history_does_not_fallback_to_unrelated_url(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            history_path = Path(temp_dir) / "History"
+            _create_chromium_history(
+                history_path,
+                "https://github.com/example/repo",
+                "Example Repo",
+            )
+
+            with patch(
+                "collector.browser_tracker.history_paths", return_value=[history_path]
+            ):
+                domain = domain_from_browser_history(
+                    "brave.exe",
+                    "64,225.9 | BTCUSDT USDⓈ-Margined Perpetual Chart | Binance Futures - Brave",
+                    "windows",
+                    lookback_seconds=600,
+                )
+
+            self.assertIsNone(domain)
 
 
 def _create_chromium_history(path: Path, url: str, title: str) -> None:
@@ -62,7 +85,7 @@ def _create_chromium_history(path: Path, url: str, title: str) -> None:
     )
     connection.execute(
         "INSERT INTO urls (url, title, last_visit_time) VALUES (?, ?, ?)",
-        (url, title, _chromium_timestamp(datetime.now(timezone.utc))),
+        (url, title, _chromium_timestamp(datetime.now(UTC))),
     )
     connection.commit()
     connection.close()
