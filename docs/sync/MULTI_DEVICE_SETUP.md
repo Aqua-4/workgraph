@@ -114,16 +114,80 @@ The file should contain a stable device identity JSON object. Do not reuse one d
 
 ### 4.2 Create stable user and device IDs
 
-Choose one `user_id` shared across all your devices, and one unique `device_id` per device.
+Use one shared `user_id` across all your devices and a unique `device_id` per device.
 
-Example IDs (UUID format recommended):
-- `user_id`: `9f5aa674-6e53-4c4e-8a65-92f4f6f2f7a1`
-- `device_id` for laptop: `f1b44e95-3f7f-4a24-9e3f-8cf2e8bcdb87`
-- `device_id` for desktop: `f0a5198f-62d1-464f-ab11-f0fd5ed4c2c3`
+WorkGraph identity file fields (`config/my-identity.json`):
+
+- `user_id`: stable identifier for the person (same across all that user's devices)
+- `device_id`: stable identifier for this device only (must be unique per device)
+- `user_name`: display name sent during registration
+- `device_name`: readable device label (for example, "Office Laptop")
+- `device_type`: logical category (`desktop`, `laptop`, `server`, `personal`, `work`)
+
+Example file:
+
+```json
+{
+  "user_id": "9f5aa674-6e53-4c4e-8a65-92f4f6f2f7a1",
+  "device_id": "f1b44e95-3f7f-4a24-9e3f-8cf2e8bcdb87",
+  "user_name": "Parashar",
+  "device_name": "Office Laptop",
+  "device_type": "laptop"
+}
+```
+
+Maintenance rules:
+
+1. Keep `user_id` identical on all devices belonging to the same person.
+2. Keep `device_id` unique per device and never copy one device's file to another.
+3. Keep `user_name` and `device_name` human-readable for easier server-side operations.
+4. Keep `device_type` stable unless the device role actually changes.
+5. Back up this file locally if you rebuild the machine and want to preserve identity continuity.
+
+If file is missing, migration creates defaults. You can edit values after first generation and rerun sync.
 
 ### 4.3 Register device and get sync token
 
 Use the sync register endpoint once per device.
+
+Suggested `type` and `category` values:
+
+- `type`: `desktop`, `laptop`, `server`, `work`, `personal`
+- `category`: `work`, `personal`, `home-lab`, `shared`, `test`
+
+Recommended convention:
+
+1. Use `type` for machine form factor or role (`laptop`, `desktop`, `server`).
+2. Use `category` for ownership/context (`work`, `personal`, `shared`, `test`).
+
+Example pairings:
+
+- Work laptop: `type=laptop`, `category=work`
+- Personal desktop: `type=desktop`, `category=personal`
+- Raspberry Pi sync node: `type=server`, `category=home-lab`
+- CI/test runner: `type=server`, `category=test`
+
+Instead of exporting shell variables, build request data directly from `config/my-identity.json`:
+
+```bash
+jq -n --argfile ident config/my-identity.json '{
+  user: {
+    id: $ident.user_id,
+    name: $ident.user_name
+  },
+  device: {
+    id: $ident.device_id,
+    name: $ident.device_name,
+    type: $ident.device_type,
+    hostname: $ident.device_name,
+    category: $ident.device_type
+  }
+}' | curl -X POST http://<SERVER_HOST>:8000/api/sync/v1/devices/register \
+  -H "Content-Type: application/json" \
+  --data-binary @-
+```
+
+Fallback without `jq` (manual payload):
 
 ```bash
 curl -X POST http://<SERVER_HOST>:8000/api/sync/v1/devices/register \
@@ -148,6 +212,13 @@ Response includes:
 - `server_time`
 
 Save the `device_token` safely for that device.
+
+Optional: save token back into local settings in one step:
+
+```bash
+# Replace <TOKEN> with returned device_token
+sed -i 's|^sync_token:.*$|sync_token: "<TOKEN>"|' config/my-settings.yaml
+```
 
 ### 4.4 Configure device sync settings
 
