@@ -46,15 +46,15 @@ Verification basis:
 | Journal entries API | Implemented | Create, list, get, update endpoints |
 | Correlated sessions for journal windows | Implemented | Correlation endpoint with overlap summary |
 | Daily reflections API | Implemented | Upsert and list reflections |
-| Weekly reports | Planned | No report generation module yet |
+| Weekly reports | Implemented | CLI report generator with deterministic markdown output |
 | PostgreSQL backend for multi-device sync | Planned | SQLite is the active backend |
-| Activity export (JSON, CSV) | Planned | No export command/endpoint yet |
+| Activity export (JSON, CSV, Markdown) | Implemented | CLI exports session data in multiple formats |
 
 ## v2.0 Analytics Engine
 
 | Feature | Status | Notes |
 |---|---|---|
-| Goal drift detection | Planned | Mentioned in docs, no detection engine yet |
+| Goal drift detection | Implemented | Planned-vs-actual goal allocation drift via CLI |
 | Focus block analysis | Partial | Core focus metrics exist in dashboard stats |
 | Weekly/monthly reports | Planned | Not present in current code |
 | Burnout risk indicators | Planned | No burnout model/heuristics yet |
@@ -71,6 +71,6 @@ Verification basis:
 
 ## Notes
 
-- CLI currently supports `--config`, `--once`, `--web`, `--port`, and `--retag-existing`.
+- CLI supports collector flags plus `export`, `report weekly`, and `goals analyze` subcommands.
 - Retag flow creates a backup before rewriting tags for existing sessions.
 - This file should be updated alongside roadmap changes in README.

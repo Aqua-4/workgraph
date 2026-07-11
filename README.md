@@ -116,8 +116,10 @@ For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STA
 * Local web dashboard
 * Timeline view
 * Journal view and APIs (entries, correlation, reflections)
+* Weekly report generator (`workgraph report weekly`)
+* Goal allocation drift analysis (`workgraph goals analyze`)
+* Activity export (`workgraph export csv|json|markdown`)
 * PostgreSQL backend for multi-device sync *(planned)*
-* Activity export (JSON, CSV) *(planned)*
 
 ### Version 2.0 — Analytics Engine
 
@@ -372,6 +374,18 @@ Current CLI support:
 
 ```bash
 uv run python main.py --retag-existing --config config/settings.yaml
+
+# Export activity sessions
+uv run workgraph export csv
+uv run workgraph export json --days 7
+uv run workgraph export markdown --output exports/week.md
+
+# Deterministic weekly summary
+uv run workgraph report weekly
+uv run workgraph report weekly --days 7 --output reports/week.md
+
+# Goal allocation drift detection
+uv run workgraph goals analyze --goals config/goals.yaml --days 7
 ```
 
 To roll back, copy the backup `.db` file returned by the command over your active database file.

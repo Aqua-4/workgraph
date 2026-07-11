@@ -4,6 +4,13 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
+from services.reporting import (
+    export_activity_sessions,
+    goal_drift_markdown,
+    generate_weekly_report_markdown,
+    write_weekly_report,
+)
+
 from db.repository import ActivityRepository
 from services.activity_tagger import ActivityTagger
 from services.collector_service import (
@@ -42,9 +49,73 @@ def main() -> None:
         action="store_true",
         help="Recompute tags for all existing sessions using current config/tags.yaml rules.",
     )
+    subparsers = parser.add_subparsers(dest="command")
+
+    export_parser = subparsers.add_parser(
+        "export", help="Export activity sessions as csv, json, or markdown."
+    )
+    export_parser.add_argument("format", choices=["csv", "json", "markdown"])
+    export_parser.add_argument(
+        "--output",
+        help="Output file path. Defaults to exports/activity-export-<timestamp>.<ext>",
+    )
+    export_parser.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        help="Only export sessions from the last N days.",
+    )
+    export_parser.add_argument(
+        "--exclude-idle",
+        action="store_true",
+        help="Exclude idle sessions from export output.",
+    )
+
+    report_parser = subparsers.add_parser("report", help="Generate deterministic reports.")
+    report_subparsers = report_parser.add_subparsers(dest="report_command")
+    weekly_parser = report_subparsers.add_parser("weekly", help="Generate weekly report.")
+    weekly_parser.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Rolling window in days (default: 7).",
+    )
+    weekly_parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional output markdown file. Prints report to stdout when omitted.",
+    )
+    weekly_parser.add_argument(
+        "--goals",
+        default="config/goals.yaml",
+        help="Path to goals yaml used for drift analysis.",
+    )
+
+    goals_parser = subparsers.add_parser("goals", help="Analyze goal allocation drift.")
+    goals_subparsers = goals_parser.add_subparsers(dest="goals_command")
+    goals_analyze_parser = goals_subparsers.add_parser(
+        "analyze", help="Analyze planned vs actual time allocation by goal."
+    )
+    goals_analyze_parser.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Rolling window in days (default: 7).",
+    )
+    goals_analyze_parser.add_argument(
+        "--goals",
+        default="config/goals.yaml",
+        help="Path to goals yaml file.",
+    )
     args = parser.parse_args()
 
-    if args.retag_existing:
+    if args.command == "export":
+        run_export_command(args)
+    elif args.command == "report" and args.report_command == "weekly":
+        run_weekly_report_command(args)
+    elif args.command == "goals" and args.goals_command == "analyze":
+        run_goals_analyze_command(args)
+    elif args.retag_existing:
         retag_existing_sessions(args.config)
     elif args.web:
         start_web_dashboard(args.port)
@@ -59,6 +130,57 @@ def main() -> None:
             service.repository.close()
         else:
             service.run_forever()
+
+
+def run_export_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    output_path = export_activity_sessions(
+        db_path=settings.database_path,
+        export_format=args.format,
+        output_path=args.output,
+        days=args.days,
+        include_idle=not args.exclude_idle,
+    )
+    print(f"Export complete: {output_path}")
+
+
+def run_weekly_report_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    goals_path = Path(args.goals)
+    goals_arg = str(goals_path) if goals_path.exists() else None
+
+    if args.output:
+        output_path = write_weekly_report(
+            db_path=settings.database_path,
+            output_path=args.output,
+            days=args.days,
+            goals_path=goals_arg,
+        )
+        print(f"Weekly report generated: {output_path}")
+        return
+
+    report = generate_weekly_report_markdown(
+        db_path=settings.database_path,
+        days=args.days,
+        goals_path=goals_arg,
+    )
+    print(report)
+
+
+def run_goals_analyze_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    goals_path = Path(args.goals)
+    if not goals_path.exists():
+        print(f"Goals file not found: {goals_path}")
+        print("Create config/goals.yaml with a top-level 'goals' mapping.")
+        return
+
+    report = goal_drift_markdown(
+        db_path=settings.database_path,
+        goals_path=str(goals_path),
+        days=args.days,
+    )
+    print(report)
 
 
 def retag_existing_sessions(config_path: str) -> None:
