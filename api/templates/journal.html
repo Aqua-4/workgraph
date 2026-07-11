@@ -4,9 +4,56 @@
 
 {% block nav_journal %}active{% endblock %}
 
+{% block extra_styles %}
+<style>
+.journal-shell {
+    display: grid;
+    gap: 1rem;
+}
+
+.journal-card {
+    border: 1px solid #e6e9ef;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.tag-panel {
+    border: 1px solid #d8e1ec;
+    border-radius: 10px;
+    background: #f8fbff;
+    padding: 12px;
+}
+
+#journal-tags {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 8px;
+    border: 1px solid #d7dfea;
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fff;
+}
+
+.journal-tag-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92em;
+    color: #26313f;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div>
-    <h2>Work Journal</h2>
+<div class="journal-shell">
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1">Work Journal</h2>
+            <p class="muted mb-0">Capture context, decisions, and reflections in one place.</p>
+        </div>
+    </div>
 
     {% if message %}
     <div class="success">{{ message }}</div>
@@ -16,9 +63,9 @@
     <div class="error">{{ error }}</div>
     {% endif %}
 
-    <div class="card">
-        <h3 id="journal-form-title">Add Journal Entry</h3>
-        <p class="muted" style="margin-bottom: 14px;">Capture context around your day, including historical events.</p>
+    <div class="card journal-card p-3 p-md-4">
+        <h3 id="journal-form-title" class="mb-1">Add Journal Entry</h3>
+        <p class="muted mb-3">Capture context around your day, including historical events.</p>
         <div id="journal-feedback" style="display: none;"></div>
 
         <form id="journal-form" class="form-grid">
@@ -48,37 +95,41 @@
                 <input type="text" id="journal-labels" placeholder="incident, travel, personal, learning">
             </div>
             <div class="field" style="grid-column: 1 / -1;">
-                <label for="journal-tags">Available Tags</label>
-                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+                <label class="mb-1" for="journal-tags">Tag Assignment</label>
+                <div class="tag-panel">
+                <div class="d-flex gap-2 flex-wrap mb-2">
                     <input
                         type="text"
                         id="journal-tags-search"
                         placeholder="Search tags..."
-                        style="flex: 1; min-width: 220px; border: 1px solid #ddd; border-radius: 6px; padding: 8px;"
+                        class="form-control"
+                        style="flex: 1; min-width: 220px;"
                     >
-                    <button class="btn" id="tags-select-all" type="button" style="padding: 8px 10px; background: #444;">Select All</button>
-                    <button class="btn" id="tags-select-visible" type="button" style="padding: 8px 10px; background: #666;">Select Visible</button>
-                    <button class="btn" id="tags-clear-all" type="button" style="padding: 8px 10px; background: #888;">Clear All</button>
+                    <button class="btn btn-outline-primary" id="tags-select-all" type="button">Select All</button>
+                    <button class="btn btn-outline-secondary" id="tags-select-visible" type="button">Select Visible</button>
+                    <button class="btn btn-outline-danger" id="tags-clear-all" type="button">Clear All</button>
                 </div>
-                <div id="journal-tags" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; border: 1px solid #ddd; border-radius: 6px; padding: 10px; max-height: 220px; overflow-y: auto;">
+                <div id="journal-tags">
                     {% for tag in available_tags %}
-                    <label class="journal-tag-row" data-tag-name="{{ tag|lower }}" style="display: flex; align-items: center; gap: 8px; font-size: 0.92em; color: #333;">
+                    <label class="journal-tag-row" data-tag-name="{{ tag|lower }}">
                         <input type="checkbox" class="journal-tag-option" value="{{ tag }}">
                         <span>{{ tag }}</span>
                     </label>
                     {% endfor %}
                 </div>
+                </div>
                 <p class="muted">Pick one or more configured tags to associate with this entry.</p>
             </div>
-            <div style="grid-column: 1 / -1;">
-                <button class="btn" id="journal-submit" type="submit">Save Journal Entry</button>
-                <button class="btn" id="journal-cancel" type="button" style="background: #777; display: none;">Cancel Edit</button>
+            <div class="d-flex gap-2" style="grid-column: 1 / -1;">
+                <button class="btn btn-primary" id="journal-submit" type="submit">Save Journal Entry</button>
+                <button class="btn btn-outline-secondary" id="journal-cancel" type="button" style="display: none;">Cancel Edit</button>
             </div>
         </form>
     </div>
 
-    <div class="card">
-        <h3>Daily Reflection + Energy</h3>
+    <div class="card journal-card p-3 p-md-4">
+        <h3 class="mb-1">Daily Reflection + Energy</h3>
+        <p class="muted mb-3">Track wins, setbacks, and your energy/stress for trend analysis.</p>
         <div id="reflection-feedback" style="display: none;"></div>
         <form id="reflection-form" class="form-grid">
             <div class="field">
@@ -105,14 +156,14 @@
                 <label for="tomorrow">What should I do tomorrow?</label>
                 <textarea id="tomorrow" rows="3"></textarea>
             </div>
-            <div style="grid-column: 1 / -1;">
-                <button class="btn" type="submit">Save Reflection</button>
+            <div style="grid-column: 1 / -1;" class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save Reflection</button>
             </div>
         </form>
     </div>
 
-    <h2>Recent Journal Entries</h2>
-    <div class="card">
+    <h2 class="mb-0">Recent Journal Entries</h2>
+    <div class="card journal-card p-3 p-md-4">
         {% if entries %}
         <table>
             <thead>
@@ -136,18 +187,17 @@
                     <td>{{ (e.notes or "")[:140] }}{% if e.notes and e.notes|length > 140 %}...{% endif %}</td>
                     <td>
                         <button
-                            class="btn edit-entry-btn"
+                            class="btn btn-outline-dark btn-sm edit-entry-btn"
                             type="button"
                             data-journal-id="{{ e.id }}"
-                            style="padding: 6px 10px; font-size: 0.85em; margin-right: 6px; background: #444;"
+                            style="margin-right: 6px;"
                         >
                             Edit
                         </button>
                         <button
-                            class="btn correlate-btn"
+                            class="btn btn-primary btn-sm correlate-btn"
                             type="button"
                             data-journal-id="{{ e.id }}"
-                            style="padding: 6px 10px; font-size: 0.85em;"
                         >
                             Correlate
                         </button>
@@ -162,8 +212,8 @@
         {% endif %}
     </div>
 
-    <h2>Recent Reflections</h2>
-    <div class="card">
+    <h2 class="mb-0">Recent Reflections</h2>
+    <div class="card journal-card p-3 p-md-4">
         {% if reflections %}
         <table>
             <thead>
