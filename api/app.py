@@ -811,6 +811,21 @@ def get_sync_health(db_path: Path) -> dict:
         FROM sync_checkpoints
         """
     ).fetchone()
+    device_status_rows = conn.execute(
+        """
+        SELECT
+            d.id AS device_id,
+            d.name AS device_name,
+            d.type AS device_type,
+            d.category AS device_category,
+            d.last_seen_at AS last_seen_at,
+            c.updated_at AS last_sync_at
+        FROM sync_devices d
+        LEFT JOIN sync_checkpoints c
+            ON c.device_id = d.id
+        ORDER BY COALESCE(c.updated_at, d.last_seen_at) DESC, d.id ASC
+        """
+    ).fetchall()
     metrics_row = conn.execute(
         """
         SELECT
@@ -852,6 +867,25 @@ def get_sync_health(db_path: Path) -> dict:
         except ValueError:
             lag_seconds = None
 
+    device_statuses: list[dict[str, object]] = []
+    synced_devices = 0
+    for row in device_status_rows:
+        device_last_sync = row["last_sync_at"]
+        is_synced = bool(device_last_sync)
+        if is_synced:
+            synced_devices += 1
+        device_statuses.append(
+            {
+                "device_id": row["device_id"],
+                "device_name": row["device_name"],
+                "device_type": row["device_type"],
+                "device_category": row["device_category"],
+                "last_seen_at": row["last_seen_at"],
+                "last_sync_at": device_last_sync,
+                "is_synced": is_synced,
+            }
+        )
+
     return {
         "enabled": active_tokens > 0,
         "active_tokens": active_tokens,
@@ -867,6 +901,9 @@ def get_sync_health(db_path: Path) -> dict:
         "avg_push_latency_ms": avg_push_latency,
         "avg_pull_latency_ms": avg_pull_latency,
         "last_request_at": metrics_row["last_request_at"] if metrics_row is not None else None,
+        "synced_devices": synced_devices,
+        "unsynced_devices": max(0, registered_devices - synced_devices),
+        "device_statuses": device_statuses,
     }
 
 
@@ -1431,6 +1468,9 @@ async def api_sync_health():
             "registered_devices": 0,
             "last_seen_at": None,
             "last_sync_at": None,
+            "synced_devices": 0,
+            "unsynced_devices": 0,
+            "device_statuses": [],
         }
     return get_sync_health(db_path)
 

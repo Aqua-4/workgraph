@@ -71,9 +71,24 @@
         </div>
         <div class="d-flex flex-wrap gap-2 mt-2">
             <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
+            <span class="badge text-bg-light border">Synced: {{ sync_health.synced_devices }}</span>
             <span class="badge text-bg-light border">Active Tokens: {{ sync_health.active_tokens }}</span>
             <span class="badge text-bg-light border">Last Seen: {{ sync_health.last_seen_at or '-' }}</span>
         </div>
+        {% if sync_health.device_statuses %}
+        <div class="timeline-hint mt-2">
+            {% for item in sync_health.device_statuses %}
+            <div>
+                {{ item.device_name or item.device_id }}:
+                {% if item.is_synced %}
+                last synced {{ item.last_sync_at }}
+                {% else %}
+                registered, not synced yet
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 

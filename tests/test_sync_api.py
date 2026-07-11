@@ -338,6 +338,10 @@ class SyncApiTests(unittest.TestCase):
         self.assertIn("push_success_rate", health)
         self.assertIn("push_conflict_rate", health)
         self.assertIn("avg_push_latency_ms", health)
+        self.assertIn("synced_devices", health)
+        self.assertIn("unsynced_devices", health)
+        self.assertIn("device_statuses", health)
+        self.assertEqual(len(health["device_statuses"]), 2)
 
     def test_retry_storm_duplicate_batch_id_is_idempotent(self) -> None:
         register_response = self.client.post(

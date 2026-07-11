@@ -381,10 +381,12 @@ class JournalApiTests(unittest.TestCase):
         timeline_response = self.client.get("/timeline")
         self.assertEqual(timeline_response.status_code, 200)
         self.assertIn("Sync Health", timeline_response.text)
+        self.assertIn("registered, not synced yet", timeline_response.text)
 
         journal_response = self.client.get("/journal")
         self.assertEqual(journal_response.status_code, 200)
         self.assertIn("Sync Health", journal_response.text)
+        self.assertIn("registered, not synced yet", journal_response.text)
 
 
 if __name__ == "__main__":

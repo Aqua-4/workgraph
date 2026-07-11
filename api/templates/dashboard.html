@@ -11,6 +11,12 @@
     {% if sync_health and sync_health.enabled %}
     <h2>Sync Health</h2>
     <div class="card">
+        <div class="stat-label" style="margin-bottom: 10px;">
+            Synced devices: {{ sync_health.synced_devices }} / {{ sync_health.registered_devices }}
+            {% if sync_health.unsynced_devices and sync_health.unsynced_devices > 0 %}
+            ({{ sync_health.unsynced_devices }} pending first sync)
+            {% endif %}
+        </div>
         <div class="stats-grid" style="margin-bottom: 0;">
             <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Registered Devices</div>
@@ -34,6 +40,20 @@
                 </div>
             </div>
         </div>
+        {% if sync_health.device_statuses %}
+        <div style="margin-top: 12px; font-size: 0.85em; color: #6b7280;">
+            {% for item in sync_health.device_statuses %}
+            <div>
+                <strong>{{ item.device_name or item.device_id }}</strong>
+                {% if item.is_synced %}
+                - last synced: {{ item.last_sync_at }}
+                {% else %}
+                - not synced yet (registered)
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 
