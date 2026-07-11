@@ -531,7 +531,10 @@ async def timeline(
         return "<h1>WorkGraph Timeline</h1><p>No data collected yet.</p>"
 
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
-    sessions = query_sessions(db_path, start_date=start_date, limit=500)
+    sessions = query_sessions(db_path, start_date=start_date, limit=2000)
+
+    available_tags = sorted({str(s.get("tag")) for s in sessions if s.get("tag")})
+    available_apps = sorted({str(s.get("app_name")) for s in sessions if s.get("app_name")})
 
     # Filter by tag/app if provided
     if tag:
@@ -539,12 +542,19 @@ async def timeline(
     if app:
         sessions = [s for s in sessions if s.get("app_name") == app]
 
+    chart_sessions = sorted(sessions, key=lambda s: str(s.get("start_time") or ""))[:300]
+    table_sessions = sessions[:120]
+
     template = jinja_env.get_template("timeline.html")
     return template.render(
-        sessions=sessions,
+        sessions=table_sessions,
+        filtered_count=len(sessions),
         days=days,
         selected_tag=tag,
         selected_app=app,
+        available_tags=available_tags,
+        available_apps=available_apps,
+        chart_sessions=chart_sessions,
     )
 
 

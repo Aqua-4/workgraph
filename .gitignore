@@ -8,7 +8,9 @@ activity.db
 activity.db-*
 backups/*.db
 logs/
+# Personal configuration files
 config/my-tags.yaml
+config/my-goals.yaml
 
 # C extensions
 *.so
