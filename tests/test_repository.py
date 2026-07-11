@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -411,6 +412,29 @@ class ActivityRepositoryTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["wins"], "Latest")
         self.assertEqual(rows[0]["uuid"], "44444444-4444-4444-4444-444444444444")
+
+    def test_repository_creates_and_reuses_identity_file(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            db_path_one = temp / "one.db"
+            db_path_two = temp / "two.db"
+            identity_path = temp / "identity.json"
+
+            with ActivityRepository(db_path_one, identity_path=identity_path) as repository_one:
+                state_one = repository_one.get_sync_state()
+
+            self.assertTrue(identity_path.exists())
+            identity_data = json.loads(identity_path.read_text(encoding="utf-8"))
+
+            with ActivityRepository(db_path_two, identity_path=identity_path) as repository_two:
+                state_two = repository_two.get_sync_state()
+
+        self.assertIsNotNone(state_one)
+        self.assertIsNotNone(state_two)
+        self.assertEqual(state_one["user_id"], identity_data["user_id"])
+        self.assertEqual(state_one["device_id"], identity_data["device_id"])
+        self.assertEqual(state_two["user_id"], identity_data["user_id"])
+        self.assertEqual(state_two["device_id"], identity_data["device_id"])
 
 
 if __name__ == "__main__":

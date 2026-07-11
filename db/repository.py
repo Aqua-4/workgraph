@@ -19,16 +19,18 @@ class ActivityRepository:
         *,
         user_id: str | None = None,
         device_id: str | None = None,
-        user_name: str = "Local User",
-        device_name: str = "Local Device",
-        device_type: str = "desktop",
+        user_name: str | None = None,
+        device_name: str | None = None,
+        device_type: str | None = None,
+        identity_path: str | Path | None = None,
     ) -> None:
         self.db_path = Path(db_path)
-        self._user_id = user_id or _default_user_id()
-        self._device_id = device_id or _default_device_id()
-        self._user_name = user_name
-        self._device_name = device_name
-        self._device_type = device_type
+        identity = _load_or_create_identity(identity_path)
+        self._user_id = user_id or identity["user_id"]
+        self._device_id = device_id or identity["device_id"]
+        self._user_name = user_name or identity["user_name"]
+        self._device_name = device_name or identity["device_name"]
+        self._device_type = device_type or identity["device_type"]
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.db_path)
         self._connection.row_factory = sqlite3.Row
@@ -1174,6 +1176,33 @@ def _default_user_id() -> str:
 def _default_device_id() -> str:
     node_name = platform.node() or "unknown-device"
     return str(uuid5(NAMESPACE_DNS, f"workgraph.local.device.{node_name}"))
+
+
+def _load_or_create_identity(identity_path: str | Path | None) -> dict[str, str]:
+    default_identity = {
+        "user_id": _default_user_id(),
+        "device_id": _default_device_id(),
+        "user_name": "Local User",
+        "device_name": platform.node() or "Local Device",
+        "device_type": "desktop",
+    }
+    if identity_path is None:
+        return default_identity
+
+    path = Path(identity_path)
+    if path.exists():
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        return {
+            "user_id": str(loaded.get("user_id") or default_identity["user_id"]),
+            "device_id": str(loaded.get("device_id") or default_identity["device_id"]),
+            "user_name": str(loaded.get("user_name") or default_identity["user_name"]),
+            "device_name": str(loaded.get("device_name") or default_identity["device_name"]),
+            "device_type": str(loaded.get("device_type") or default_identity["device_type"]),
+        }
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(default_identity, indent=2), encoding="utf-8")
+    return default_identity
 
 
 def restore_database_from_backup(db_path: str | Path, backup_path: str | Path) -> None:

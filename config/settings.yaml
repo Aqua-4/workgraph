@@ -4,3 +4,4 @@ idle_threshold_seconds: 300
 session_gap_seconds: 90
 browser_history_lookback_seconds: 600
 log_path: logs/workgraph.log
+identity_path: config/identity.json

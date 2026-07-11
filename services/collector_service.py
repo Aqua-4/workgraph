@@ -29,6 +29,7 @@ class CollectorSettings(BaseModel):
     session_gap_seconds: int = 90
     browser_history_lookback_seconds: int = 600
     log_path: str = "logs/workgraph.log"
+    identity_path: str = "config/identity.json"
 
     @field_validator("poll_interval_seconds")
     @classmethod
@@ -58,7 +59,10 @@ class CollectorService:
         self.git_tracker = GitTracker()
         self.activity_tagger = ActivityTagger()
         self.session_builder = SessionBuilder(settings.session_gap_seconds)
-        self.repository = ActivityRepository(settings.database_path)
+        self.repository = ActivityRepository(
+            settings.database_path,
+            identity_path=settings.identity_path,
+        )
         self._running = False
 
     def run_forever(self) -> None:

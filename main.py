@@ -259,6 +259,7 @@ def load_settings(path: str) -> CollectorSettings:
         "session_gap_seconds": 90,
         "browser_history_lookback_seconds": 600,
         "log_path": "logs/workgraph.log",
+        "identity_path": "config/identity.json",
     }
     config_path = Path(path)
     if config_path.exists():
@@ -270,6 +271,7 @@ def load_settings(path: str) -> CollectorSettings:
         session_gap_seconds=int(values["session_gap_seconds"]),
         browser_history_lookback_seconds=int(values["browser_history_lookback_seconds"]),
         log_path=str(values["log_path"]),
+        identity_path=str(values["identity_path"]),
     )
 
 
