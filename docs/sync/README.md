@@ -5,6 +5,7 @@ This folder contains implementation and planning documents for WorkGraph multi-d
 ## Documents
 
 - [SYNC_IMPLEMENTATION_V1.md](SYNC_IMPLEMENTATION_V1.md): implementation-ready specification for local schema, sync protocol, conflict handling, and rollout phases.
+- [MULTI_DEVICE_SETUP.md](MULTI_DEVICE_SETUP.md): practical setup steps for Raspberry Pi sync server and multiple client devices.
 
 ## Suggested Additions
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 from pathlib import Path
+import sqlite3
 
 from services.reporting import (
     default_goals_path,
@@ -202,6 +203,10 @@ def main() -> None:
         default=None,
         help="Maximum retry backoff seconds (fallback: sync_backoff_max_seconds in config or default 60).",
     )
+    sync_subparsers.add_parser(
+        "migrate",
+        help="Run local sync schema migration/backfill on the configured SQLite database.",
+    )
     args = parser.parse_args()
 
     if args.command == "export":
@@ -214,6 +219,8 @@ def main() -> None:
         run_sync_once_command(args)
     elif args.command == "sync" and args.sync_command == "daemon":
         run_sync_daemon_command(args)
+    elif args.command == "sync" and args.sync_command == "migrate":
+        run_sync_migrate_command(args)
     elif args.retag_existing:
         retag_existing_sessions(args.config)
     elif args.web:
@@ -354,6 +361,23 @@ def run_sync_daemon_command(args: argparse.Namespace) -> None:
         daemon.run_forever()
 
 
+def run_sync_migrate_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    db_path = Path(settings.database_path)
+
+    before = _count_sync_metadata_gaps(db_path)
+    with ActivityRepository(settings.database_path, identity_path=settings.identity_path):
+        pass
+    after = _count_sync_metadata_gaps(db_path)
+
+    print("Sync migration complete")
+    print(f"Database: {db_path}")
+    print(f"Identity: {settings.identity_path}")
+    print(f"Sessions with missing sync metadata: {before['activity_sessions']} -> {after['activity_sessions']}")
+    print(f"Journal entries with missing sync metadata: {before['journal_entries']} -> {after['journal_entries']}")
+    print(f"Reflections with missing sync metadata: {before['daily_reflections']} -> {after['daily_reflections']}")
+
+
 def retag_existing_sessions(config_path: str) -> None:
     """Retag all existing sessions in DB with current tagging rules."""
     settings = load_settings(config_path)
@@ -454,6 +478,71 @@ def _read_simple_yaml(path: Path) -> dict[str, str]:
         key, value = line.split(":", 1)
         parsed[key.strip()] = value.strip().strip("\"'")
     return parsed
+
+
+def _count_sync_metadata_gaps(db_path: Path) -> dict[str, int]:
+    if not db_path.exists():
+        return {
+            "activity_sessions": 0,
+            "journal_entries": 0,
+            "daily_reflections": 0,
+        }
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        counts = {}
+        counts["activity_sessions"] = _count_table_sync_gaps(conn, "activity_sessions")
+        counts["journal_entries"] = _count_table_sync_gaps(conn, "journal_entries")
+        counts["daily_reflections"] = _count_table_sync_gaps(conn, "daily_reflections")
+        return counts
+    finally:
+        conn.close()
+
+
+def _count_table_sync_gaps(conn: sqlite3.Connection, table_name: str) -> int:
+    if not _table_exists(conn, table_name):
+        return 0
+
+    columns = _table_columns(conn, table_name)
+    if not columns:
+        return 0
+
+    required = ["uuid", "user_id", "device_id", "updated_at"]
+    if not all(column in columns for column in required):
+        return _safe_count_rows(conn, table_name)
+
+    row = conn.execute(
+        f"""
+        SELECT COUNT(*) AS missing_count
+        FROM {table_name}
+        WHERE uuid IS NULL
+           OR user_id IS NULL
+           OR device_id IS NULL
+           OR updated_at IS NULL
+        """
+    ).fetchone()
+    return int(row["missing_count"] if row is not None else 0)
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {str(row[1]) for row in rows}
+
+
+def _safe_count_rows(conn: sqlite3.Connection, table_name: str) -> int:
+    row = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
+    if row is None:
+        return 0
+    return int(row[0])
 
 
 if __name__ == "__main__":

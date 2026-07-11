@@ -93,6 +93,7 @@ This kind of insight isn't commonly available in time tracking tools, but it's e
 ## Features
 
 For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STATUS.md).
+For multi-device sync setup steps (server + device configuration), see [docs/sync/MULTI_DEVICE_SETUP.md](docs/sync/MULTI_DEVICE_SETUP.md).
 
 ### Version 1.0 — Collection Foundation
 
