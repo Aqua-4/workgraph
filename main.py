@@ -11,6 +11,7 @@ from services.reporting import (
     generate_weekly_report_markdown,
     write_weekly_report,
 )
+from services.sync_worker import HttpSyncClient, SyncWorker, SyncWorkerSettings
 
 from db.repository import ActivityRepository
 from services.activity_tagger import ActivityTagger
@@ -108,6 +109,43 @@ def main() -> None:
         default=str(default_goals_path()),
         help="Path to goals yaml file.",
     )
+    sync_parser = subparsers.add_parser("sync", help="Synchronize local data with central sync service.")
+    sync_subparsers = sync_parser.add_subparsers(dest="sync_command")
+    sync_once_parser = sync_subparsers.add_parser("once", help="Run one push/pull sync cycle.")
+    sync_once_parser.add_argument(
+        "--base-url",
+        default=None,
+        help="Sync service base URL (fallback: sync_base_url in config).",
+    )
+    sync_once_parser.add_argument(
+        "--token",
+        default=None,
+        help="Device token for sync API (fallback: sync_token in config).",
+    )
+    sync_once_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Push batch size (fallback: sync_batch_size in config or default 1000).",
+    )
+    sync_once_parser.add_argument(
+        "--pull-limit",
+        type=int,
+        default=None,
+        help="Pull page size (fallback: sync_pull_limit in config or default 1000).",
+    )
+    sync_once_parser.add_argument(
+        "--max-pull-pages",
+        type=int,
+        default=None,
+        help="Max pull pages per cycle (fallback: sync_max_pull_pages in config or default 20).",
+    )
+    sync_once_parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=None,
+        help="HTTP timeout for sync requests (fallback: sync_timeout_seconds in config or default 10).",
+    )
     args = parser.parse_args()
 
     if args.command == "export":
@@ -116,6 +154,8 @@ def main() -> None:
         run_weekly_report_command(args)
     elif args.command == "goals" and args.goals_command == "analyze":
         run_goals_analyze_command(args)
+    elif args.command == "sync" and args.sync_command == "once":
+        run_sync_once_command(args)
     elif args.retag_existing:
         retag_existing_sessions(args.config)
     elif args.web:
@@ -182,6 +222,40 @@ def run_goals_analyze_command(args: argparse.Namespace) -> None:
         days=args.days,
     )
     print(report)
+
+
+def run_sync_once_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    raw_values = _read_simple_yaml(Path(args.config)) if Path(args.config).exists() else {}
+
+    base_url = args.base_url or raw_values.get("sync_base_url")
+    token = args.token or raw_values.get("sync_token")
+    if not base_url:
+        print("sync_base_url missing. Pass --base-url or set sync_base_url in config.")
+        return
+    if not token:
+        print("sync_token missing. Pass --token or set sync_token in config.")
+        return
+
+    batch_size = int(args.batch_size or raw_values.get("sync_batch_size", 1000))
+    pull_limit = int(args.pull_limit or raw_values.get("sync_pull_limit", 1000))
+    max_pull_pages = int(args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20))
+    timeout_seconds = float(args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0))
+
+    worker_settings = SyncWorkerSettings(
+        batch_size=batch_size,
+        pull_limit=pull_limit,
+        max_pull_pages=max_pull_pages,
+    )
+    client = HttpSyncClient(base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds)
+
+    with ActivityRepository(settings.database_path, identity_path=settings.identity_path) as repository:
+        worker = SyncWorker(repository, client, worker_settings)
+        summary = worker.run_once()
+
+    print("Sync complete")
+    print(f"Push: {summary['push']}")
+    print(f"Pull: {summary['pull']}")
 
 
 def retag_existing_sessions(config_path: str) -> None:
