@@ -19,6 +19,7 @@
     <div class="card">
         <h3>Add Journal Entry</h3>
         <p class="muted" style="margin-bottom: 14px;">Capture context around your day, including historical events.</p>
+        <div id="journal-feedback" style="display: none;"></div>
 
         <form id="journal-form" class="form-grid">
             <div class="field">
@@ -53,6 +54,7 @@
 
     <div class="card">
         <h3>Daily Reflection + Energy</h3>
+        <div id="reflection-feedback" style="display: none;"></div>
         <form id="reflection-form" class="form-grid">
             <div class="field">
                 <label for="reflection-date">Date</label>
@@ -108,12 +110,20 @@
                     <td><strong>{{ e.title }}</strong></td>
                     <td>{{ (e.notes or "")[:140] }}{% if e.notes and e.notes|length > 140 %}...{% endif %}</td>
                     <td>
-                        <a href="/api/journal/{{ e.id }}/correlated-sessions" target="_blank">Correlate</a>
+                        <button
+                            class="btn correlate-btn"
+                            type="button"
+                            data-journal-id="{{ e.id }}"
+                            style="padding: 6px 10px; font-size: 0.85em;"
+                        >
+                            Correlate
+                        </button>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        <div id="correlation-panel" class="card" style="margin-top: 14px; display: none;"></div>
         {% else %}
         <p class="muted">No journal entries yet.</p>
         {% endif %}
@@ -157,8 +167,37 @@
 
     const dateInput = document.getElementById("journal-date");
     const reflectionDate = document.getElementById("reflection-date");
+    const journalFeedback = document.getElementById("journal-feedback");
+    const reflectionFeedback = document.getElementById("reflection-feedback");
+    const correlationPanel = document.getElementById("correlation-panel");
     dateInput.value = dateValue;
     reflectionDate.value = dateValue;
+
+    function setFeedback(element, kind, message) {
+        if (!element) {
+            return;
+        }
+        element.className = kind === "error" ? "error" : "success";
+        element.textContent = message;
+        element.style.display = "block";
+    }
+
+    function clearFeedback(element) {
+        if (!element) {
+            return;
+        }
+        element.className = "";
+        element.textContent = "";
+        element.style.display = "none";
+    }
+
+    function toMinutes(timeValue) {
+        if (!timeValue) {
+            return null;
+        }
+        const parts = timeValue.split(":");
+        return (Number(parts[0]) * 60) + Number(parts[1]);
+    }
 
     function buildDateTime(date, time) {
         if (!time) {
@@ -169,11 +208,32 @@
 
     document.getElementById("journal-form").addEventListener("submit", async (event) => {
         event.preventDefault();
+        clearFeedback(journalFeedback);
+
+        const startTime = document.getElementById("journal-start").value;
+        const endTime = document.getElementById("journal-end").value;
+        const title = document.getElementById("journal-title").value.trim();
+
+        if (!title) {
+            setFeedback(journalFeedback, "error", "Title is required.");
+            return;
+        }
+        if (title.length > 200) {
+            setFeedback(journalFeedback, "error", "Title must be 200 characters or fewer.");
+            return;
+        }
+
+        const startMinutes = toMinutes(startTime);
+        const endMinutes = toMinutes(endTime);
+        if (startMinutes !== null && endMinutes !== null && endMinutes < startMinutes) {
+            setFeedback(journalFeedback, "error", "End time must be after start time.");
+            return;
+        }
 
         const payload = {
-            start_time: buildDateTime(dateInput.value, document.getElementById("journal-start").value),
-            end_time: buildDateTime(dateInput.value, document.getElementById("journal-end").value),
-            title: document.getElementById("journal-title").value,
+            start_time: buildDateTime(dateInput.value, startTime),
+            end_time: buildDateTime(dateInput.value, endTime),
+            title,
             notes: document.getElementById("journal-notes").value,
             metadata: {
                 labels: document.getElementById("journal-labels").value
@@ -190,23 +250,46 @@
         });
 
         if (!response.ok) {
-            alert("Unable to save journal entry.");
+            let detail = "Unable to save journal entry.";
+            try {
+                const errorPayload = await response.json();
+                detail = errorPayload.detail || detail;
+            } catch (_err) {
+                // ignore JSON parse errors and show default detail.
+            }
+            setFeedback(journalFeedback, "error", detail);
             return;
         }
 
+        setFeedback(journalFeedback, "success", "Journal entry saved.");
         window.location.href = "/journal?saved=entry";
     });
 
     document.getElementById("reflection-form").addEventListener("submit", async (event) => {
         event.preventDefault();
+        clearFeedback(reflectionFeedback);
 
         const date = document.getElementById("reflection-date").value;
+        const energyValue = document.getElementById("energy").value;
+        const stressValue = document.getElementById("stress").value;
+        const energy = energyValue ? Number(energyValue) : null;
+        const stress = stressValue ? Number(stressValue) : null;
+
+        if (energy !== null && (energy < 1 || energy > 10)) {
+            setFeedback(reflectionFeedback, "error", "Energy must be between 1 and 10.");
+            return;
+        }
+        if (stress !== null && (stress < 1 || stress > 10)) {
+            setFeedback(reflectionFeedback, "error", "Stress must be between 1 and 10.");
+            return;
+        }
+
         const payload = {
             wins: document.getElementById("wins").value,
             problems: document.getElementById("problems").value,
             tomorrow: document.getElementById("tomorrow").value,
-            energy: document.getElementById("energy").value || null,
-            stress: document.getElementById("stress").value || null
+            energy,
+            stress
         };
 
         const response = await fetch(`/api/reflections/${date}`, {
@@ -216,11 +299,70 @@
         });
 
         if (!response.ok) {
-            alert("Unable to save reflection.");
+            let detail = "Unable to save reflection.";
+            try {
+                const errorPayload = await response.json();
+                detail = errorPayload.detail || detail;
+            } catch (_err) {
+                // ignore JSON parse errors and show default detail.
+            }
+            setFeedback(reflectionFeedback, "error", detail);
             return;
         }
 
+        setFeedback(reflectionFeedback, "success", "Reflection saved.");
         window.location.href = "/journal?saved=reflection";
+    });
+
+    document.querySelectorAll(".correlate-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const journalId = button.getAttribute("data-journal-id");
+            if (!journalId || !correlationPanel) {
+                return;
+            }
+
+            correlationPanel.style.display = "block";
+            correlationPanel.innerHTML = "<p class=\"muted\">Loading correlation...</p>";
+
+            const response = await fetch(`/api/journal/${journalId}/correlated-sessions`);
+            if (!response.ok) {
+                let detail = "Unable to load correlation.";
+                try {
+                    const errorPayload = await response.json();
+                    detail = errorPayload.detail || detail;
+                } catch (_err) {
+                    // ignore JSON parse errors and show default detail.
+                }
+                correlationPanel.innerHTML = `<div class=\"error\">${detail}</div>`;
+                return;
+            }
+
+            const data = await response.json();
+            const summary = data.summary || {};
+            const apps = (summary.apps || []).join(", ") || "-";
+            const repos = (summary.repos || []).join(", ") || "-";
+
+            correlationPanel.innerHTML = `
+                <h3 style="margin-bottom: 10px;">Correlation Summary</h3>
+                <p class="muted" style="margin-bottom: 12px;">Range: ${data.range.start_time} to ${data.range.end_time}</p>
+                <div class="stats-grid" style="margin-bottom: 12px;">
+                    <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                        <div class="stat-label">Active Hours</div>
+                        <div class="stat-value">${summary.total_active_hours || 0}</div>
+                    </div>
+                    <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                        <div class="stat-label">Context Switches</div>
+                        <div class="stat-value">${summary.total_context_switches || 0}</div>
+                    </div>
+                    <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                        <div class="stat-label">Sessions</div>
+                        <div class="stat-value">${summary.session_count || 0}</div>
+                    </div>
+                </div>
+                <p><strong>Apps:</strong> ${apps}</p>
+                <p><strong>Repos:</strong> ${repos}</p>
+            `;
+        });
     });
 })();
 </script>

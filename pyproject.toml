@@ -26,6 +26,7 @@ web = [
 dev = [
     "pytest>=8.0",
     "ruff>=0.4.0",
+    "httpx2>=0.27",
 ]
 
 [project.scripts]

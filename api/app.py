@@ -600,18 +600,23 @@ async def correlated_sessions(journal_id: int, limit: int = Query(500, ge=1, le=
     if not end_time:
         end_time = start_time
 
-    cursor.execute(
-        """
-        SELECT *
-        FROM activity_sessions
-        WHERE start_time < ?
-          AND end_time > ?
-        ORDER BY start_time ASC
-        LIMIT ?
-        """,
-        (end_time, start_time, limit),
-    )
-    sessions = [dict(row) for row in cursor.fetchall()]
+    # Fresh databases may have journals before any collector sessions.
+    # Return an empty correlation instead of surfacing SQL errors.
+    try:
+        cursor.execute(
+            """
+            SELECT *
+            FROM activity_sessions
+            WHERE start_time < ?
+              AND end_time > ?
+            ORDER BY start_time ASC
+            LIMIT ?
+            """,
+            (end_time, start_time, limit),
+        )
+        sessions = [dict(row) for row in cursor.fetchall()]
+    except sqlite3.OperationalError:
+        sessions = []
 
     active_sessions = [s for s in sessions if not bool(s.get("is_idle"))]
     total_active_seconds = sum(int(s.get("duration_sec") or 0) for s in active_sessions)
