@@ -1,12 +1,14 @@
 """FastAPI web server for WorkGraph dashboard."""
 
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from pydantic import BaseModel, Field, field_validator
 import sqlite3
 
 app = FastAPI(title="WorkGraph Dashboard")
@@ -28,6 +30,84 @@ if static_dir.exists():
 def get_db_path() -> Path:
     """Get the database path from environment or default."""
     return Path("activity.db")
+
+
+def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS journal_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            start_time TEXT,
+            end_time TEXT,
+            title TEXT,
+            notes TEXT,
+            metadata TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_journal_entries_start_time
+            ON journal_entries (start_time);
+
+        CREATE INDEX IF NOT EXISTS idx_journal_entries_end_time
+            ON journal_entries (end_time);
+
+        CREATE TABLE IF NOT EXISTS daily_reflections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL UNIQUE,
+            wins TEXT,
+            problems TEXT,
+            tomorrow TEXT,
+            energy INTEGER,
+            stress INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_daily_reflections_date
+            ON daily_reflections (date);
+        """
+    )
+    conn.commit()
+
+
+def _to_utc_iso(value: datetime | str | None) -> str | None:
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        dt = datetime.fromisoformat(value)
+    else:
+        dt = value
+
+    if dt.tzinfo is None:
+        local_tz = datetime.now().astimezone().tzinfo
+        dt = dt.replace(tzinfo=local_tz)
+
+    return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+class JournalCreate(BaseModel):
+    start_time: str | None = None
+    end_time: str | None = None
+    title: str = Field(min_length=1, max_length=200)
+    notes: str = ""
+    metadata: dict | None = None
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("title cannot be blank")
+        return trimmed
+
+
+class ReflectionUpsert(BaseModel):
+    wins: str | None = None
+    problems: str | None = None
+    tomorrow: str | None = None
+    energy: int | None = Field(default=None, ge=1, le=10)
+    stress: int | None = Field(default=None, ge=1, le=10)
 
 
 def query_sessions(
@@ -60,6 +140,44 @@ def query_sessions(
     conn.close()
 
     return [dict(row) for row in rows]
+
+
+def query_recent_journal_entries(db_path: Path, limit: int = 50) -> list[dict]:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT *
+        FROM journal_entries
+        ORDER BY COALESCE(start_time, created_at) DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def query_recent_reflections(db_path: Path, limit: int = 30) -> list[dict]:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT *
+        FROM daily_reflections
+        ORDER BY date DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
 
 
 def get_summary_stats(db_path: Path, days: int = 7) -> dict:
@@ -324,6 +442,27 @@ async def timeline(
     )
 
 
+@app.get("/journal", response_class=HTMLResponse)
+async def journal_page(saved: str | None = Query(None)):
+    """Journal view for adding entries and reflections."""
+    db_path = get_db_path()
+
+    if not db_path.exists():
+        return "<h1>WorkGraph Journal</h1><p>No database found yet. Run collector once first.</p>"
+
+    entries = query_recent_journal_entries(db_path, limit=50)
+    reflections = query_recent_reflections(db_path, limit=30)
+
+    message = None
+    if saved == "entry":
+        message = "Journal entry saved."
+    elif saved == "reflection":
+        message = "Reflection saved."
+
+    template = jinja_env.get_template("journal.html")
+    return template.render(entries=entries, reflections=reflections, message=message, error=None)
+
+
 @app.get("/api/sessions")
 async def api_sessions(
     days: int = Query(7, ge=1, le=30),
@@ -358,6 +497,227 @@ async def api_stats(days: int = Query(7, ge=1, le=30)):
         }
 
     return get_summary_stats(db_path, days=days)
+
+
+@app.post("/api/journal")
+async def create_journal_entry(payload: JournalCreate):
+    """Create a journal entry with optional historical timestamps."""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    start_iso = _to_utc_iso(payload.start_time)
+    end_iso = _to_utc_iso(payload.end_time)
+    if start_iso and end_iso and end_iso < start_iso:
+        raise HTTPException(status_code=400, detail="end_time must be after start_time")
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    cursor.execute(
+        """
+        INSERT INTO journal_entries (
+            created_at,
+            start_time,
+            end_time,
+            title,
+            notes,
+            metadata
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            now_iso,
+            start_iso,
+            end_iso,
+            payload.title,
+            payload.notes,
+            json.dumps(payload.metadata) if payload.metadata is not None else None,
+        ),
+    )
+    conn.commit()
+    entry_id = int(cursor.lastrowid)
+    conn.close()
+
+    return {"id": entry_id}
+
+
+@app.get("/api/journal")
+async def list_journal_entries(
+    from_ts: str | None = Query(None, alias="from"),
+    to_ts: str | None = Query(None, alias="to"),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """List journal entries with optional range filtering."""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM journal_entries WHERE 1=1"
+    params: list[str | int] = []
+
+    if from_ts:
+        query += " AND COALESCE(start_time, created_at) >= ?"
+        params.append(_to_utc_iso(from_ts) or from_ts)
+    if to_ts:
+        query += " AND COALESCE(end_time, start_time, created_at) <= ?"
+        params.append(_to_utc_iso(to_ts) or to_ts)
+
+    query += " ORDER BY COALESCE(start_time, created_at) DESC LIMIT ?"
+    params.append(limit)
+
+    cursor.execute(query, params)
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return {"entries": rows, "count": len(rows)}
+
+
+@app.get("/api/journal/{journal_id}/correlated-sessions")
+async def correlated_sessions(journal_id: int, limit: int = Query(500, ge=1, le=1000)):
+    """Fetch sessions overlapping a journal entry time range and a simple summary."""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT * FROM journal_entries WHERE id = ?",
+        (journal_id,),
+    )
+    entry = cursor.fetchone()
+    if entry is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+
+    start_time = entry["start_time"]
+    end_time = entry["end_time"]
+    if not start_time:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Journal entry has no start_time")
+    if not end_time:
+        end_time = start_time
+
+    cursor.execute(
+        """
+        SELECT *
+        FROM activity_sessions
+        WHERE start_time < ?
+          AND end_time > ?
+        ORDER BY start_time ASC
+        LIMIT ?
+        """,
+        (end_time, start_time, limit),
+    )
+    sessions = [dict(row) for row in cursor.fetchall()]
+
+    active_sessions = [s for s in sessions if not bool(s.get("is_idle"))]
+    total_active_seconds = sum(int(s.get("duration_sec") or 0) for s in active_sessions)
+    total_switches = sum(int(s.get("context_switches") or 0) for s in active_sessions)
+    apps = sorted({str(s.get("app_name")) for s in active_sessions if s.get("app_name")})
+    repos = sorted({str(s.get("git_repo")) for s in active_sessions if s.get("git_repo")})
+
+    conn.close()
+    return {
+        "journal_id": journal_id,
+        "range": {"start_time": start_time, "end_time": end_time},
+        "summary": {
+            "session_count": len(sessions),
+            "active_session_count": len(active_sessions),
+            "total_active_seconds": total_active_seconds,
+            "total_active_hours": round(total_active_seconds / 3600, 2),
+            "total_context_switches": total_switches,
+            "apps": apps,
+            "repos": repos,
+        },
+        "sessions": sessions,
+    }
+
+
+@app.put("/api/reflections/{date}")
+async def upsert_reflection(date: str, payload: ReflectionUpsert):
+    """Create or update a reflection record for a date."""
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
+
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    cursor.execute(
+        """
+        INSERT INTO daily_reflections (
+            date,
+            wins,
+            problems,
+            tomorrow,
+            energy,
+            stress,
+            created_at,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(date) DO UPDATE SET
+            wins = excluded.wins,
+            problems = excluded.problems,
+            tomorrow = excluded.tomorrow,
+            energy = excluded.energy,
+            stress = excluded.stress,
+            updated_at = excluded.updated_at
+        """,
+        (
+            date,
+            payload.wins,
+            payload.problems,
+            payload.tomorrow,
+            payload.energy,
+            payload.stress,
+            now_iso,
+            now_iso,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {"date": date, "saved": True}
+
+
+@app.get("/api/reflections")
+async def list_reflections(
+    from_date: str | None = Query(None, alias="from"),
+    to_date: str | None = Query(None, alias="to"),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """List reflections in date range."""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM daily_reflections WHERE 1=1"
+    params: list[str | int] = []
+
+    if from_date:
+        query += " AND date >= ?"
+        params.append(from_date)
+    if to_date:
+        query += " AND date <= ?"
+        params.append(to_date)
+
+    query += " ORDER BY date DESC LIMIT ?"
+    params.append(limit)
+
+    cursor.execute(query, params)
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return {"reflections": rows, "count": len(rows)}
 
 
 if __name__ == "__main__":

@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Journal - WorkGraph{% endblock %}
+
+{% block nav_journal %}active{% endblock %}
+
+{% block content %}
+<div>
+    <h2>Work Journal</h2>
+
+    {% if message %}
+    <div class="success">{{ message }}</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <div class="card">
+        <h3>Add Journal Entry</h3>
+        <p class="muted" style="margin-bottom: 14px;">Capture context around your day, including historical events.</p>
+
+        <form id="journal-form" class="form-grid">
+            <div class="field">
+                <label for="journal-date">Date</label>
+                <input type="date" id="journal-date" required>
+            </div>
+            <div class="field">
+                <label for="journal-start">Start Time (optional)</label>
+                <input type="time" id="journal-start">
+            </div>
+            <div class="field">
+                <label for="journal-end">End Time (optional)</label>
+                <input type="time" id="journal-end">
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="journal-title">Title</label>
+                <input type="text" id="journal-title" maxlength="200" placeholder="Example: Spent afternoon handling client-site delay" required>
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="journal-notes">Notes</label>
+                <textarea id="journal-notes" rows="5" placeholder="Add details, emotions, context, blockers, learnings, or anything important."></textarea>
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="journal-labels">Optional Labels (comma-separated)</label>
+                <input type="text" id="journal-labels" placeholder="incident, travel, personal, learning">
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <button class="btn" type="submit">Save Journal Entry</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Daily Reflection + Energy</h3>
+        <form id="reflection-form" class="form-grid">
+            <div class="field">
+                <label for="reflection-date">Date</label>
+                <input type="date" id="reflection-date" required>
+            </div>
+            <div class="field">
+                <label for="energy">Energy (1-10)</label>
+                <input type="number" id="energy" min="1" max="10" placeholder="7">
+            </div>
+            <div class="field">
+                <label for="stress">Stress (1-10)</label>
+                <input type="number" id="stress" min="1" max="10" placeholder="4">
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="wins">What went well?</label>
+                <textarea id="wins" rows="3"></textarea>
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="problems">What went poorly?</label>
+                <textarea id="problems" rows="3"></textarea>
+            </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="tomorrow">What should I do tomorrow?</label>
+                <textarea id="tomorrow" rows="3"></textarea>
+            </div>
+            <div style="grid-column: 1 / -1;">
+                <button class="btn" type="submit">Save Reflection</button>
+            </div>
+        </form>
+    </div>
+
+    <h2>Recent Journal Entries</h2>
+    <div class="card">
+        {% if entries %}
+        <table>
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Title</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in entries %}
+                <tr>
+                    <td class="time-small">
+                        {{ e.start_time or e.created_at }}
+                        {% if e.end_time %}
+                        <br><span style="color: #999;">to {{ e.end_time }}</span>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ e.title }}</strong></td>
+                    <td>{{ (e.notes or "")[:140] }}{% if e.notes and e.notes|length > 140 %}...{% endif %}</td>
+                    <td>
+                        <a href="/api/journal/{{ e.id }}/correlated-sessions" target="_blank">Correlate</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No journal entries yet.</p>
+        {% endif %}
+    </div>
+
+    <h2>Recent Reflections</h2>
+    <div class="card">
+        {% if reflections %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Energy</th>
+                    <th>Stress</th>
+                    <th>Wins</th>
+                    <th>Problems</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in reflections %}
+                <tr>
+                    <td>{{ r.date }}</td>
+                    <td>{{ r.energy or "-" }}</td>
+                    <td>{{ r.stress or "-" }}</td>
+                    <td>{{ (r.wins or "")[:80] }}{% if r.wins and r.wins|length > 80 %}...{% endif %}</td>
+                    <td>{{ (r.problems or "")[:80] }}{% if r.problems and r.problems|length > 80 %}...{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No reflections yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+(function() {
+    const now = new Date();
+    const dateValue = now.toISOString().slice(0, 10);
+
+    const dateInput = document.getElementById("journal-date");
+    const reflectionDate = document.getElementById("reflection-date");
+    dateInput.value = dateValue;
+    reflectionDate.value = dateValue;
+
+    function buildDateTime(date, time) {
+        if (!time) {
+            return null;
+        }
+        return `${date}T${time}`;
+    }
+
+    document.getElementById("journal-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const payload = {
+            start_time: buildDateTime(dateInput.value, document.getElementById("journal-start").value),
+            end_time: buildDateTime(dateInput.value, document.getElementById("journal-end").value),
+            title: document.getElementById("journal-title").value,
+            notes: document.getElementById("journal-notes").value,
+            metadata: {
+                labels: document.getElementById("journal-labels").value
+                    .split(",")
+                    .map((v) => v.trim())
+                    .filter((v) => v.length > 0)
+            }
+        };
+
+        const response = await fetch("/api/journal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            alert("Unable to save journal entry.");
+            return;
+        }
+
+        window.location.href = "/journal?saved=entry";
+    });
+
+    document.getElementById("reflection-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const date = document.getElementById("reflection-date").value;
+        const payload = {
+            wins: document.getElementById("wins").value,
+            problems: document.getElementById("problems").value,
+            tomorrow: document.getElementById("tomorrow").value,
+            energy: document.getElementById("energy").value || null,
+            stress: document.getElementById("stress").value || null
+        };
+
+        const response = await fetch(`/api/reflections/${date}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            alert("Unable to save reflection.");
+            return;
+        }
+
+        window.location.href = "/journal?saved=reflection";
+    });
+})();
+</script>
+{% endblock %}

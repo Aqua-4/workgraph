@@ -228,6 +228,71 @@
             color: #999;
         }
 
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .field label {
+            font-size: 0.85em;
+            color: #555;
+            font-weight: 600;
+        }
+
+        .field input,
+        .field textarea,
+        .field select {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px;
+            font: inherit;
+        }
+
+        .btn {
+            border: 0;
+            border-radius: 6px;
+            padding: 10px 14px;
+            background: #0066cc;
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            background: #0052a3;
+        }
+
+        .muted {
+            color: #888;
+            font-size: 0.9em;
+        }
+
+        .success {
+            color: #0d7a43;
+            background: #e6f7ef;
+            border: 1px solid #bcead1;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 12px;
+        }
+
+        .error {
+            color: #a11b1b;
+            background: #fdecec;
+            border: 1px solid #f3c5c5;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 12px;
+        }
+
         {% block extra_styles %}{% endblock %}
     </style>
 </head>
@@ -238,6 +303,7 @@
             <nav>
                 <a href="/" class="{% block nav_dashboard %}{% endblock %}">Dashboard</a>
                 <a href="/timeline" class="{% block nav_timeline %}{% endblock %}">Timeline</a>
+                <a href="/journal" class="{% block nav_journal %}{% endblock %}">Journal</a>
             </nav>
         </div>
     </header>

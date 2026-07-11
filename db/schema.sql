@@ -45,3 +45,34 @@ CREATE INDEX IF NOT EXISTS idx_git_activity_session_id
 
 CREATE INDEX IF NOT EXISTS idx_git_activity_repo
     ON git_activity (repo);
+
+CREATE TABLE IF NOT EXISTS journal_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    start_time TEXT,
+    end_time TEXT,
+    title TEXT,
+    notes TEXT,
+    metadata TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_journal_entries_start_time
+    ON journal_entries (start_time);
+
+CREATE INDEX IF NOT EXISTS idx_journal_entries_end_time
+    ON journal_entries (end_time);
+
+CREATE TABLE IF NOT EXISTS daily_reflections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL UNIQUE,
+    wins TEXT,
+    problems TEXT,
+    tomorrow TEXT,
+    energy INTEGER,
+    stress INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_reflections_date
+    ON daily_reflections (date);
