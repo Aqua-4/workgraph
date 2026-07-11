@@ -8,9 +8,14 @@
 <div>
     <h2>This Week Overview</h2>
 
-    {% if sync_health and sync_health.enabled %}
+    {% if sync_health %}
     <h2>Sync Health</h2>
     <div class="card">
+        {% if sync_health.registered_devices == 0 %}
+        <div class="stat-label" style="margin-bottom: 10px; color: #6b7280;">
+            No devices registered yet.
+        </div>
+        {% endif %}
         <div class="stat-label" style="margin-bottom: 10px;">
             Synced devices: {{ sync_health.synced_devices }} / {{ sync_health.registered_devices }}
             {% if sync_health.unsynced_devices and sync_health.unsynced_devices > 0 %}
