@@ -79,6 +79,18 @@
         </div>
     </div>
 
+    {% if sync_health and sync_health.enabled %}
+    <div class="card journal-card p-3 p-md-4">
+        <h3 class="mb-1">Sync Health</h3>
+        <p class="muted mb-2">Server sync status for connected devices.</p>
+        <div class="d-flex gap-2 flex-wrap">
+            <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
+            <span class="badge text-bg-light border">Active Tokens: {{ sync_health.active_tokens }}</span>
+            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at or '-' }}</span>
+        </div>
+    </div>
+    {% endif %}
+
     {% if message %}
     <div class="success">{{ message }}</div>
     {% endif %}

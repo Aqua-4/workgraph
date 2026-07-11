@@ -8,6 +8,35 @@
 <div>
     <h2>This Week Overview</h2>
 
+    {% if sync_health and sync_health.enabled %}
+    <h2>Sync Health</h2>
+    <div class="card">
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Registered Devices</div>
+                <div class="stat-value">{{ sync_health.registered_devices }}</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    active sync clients
+                </div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Active Tokens</div>
+                <div class="stat-value">{{ sync_health.active_tokens }}</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    valid device tokens
+                </div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Last Sync</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at or '-' }}</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    latest checkpoint update
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="stats-grid">
         <div class="stat-box">
             <div class="stat-label">Total Active Time</div>

@@ -279,6 +279,30 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(stats["total_switches"], 2)
         self.assertAlmostEqual(stats["switch_rate_per_hour"], 1.33, places=2)
 
+    def test_timeline_and_journal_show_sync_health_when_enabled(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-1", "name": "Parashar"},
+                "device": {
+                    "id": "device-1",
+                    "name": "Office Laptop",
+                    "type": "work",
+                    "hostname": "LAT-001",
+                    "category": "employer",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+
+        timeline_response = self.client.get("/timeline")
+        self.assertEqual(timeline_response.status_code, 200)
+        self.assertIn("Sync Health", timeline_response.text)
+
+        journal_response = self.client.get("/journal")
+        self.assertEqual(journal_response.status_code, 200)
+        self.assertIn("Sync Health", journal_response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

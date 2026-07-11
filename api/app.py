@@ -625,6 +625,110 @@ def _max_cursor_from_changes(changes: list[dict]) -> str | None:
     return f"{top[0]}|{top[1]}"
 
 
+def _list_sync_union_rows(
+    conn: sqlite3.Connection,
+    *,
+    cursor_value: str | None,
+    limit: int,
+) -> list[sqlite3.Row]:
+    updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
+    query = """
+        SELECT entity, id, updated_at, deleted_at, payload_json
+        FROM (
+            SELECT 'sessions' AS entity, uuid AS id, updated_at, deleted_at, payload_json
+            FROM sync_sessions
+            UNION ALL
+            SELECT 'journal_entries' AS entity, uuid AS id, updated_at, deleted_at, payload_json
+            FROM sync_journal_entries
+            UNION ALL
+            SELECT 'daily_reflections' AS entity, uuid AS id, updated_at, deleted_at, payload_json
+            FROM sync_daily_reflections
+        )
+        WHERE 1=1
+    """
+    params: list[str | int] = []
+    if updated_at_cursor is not None:
+        query += """
+          AND (
+                updated_at > ?
+                OR (updated_at = ? AND id > ?)
+              )
+        """
+        params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+    query += " ORDER BY updated_at ASC, id ASC LIMIT ?"
+    params.append(limit)
+    return list(conn.execute(query, params).fetchall())
+
+
+def _count_sync_union_rows_after_cursor(
+    conn: sqlite3.Connection,
+    *,
+    cursor_value: str | None,
+) -> int:
+    updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
+    query = """
+        SELECT COUNT(*) AS total_rows
+        FROM (
+            SELECT uuid AS id, updated_at FROM sync_sessions
+            UNION ALL
+            SELECT uuid AS id, updated_at FROM sync_journal_entries
+            UNION ALL
+            SELECT uuid AS id, updated_at FROM sync_daily_reflections
+        )
+        WHERE 1=1
+    """
+    params: list[str] = []
+    if updated_at_cursor is not None:
+        query += """
+          AND (
+                updated_at > ?
+                OR (updated_at = ? AND id > ?)
+              )
+        """
+        params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+
+    row = conn.execute(query, params).fetchone()
+    return int(row["total_rows"] if row is not None else 0)
+
+
+def get_sync_health(db_path: Path) -> dict:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+
+    token_row = conn.execute(
+        """
+        SELECT COUNT(*) AS active_tokens
+        FROM sync_tokens
+        WHERE revoked_at IS NULL
+        """
+    ).fetchone()
+    device_row = conn.execute(
+        """
+        SELECT COUNT(*) AS registered_devices,
+               MAX(last_seen_at) AS last_seen_at
+        FROM sync_devices
+        """
+    ).fetchone()
+    checkpoint_row = conn.execute(
+        """
+        SELECT MAX(updated_at) AS last_sync_at
+        FROM sync_checkpoints
+        """
+    ).fetchone()
+    conn.close()
+
+    active_tokens = int(token_row["active_tokens"] if token_row is not None else 0)
+    registered_devices = int(device_row["registered_devices"] if device_row is not None else 0)
+    return {
+        "enabled": active_tokens > 0,
+        "active_tokens": active_tokens,
+        "registered_devices": registered_devices,
+        "last_seen_at": device_row["last_seen_at"] if device_row is not None else None,
+        "last_sync_at": checkpoint_row["last_sync_at"] if checkpoint_row is not None else None,
+    }
+
+
 def get_available_tags() -> list[str]:
     return sorted(ActivityTagger().rules.keys())
 
@@ -1029,9 +1133,10 @@ async def dashboard():
         return "<h1>WorkGraph Dashboard</h1><p>No data collected yet. Run the collector first.</p>"
 
     stats = get_summary_stats(db_path, days=7)
+    sync_health = get_sync_health(db_path)
 
     template = jinja_env.get_template("dashboard.html")
-    return template.render(stats=stats)
+    return template.render(stats=stats, sync_health=sync_health)
 
 
 @app.get("/timeline", response_class=HTMLResponse)
@@ -1060,6 +1165,7 @@ async def timeline(
 
     chart_sessions = sorted(sessions, key=lambda s: str(s.get("start_time") or ""))[:300]
     table_sessions = sessions[:120]
+    sync_health = get_sync_health(db_path)
 
     template = jinja_env.get_template("timeline.html")
     return template.render(
@@ -1071,6 +1177,7 @@ async def timeline(
         available_tags=available_tags,
         available_apps=available_apps,
         chart_sessions=chart_sessions,
+        sync_health=sync_health,
     )
 
 
@@ -1086,6 +1193,7 @@ async def journal_page(saved: str | None = Query(None)):
     reflections = query_recent_reflections(db_path, limit=30)
     work_events = query_recent_work_events(db_path, limit=30)
     available_tags = get_available_tags()
+    sync_health = get_sync_health(db_path)
 
     message = None
     if saved == "entry":
@@ -1103,6 +1211,7 @@ async def journal_page(saved: str | None = Query(None)):
         available_tags=available_tags,
         work_event_types=WORK_EVENT_TYPES,
         work_event_impacts=WORK_EVENT_IMPACTS,
+        sync_health=sync_health,
         message=message,
         error=None,
     )
@@ -1142,6 +1251,20 @@ async def api_stats(days: int = Query(7, ge=1, le=30)):
         }
 
     return get_summary_stats(db_path, days=days)
+
+
+@app.get("/api/sync/health")
+async def api_sync_health():
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {
+            "enabled": False,
+            "active_tokens": 0,
+            "registered_devices": 0,
+            "last_seen_at": None,
+            "last_sync_at": None,
+        }
+    return get_sync_health(db_path)
 
 
 @app.post("/api/journal")
@@ -1746,45 +1869,46 @@ async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None 
         user_id=payload.user_id,
     )
 
-    sessions = _list_sync_changes(
-        conn,
-        table_name="sync_sessions",
-        cursor_value=payload.cursor,
-        limit=payload.limit,
-    )
-    journal_entries = _list_sync_changes(
-        conn,
-        table_name="sync_journal_entries",
-        cursor_value=payload.cursor,
-        limit=payload.limit,
-    )
-    daily_reflections = _list_sync_changes(
-        conn,
-        table_name="sync_daily_reflections",
-        cursor_value=payload.cursor,
-        limit=payload.limit,
-    )
-    tombstones = _list_sync_tombstones(
-        conn,
-        cursor_value=payload.cursor,
-        limit=payload.limit,
-    )
+    rows = _list_sync_union_rows(conn, cursor_value=payload.cursor, limit=payload.limit)
+    active_sessions: list[dict] = []
+    active_journal_entries: list[dict] = []
+    active_daily_reflections: list[dict] = []
+    tombstones: list[dict] = []
 
-    active_sessions = [row for row in sessions if not row.get("deleted_at")]
-    active_journal_entries = [row for row in journal_entries if not row.get("deleted_at")]
-    active_daily_reflections = [row for row in daily_reflections if not row.get("deleted_at")]
+    for row in rows:
+        entity = str(row["entity"])
+        row_id = str(row["id"])
+        updated_at = row["updated_at"]
+        deleted_at = row["deleted_at"]
+        if deleted_at:
+            tombstones.append(
+                {
+                    "entity": entity,
+                    "id": row_id,
+                    "deleted_at": deleted_at,
+                    "updated_at": updated_at,
+                }
+            )
+            continue
 
-    all_changes = active_sessions + active_journal_entries + active_daily_reflections
-    next_cursor = _max_cursor_from_changes(all_changes)
-    if next_cursor is None:
-        next_cursor = payload.cursor
+        payload_json = row["payload_json"]
+        if not payload_json:
+            continue
+        item = json.loads(payload_json)
+        if entity == "sessions":
+            active_sessions.append(item)
+        elif entity == "journal_entries":
+            active_journal_entries.append(item)
+        elif entity == "daily_reflections":
+            active_daily_reflections.append(item)
 
-    has_more = (
-        len(sessions) >= payload.limit
-        or len(journal_entries) >= payload.limit
-        or len(daily_reflections) >= payload.limit
-        or len(tombstones) >= payload.limit
-    )
+    next_cursor = payload.cursor
+    if rows:
+        last_row = rows[-1]
+        next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
+
+    total_after_cursor = _count_sync_union_rows_after_cursor(conn, cursor_value=payload.cursor)
+    has_more = total_after_cursor > len(rows)
 
     now_iso = _now_iso()
     conn.execute(

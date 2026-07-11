@@ -63,6 +63,20 @@
         <span class="badge text-bg-secondary">{{ filtered_count }} sessions</span>
     </div>
 
+    {% if sync_health and sync_health.enabled %}
+    <div class="card mb-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h3 class="m-0">Sync Health</h3>
+            <span class="timeline-hint">Last sync: {{ sync_health.last_sync_at or '-' }}</span>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
+            <span class="badge text-bg-light border">Active Tokens: {{ sync_health.active_tokens }}</span>
+            <span class="badge text-bg-light border">Last Seen: {{ sync_health.last_seen_at or '-' }}</span>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="card mb-3">
         <form method="get" class="row g-3 align-items-end">
             <div class="col-12 col-md-3">
