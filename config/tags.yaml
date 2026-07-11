@@ -1,10 +1,12 @@
 tags:
-  # Example client/project work bucket kept for backward compatibility.
+  # NOTE: Keep this list limited to non-sensitive historical project aliases only.
+  # Do NOT add current client names, repos, or internal identifiers here.
+  # Approved placeholders: compass, tenet, atlas.
   Client Delivery:
     repos:
-      - aicoe-enterprise-mcp-api-backend
-      - mcp-platform
-      - client
+      - compass
+      - tenet
+      - atlas
     domains: []
     keywords:
       - client

@@ -618,12 +618,12 @@ Run a one-shot snapshot every hour:
 * [x] Activity tagging (rules-based categorization)
 * [x] Context-switch counting
 * [ ] Calendar event tracking
-* [ ] Focus time analytics
+* [x] Focus time analytics
 
 ### v1.2
 
-* [ ] Local dashboard
-* [ ] Timeline view
+* [x] Local dashboard
+* [x] Timeline view
 * [ ] Weekly reports
 
 ### v2.0
