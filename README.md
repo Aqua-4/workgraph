@@ -474,6 +474,13 @@ Then open your browser to: **http://127.0.0.1:4000**
 
 The collector runs in self-healing mode (auto-restarts on crashes), while the dashboard displays data at the same time.
 
+Unified mode also auto-starts the sync daemon when `sync_base_url` and `sync_token` are present in the resolved config (prefers `config/my-settings.yaml` when using default config path).
+
+```bash
+# Disable sync daemon startup in unified mode
+./run-dashboard.sh --no-sync
+```
+
 ### Option 2: Collector Only
 
 If you only want to collect data without viewing it:
@@ -509,6 +516,9 @@ uv run python main.py --web --port 4000
 
 # Run both together
 uv run python -m services.unified_launcher
+
+# Run both together without sync daemon
+uv run python -m services.unified_launcher --no-sync
 ```
 
 ### Web Dashboard (V1.1+)
