@@ -1,10 +1,14 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "workgraph"
 version = "0.1.0"
 description = "Privacy-first local work telemetry for engineers."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 dependencies = [
     "psutil>=5.9",
     "pydantic>=2.0",
@@ -31,6 +35,16 @@ dev = [
 
 [project.scripts]
 workgraph = "main:main"
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+py-modules = ["main"]
+packages = ["api", "collector", "db", "processor", "services", "workgraph"]
+
+[tool.setuptools.package-data]
+api = ["templates/*.html", "static/**/*"]
 
 [tool.ruff]
 line-length = 88
