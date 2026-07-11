@@ -279,6 +279,89 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(stats["total_switches"], 2)
         self.assertAlmostEqual(stats["switch_rate_per_hour"], 1.33, places=2)
 
+    def test_summary_stats_merges_short_active_sessions_into_focus_blocks(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 9, 12, tzinfo=timezone.utc),
+                    duration_sec=720,
+                    app_name="Code",
+                    process_name="Code",
+                    window_title="main.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=1,
+                    tag="Client Delivery",
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 9, 12, 30, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 9, 25, 30, tzinfo=timezone.utc),
+                    duration_sec=780,
+                    app_name="Terminal",
+                    process_name="bash",
+                    window_title="workgraph",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=1,
+                    tag="Client Delivery",
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 9, 25, 45, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 9, 44, 45, tzinfo=timezone.utc),
+                    duration_sec=1140,
+                    app_name="Browser",
+                    process_name="chrome",
+                    window_title="docs",
+                    browser_domain="docs.python.org",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=1,
+                    tag="Learning",
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 10, 30, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 10, 45, tzinfo=timezone.utc),
+                    duration_sec=900,
+                    app_name="Mail",
+                    process_name="mail",
+                    window_title="Inbox",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        stats = get_summary_stats(self.db_path, days=7)
+
+        self.assertEqual(stats["deep_work_blocks"], 1)
+        self.assertEqual(stats["longest_focus_sec"], 2640)
+        self.assertEqual(stats["avg_focus_sec"], 2640)
+        self.assertAlmostEqual(stats["longest_focus_hours"], 0.73, places=2)
+        self.assertAlmostEqual(stats["avg_focus_minutes"], 44.0, places=1)
+
     def test_timeline_and_journal_show_sync_health_when_enabled(self) -> None:
         register_response = self.client.post(
             "/api/sync/v1/devices/register",

@@ -55,6 +55,13 @@ def get_db_path() -> Path:
     return Path("activity.db")
 
 
+def _parse_iso_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
@@ -1068,21 +1075,48 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     # Deep work / focus metrics
     cursor.execute(
         """
-        SELECT
-            COUNT(*) as deep_work_blocks,
-            MAX(duration_sec) as longest_focus_sec,
-            AVG(duration_sec) as avg_focus_sec
+        SELECT start_time, end_time, duration_sec
         FROM activity_sessions
         WHERE start_time >= ?
           AND is_idle = 0
-          AND duration_sec >= 1800
+        ORDER BY start_time, id
         """,
         (start_iso,),
     )
-    focus_row = cursor.fetchone()
-    deep_work_blocks = focus_row["deep_work_blocks"] or 0
-    longest_focus_sec = focus_row["longest_focus_sec"] or 0
-    avg_focus_sec = focus_row["avg_focus_sec"] or 0
+    focus_blocks: list[int] = []
+    current_block_end: datetime | None = None
+    current_block_seconds = 0
+
+    for row in cursor.fetchall():
+        start_time = _parse_iso_datetime(row["start_time"])
+        end_time_value = row["end_time"] or row["start_time"]
+        end_time = _parse_iso_datetime(end_time_value)
+        duration_sec = int(row["duration_sec"] or 0)
+
+        if current_block_end is None:
+            current_block_end = end_time
+            current_block_seconds = duration_sec
+            continue
+
+        gap_seconds = (start_time - current_block_end).total_seconds()
+        if gap_seconds > 90:
+            focus_blocks.append(current_block_seconds)
+            current_block_seconds = duration_sec
+        else:
+            current_block_seconds += duration_sec
+
+        if end_time > current_block_end:
+            current_block_end = end_time
+
+    if current_block_end is not None:
+        focus_blocks.append(current_block_seconds)
+
+    deep_focus_blocks = [block_seconds for block_seconds in focus_blocks if block_seconds >= 1800]
+    deep_work_blocks = len(deep_focus_blocks)
+    longest_focus_sec = max(focus_blocks) if focus_blocks else 0
+    avg_focus_sec = (
+        sum(deep_focus_blocks) / len(deep_focus_blocks) if deep_focus_blocks else 0
+    )
 
     # Meeting proxy from app name / domain / title patterns
     cursor.execute(
