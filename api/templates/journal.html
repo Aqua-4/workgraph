@@ -17,11 +17,12 @@
     {% endif %}
 
     <div class="card">
-        <h3>Add Journal Entry</h3>
+        <h3 id="journal-form-title">Add Journal Entry</h3>
         <p class="muted" style="margin-bottom: 14px;">Capture context around your day, including historical events.</p>
         <div id="journal-feedback" style="display: none;"></div>
 
         <form id="journal-form" class="form-grid">
+            <input type="hidden" id="journal-id">
             <div class="field">
                 <label for="journal-date">Date</label>
                 <input type="date" id="journal-date" required>
@@ -46,8 +47,18 @@
                 <label for="journal-labels">Optional Labels (comma-separated)</label>
                 <input type="text" id="journal-labels" placeholder="incident, travel, personal, learning">
             </div>
+            <div class="field" style="grid-column: 1 / -1;">
+                <label for="journal-tags">Available Tags</label>
+                <select id="journal-tags" multiple size="6">
+                    {% for tag in available_tags %}
+                    <option value="{{ tag }}">{{ tag }}</option>
+                    {% endfor %}
+                </select>
+                <p class="muted">Select one or more configured tags to associate with this entry.</p>
+            </div>
             <div style="grid-column: 1 / -1;">
-                <button class="btn" type="submit">Save Journal Entry</button>
+                <button class="btn" id="journal-submit" type="submit">Save Journal Entry</button>
+                <button class="btn" id="journal-cancel" type="button" style="background: #777; display: none;">Cancel Edit</button>
             </div>
         </form>
     </div>
@@ -111,6 +122,14 @@
                     <td>{{ (e.notes or "")[:140] }}{% if e.notes and e.notes|length > 140 %}...{% endif %}</td>
                     <td>
                         <button
+                            class="btn edit-entry-btn"
+                            type="button"
+                            data-journal-id="{{ e.id }}"
+                            style="padding: 6px 10px; font-size: 0.85em; margin-right: 6px; background: #444;"
+                        >
+                            Edit
+                        </button>
+                        <button
                             class="btn correlate-btn"
                             type="button"
                             data-journal-id="{{ e.id }}"
@@ -167,6 +186,10 @@
 
     const dateInput = document.getElementById("journal-date");
     const reflectionDate = document.getElementById("reflection-date");
+    const journalIdInput = document.getElementById("journal-id");
+    const journalSubmitButton = document.getElementById("journal-submit");
+    const journalCancelButton = document.getElementById("journal-cancel");
+    const journalFormTitle = document.getElementById("journal-form-title");
     const journalFeedback = document.getElementById("journal-feedback");
     const reflectionFeedback = document.getElementById("reflection-feedback");
     const correlationPanel = document.getElementById("correlation-panel");
@@ -206,6 +229,47 @@
         return `${date}T${time}`;
     }
 
+    function resetJournalForm() {
+        journalIdInput.value = "";
+        journalFormTitle.textContent = "Add Journal Entry";
+        journalSubmitButton.textContent = "Save Journal Entry";
+        journalCancelButton.style.display = "none";
+
+        dateInput.value = dateValue;
+        document.getElementById("journal-start").value = "";
+        document.getElementById("journal-end").value = "";
+        document.getElementById("journal-title").value = "";
+        document.getElementById("journal-notes").value = "";
+        document.getElementById("journal-labels").value = "";
+        Array.from(document.getElementById("journal-tags").options).forEach((opt) => {
+            opt.selected = false;
+        });
+    }
+
+    function getSelectedTags() {
+        return Array.from(document.getElementById("journal-tags").selectedOptions).map((opt) => opt.value);
+    }
+
+    function setSelectedTags(tags) {
+        const selected = new Set(tags || []);
+        Array.from(document.getElementById("journal-tags").options).forEach((opt) => {
+            opt.selected = selected.has(opt.value);
+        });
+    }
+
+    function splitIsoForInputs(isoValue) {
+        if (!isoValue) {
+            return { date: "", time: "" };
+        }
+        const dateObj = new Date(isoValue);
+        if (Number.isNaN(dateObj.getTime())) {
+            return { date: "", time: "" };
+        }
+        const localDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
+        const localTime = `${String(dateObj.getHours()).padStart(2, "0")}:${String(dateObj.getMinutes()).padStart(2, "0")}`;
+        return { date: localDate, time: localTime };
+    }
+
     document.getElementById("journal-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         clearFeedback(journalFeedback);
@@ -236,6 +300,7 @@
             title,
             notes: document.getElementById("journal-notes").value,
             metadata: {
+                tags: getSelectedTags(),
                 labels: document.getElementById("journal-labels").value
                     .split(",")
                     .map((v) => v.trim())
@@ -243,8 +308,12 @@
             }
         };
 
-        const response = await fetch("/api/journal", {
-            method: "POST",
+        const editingId = journalIdInput.value;
+        const method = editingId ? "PUT" : "POST";
+        const url = editingId ? `/api/journal/${editingId}` : "/api/journal";
+
+        const response = await fetch(url, {
+            method,
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
@@ -258,6 +327,12 @@
                 // ignore JSON parse errors and show default detail.
             }
             setFeedback(journalFeedback, "error", detail);
+            return;
+        }
+
+        if (editingId) {
+            setFeedback(journalFeedback, "success", "Journal entry updated.");
+            window.location.href = "/journal?saved=entry";
             return;
         }
 
@@ -363,6 +438,49 @@
                 <p><strong>Repos:</strong> ${repos}</p>
             `;
         });
+    });
+
+    document.querySelectorAll(".edit-entry-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+            clearFeedback(journalFeedback);
+            const journalId = button.getAttribute("data-journal-id");
+            if (!journalId) {
+                return;
+            }
+
+            const response = await fetch(`/api/journal/${journalId}`);
+            if (!response.ok) {
+                setFeedback(journalFeedback, "error", "Unable to load journal entry for editing.");
+                return;
+            }
+
+            const payload = await response.json();
+            const entry = payload.entry || {};
+            const metadata = entry.metadata || {};
+
+            const startParts = splitIsoForInputs(entry.start_time);
+            const endParts = splitIsoForInputs(entry.end_time);
+
+            journalIdInput.value = String(entry.id || "");
+            journalFormTitle.textContent = "Edit Journal Entry";
+            journalSubmitButton.textContent = "Update Journal Entry";
+            journalCancelButton.style.display = "inline-block";
+
+            dateInput.value = startParts.date || dateValue;
+            document.getElementById("journal-start").value = startParts.time;
+            document.getElementById("journal-end").value = endParts.time;
+            document.getElementById("journal-title").value = entry.title || "";
+            document.getElementById("journal-notes").value = entry.notes || "";
+            document.getElementById("journal-labels").value = (metadata.labels || []).join(", ");
+            setSelectedTags(metadata.tags || []);
+
+            document.getElementById("journal-form-title").scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    });
+
+    journalCancelButton.addEventListener("click", () => {
+        clearFeedback(journalFeedback);
+        resetJournalForm();
     });
 })();
 </script>

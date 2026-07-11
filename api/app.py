@@ -11,6 +11,8 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field, field_validator
 import sqlite3
 
+from services.activity_tagger import ActivityTagger
+
 app = FastAPI(title="WorkGraph Dashboard")
 
 # Setup Jinja2
@@ -110,6 +112,26 @@ class ReflectionUpsert(BaseModel):
     stress: int | None = Field(default=None, ge=1, le=10)
 
 
+def _decode_metadata(raw_value: str | None) -> dict | None:
+    if raw_value is None:
+        return None
+    try:
+        parsed = json.loads(raw_value)
+        return parsed if isinstance(parsed, dict) else None
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+
+def _serialize_journal_row(row: sqlite3.Row) -> dict:
+    item = dict(row)
+    item["metadata"] = _decode_metadata(item.get("metadata"))
+    return item
+
+
+def get_available_tags() -> list[str]:
+    return sorted(ActivityTagger().rules.keys())
+
+
 def query_sessions(
     db_path: Path,
     start_date: datetime | None = None,
@@ -156,7 +178,7 @@ def query_recent_journal_entries(db_path: Path, limit: int = 50) -> list[dict]:
         """,
         (limit,),
     )
-    rows = [dict(row) for row in cursor.fetchall()]
+    rows = [_serialize_journal_row(row) for row in cursor.fetchall()]
     conn.close()
     return rows
 
@@ -452,6 +474,7 @@ async def journal_page(saved: str | None = Query(None)):
 
     entries = query_recent_journal_entries(db_path, limit=50)
     reflections = query_recent_reflections(db_path, limit=30)
+    available_tags = get_available_tags()
 
     message = None
     if saved == "entry":
@@ -460,7 +483,13 @@ async def journal_page(saved: str | None = Query(None)):
         message = "Reflection saved."
 
     template = jinja_env.get_template("journal.html")
-    return template.render(entries=entries, reflections=reflections, message=message, error=None)
+    return template.render(
+        entries=entries,
+        reflections=reflections,
+        available_tags=available_tags,
+        message=message,
+        error=None,
+    )
 
 
 @app.get("/api/sessions")
@@ -569,9 +598,81 @@ async def list_journal_entries(
     params.append(limit)
 
     cursor.execute(query, params)
-    rows = [dict(row) for row in cursor.fetchall()]
+    rows = [_serialize_journal_row(row) for row in cursor.fetchall()]
     conn.close()
     return {"entries": rows, "count": len(rows)}
+
+
+@app.get("/api/journal/tags")
+async def list_journal_tags():
+    """List configured tags available for journal tagging."""
+    return {"tags": get_available_tags()}
+
+
+@app.get("/api/journal/{journal_id}")
+async def get_journal_entry(journal_id: int):
+    """Get one journal entry by id."""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT * FROM journal_entries WHERE id = ?",
+        (journal_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+
+    return {"entry": _serialize_journal_row(row)}
+
+
+@app.put("/api/journal/{journal_id}")
+async def update_journal_entry(journal_id: int, payload: JournalCreate):
+    """Update an existing journal entry."""
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM journal_entries WHERE id = ?", (journal_id,))
+    if cursor.fetchone() is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Journal entry not found")
+
+    start_iso = _to_utc_iso(payload.start_time)
+    end_iso = _to_utc_iso(payload.end_time)
+    if start_iso and end_iso and end_iso < start_iso:
+        conn.close()
+        raise HTTPException(status_code=400, detail="end_time must be after start_time")
+
+    cursor.execute(
+        """
+        UPDATE journal_entries
+        SET start_time = ?,
+            end_time = ?,
+            title = ?,
+            notes = ?,
+            metadata = ?
+        WHERE id = ?
+        """,
+        (
+            start_iso,
+            end_iso,
+            payload.title,
+            payload.notes,
+            json.dumps(payload.metadata) if payload.metadata is not None else None,
+            journal_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": journal_id, "updated": True}
 
 
 @app.get("/api/journal/{journal_id}/correlated-sessions")

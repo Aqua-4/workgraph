@@ -47,6 +47,45 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["entries"][0]["title"], "Infra issue during demo")
 
+    def test_update_journal_entry(self) -> None:
+        create_response = self.client.post(
+            "/api/journal",
+            json={
+                "start_time": "2026-07-10T10:00:00+00:00",
+                "end_time": "2026-07-10T12:00:00+00:00",
+                "title": "Original title",
+                "notes": "Original notes",
+                "metadata": {"labels": ["incident"], "tags": ["Client Delivery"]},
+            },
+        )
+        self.assertEqual(create_response.status_code, 200)
+        journal_id = create_response.json()["id"]
+
+        update_response = self.client.put(
+            f"/api/journal/{journal_id}",
+            json={
+                "start_time": "2026-07-10T10:30:00+00:00",
+                "end_time": "2026-07-10T12:30:00+00:00",
+                "title": "Updated title",
+                "notes": "Updated notes",
+                "metadata": {"labels": ["learning"], "tags": ["Learning"]},
+            },
+        )
+        self.assertEqual(update_response.status_code, 200)
+
+        detail_response = self.client.get(f"/api/journal/{journal_id}")
+        self.assertEqual(detail_response.status_code, 200)
+        entry = detail_response.json()["entry"]
+        self.assertEqual(entry["title"], "Updated title")
+        self.assertEqual(entry["metadata"]["tags"], ["Learning"])
+
+    def test_list_available_journal_tags(self) -> None:
+        response = self.client.get("/api/journal/tags")
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("tags", payload)
+        self.assertTrue(len(payload["tags"]) > 0)
+
     def test_correlated_sessions_summary(self) -> None:
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
