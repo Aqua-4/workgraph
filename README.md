@@ -92,6 +92,8 @@ This kind of insight isn't commonly available in time tracking tools, but it's e
 
 ## Features
 
+For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STATUS.md).
+
 ### Version 1.0 — Collection Foundation
 
 * Active application tracking
@@ -113,8 +115,9 @@ This kind of insight isn't commonly available in time tracking tools, but it's e
 
 * Local web dashboard
 * Timeline view
-* PostgreSQL backend for multi-device sync
-* Activity export (JSON, CSV)
+* Journal view and APIs (entries, correlation, reflections)
+* PostgreSQL backend for multi-device sync *(planned)*
+* Activity export (JSON, CSV) *(planned)*
 
 ### Version 2.0 — Analytics Engine
 
@@ -365,17 +368,13 @@ What this does:
 - Recomputes tags for all stored sessions using current rules
 - Updates only sessions where the tag changed
 
-Use custom paths if needed:
+Current CLI support:
 
 ```bash
-uv run python main.py --retag-existing --tags-config config/tags.yaml --backup-dir backups
+uv run python main.py --retag-existing --config config/settings.yaml
 ```
 
-If the new rules are not correct, restore the previous snapshot:
-
-```bash
-uv run python main.py --restore-backup backups/activity-YYYYMMDD-HHMMSS.db
-```
+To roll back, copy the backup `.db` file returned by the command over your active database file.
 
 ---
 

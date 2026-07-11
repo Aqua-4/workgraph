@@ -36,7 +36,7 @@ class ActivityTaggerTests(unittest.TestCase):
             is_idle=False,
             idle_seconds=0,
             platform="windows",
-            git_repo="aicoe-enterprise-mcp-api-backend",
+            git_repo="compass-core",
             git_branch="feature/rbac",
             context_switches=0,
         )
