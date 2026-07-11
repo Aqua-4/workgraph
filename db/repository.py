@@ -560,6 +560,302 @@ class ActivityRepository:
         )
         self._connection.commit()
 
+    def list_changes_since(
+        self,
+        *,
+        entity: str,
+        cursor: str | None = None,
+        limit: int = 1000,
+    ) -> list[sqlite3.Row]:
+        table_name = _resolve_entity_table(entity)
+        return self._list_entity_changes(table_name=table_name, cursor=cursor, limit=limit)
+
+    def list_session_changes_since(
+        self,
+        cursor: str | None = None,
+        limit: int = 1000,
+    ) -> list[sqlite3.Row]:
+        return self._list_entity_changes(table_name="activity_sessions", cursor=cursor, limit=limit)
+
+    def list_journal_changes_since(
+        self,
+        cursor: str | None = None,
+        limit: int = 1000,
+    ) -> list[sqlite3.Row]:
+        return self._list_entity_changes(table_name="journal_entries", cursor=cursor, limit=limit)
+
+    def list_reflection_changes_since(
+        self,
+        cursor: str | None = None,
+        limit: int = 1000,
+    ) -> list[sqlite3.Row]:
+        return self._list_entity_changes(table_name="daily_reflections", cursor=cursor, limit=limit)
+
+    def upsert_session_by_uuid(self, payload: dict) -> None:
+        now = _format_datetime(datetime.now(UTC))
+        row_uuid = str(payload.get("uuid") or uuid4())
+        row_updated_at = payload.get("updated_at") or now
+        row_created_at = payload.get("created_at") or row_updated_at
+
+        self._connection.execute(
+            """
+            INSERT INTO activity_sessions (
+                uuid,
+                user_id,
+                device_id,
+                start_time,
+                end_time,
+                duration_sec,
+                app_name,
+                process_name,
+                window_title,
+                browser_domain,
+                is_idle,
+                idle_seconds,
+                git_repo,
+                git_branch,
+                context_switches,
+                tag,
+                platform,
+                created_at,
+                updated_at,
+                deleted_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(uuid) DO UPDATE SET
+                user_id = excluded.user_id,
+                device_id = excluded.device_id,
+                start_time = excluded.start_time,
+                end_time = excluded.end_time,
+                duration_sec = excluded.duration_sec,
+                app_name = excluded.app_name,
+                process_name = excluded.process_name,
+                window_title = excluded.window_title,
+                browser_domain = excluded.browser_domain,
+                is_idle = excluded.is_idle,
+                idle_seconds = excluded.idle_seconds,
+                git_repo = excluded.git_repo,
+                git_branch = excluded.git_branch,
+                context_switches = excluded.context_switches,
+                tag = excluded.tag,
+                platform = excluded.platform,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at
+            WHERE excluded.updated_at >= COALESCE(activity_sessions.updated_at, activity_sessions.created_at)
+            """,
+            (
+                row_uuid,
+                payload.get("user_id") or self._user_id,
+                payload.get("device_id") or self._device_id,
+                payload["start_time"],
+                payload["end_time"],
+                payload["duration_sec"],
+                payload["app_name"],
+                payload.get("process_name"),
+                payload.get("window_title"),
+                payload.get("browser_domain"),
+                int(payload.get("is_idle", 0)),
+                payload.get("idle_seconds", 0),
+                payload.get("git_repo"),
+                payload.get("git_branch"),
+                payload.get("context_switches", 0),
+                payload.get("tag"),
+                payload.get("platform", "unknown"),
+                row_created_at,
+                row_updated_at,
+                payload.get("deleted_at"),
+            ),
+        )
+        self._connection.commit()
+
+    def upsert_journal_by_uuid(self, payload: dict) -> None:
+        now = _format_datetime(datetime.now(UTC))
+        row_uuid = str(payload.get("uuid") or uuid4())
+        row_updated_at = payload.get("updated_at") or now
+        row_created_at = payload.get("created_at") or row_updated_at
+
+        self._connection.execute(
+            """
+            INSERT INTO journal_entries (
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                start_time,
+                end_time,
+                title,
+                notes,
+                metadata,
+                deleted_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(uuid) DO UPDATE SET
+                user_id = excluded.user_id,
+                device_id = excluded.device_id,
+                updated_at = excluded.updated_at,
+                start_time = excluded.start_time,
+                end_time = excluded.end_time,
+                title = excluded.title,
+                notes = excluded.notes,
+                metadata = excluded.metadata,
+                deleted_at = excluded.deleted_at
+            WHERE excluded.updated_at >= COALESCE(journal_entries.updated_at, journal_entries.created_at)
+            """,
+            (
+                row_uuid,
+                payload.get("user_id") or self._user_id,
+                payload.get("device_id") or self._device_id,
+                row_created_at,
+                row_updated_at,
+                payload.get("start_time"),
+                payload.get("end_time"),
+                payload.get("title"),
+                payload.get("notes", ""),
+                _to_json_text(payload.get("metadata")),
+                payload.get("deleted_at"),
+            ),
+        )
+        self._connection.commit()
+
+    def upsert_reflection_by_uuid(self, payload: dict) -> None:
+        now = _format_datetime(datetime.now(UTC))
+        row_uuid = str(payload.get("uuid") or uuid4())
+        row_user_id = payload.get("user_id") or self._user_id
+        row_device_id = payload.get("device_id") or self._device_id
+        row_updated_at = payload.get("updated_at") or now
+        row_created_at = payload.get("created_at") or row_updated_at
+        row_date = payload["date"]
+
+        existing = self._connection.execute(
+            """
+            SELECT *
+            FROM daily_reflections
+            WHERE uuid = ?
+               OR (user_id = ? AND date = ?)
+            ORDER BY CASE WHEN uuid = ? THEN 0 ELSE 1 END
+            LIMIT 1
+            """,
+            (row_uuid, row_user_id, row_date, row_uuid),
+        ).fetchone()
+
+        if existing is None:
+            self._connection.execute(
+                """
+                INSERT INTO daily_reflections (
+                    uuid,
+                    user_id,
+                    device_id,
+                    date,
+                    wins,
+                    problems,
+                    tomorrow,
+                    energy,
+                    stress,
+                    created_at,
+                    updated_at,
+                    deleted_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row_uuid,
+                    row_user_id,
+                    row_device_id,
+                    row_date,
+                    payload.get("wins"),
+                    payload.get("problems"),
+                    payload.get("tomorrow"),
+                    payload.get("energy"),
+                    payload.get("stress"),
+                    row_created_at,
+                    row_updated_at,
+                    payload.get("deleted_at"),
+                ),
+            )
+            self._connection.commit()
+            return
+
+        existing_updated_at = existing["updated_at"] or existing["created_at"]
+        existing_uuid = existing["uuid"] or ""
+        should_apply = _is_incoming_newer(
+            incoming_updated_at=row_updated_at,
+            incoming_id=row_uuid,
+            existing_updated_at=existing_updated_at,
+            existing_id=existing_uuid,
+        )
+        if not should_apply:
+            return
+
+        self._connection.execute(
+            """
+            UPDATE daily_reflections
+            SET uuid = ?,
+                user_id = ?,
+                device_id = ?,
+                date = ?,
+                wins = ?,
+                problems = ?,
+                tomorrow = ?,
+                energy = ?,
+                stress = ?,
+                updated_at = ?,
+                deleted_at = ?
+            WHERE id = ?
+            """,
+            (
+                row_uuid,
+                row_user_id,
+                row_device_id,
+                row_date,
+                payload.get("wins"),
+                payload.get("problems"),
+                payload.get("tomorrow"),
+                payload.get("energy"),
+                payload.get("stress"),
+                row_updated_at,
+                payload.get("deleted_at"),
+                existing["id"],
+            ),
+        )
+        self._connection.commit()
+
+    def mark_deleted(
+        self,
+        *,
+        entity: str,
+        row_uuid: str,
+        deleted_at: str,
+        updated_at: str | None = None,
+    ) -> None:
+        table_name = _resolve_entity_table(entity)
+        effective_updated_at = updated_at or deleted_at
+        self._connection.execute(
+            f"""
+            UPDATE {table_name}
+            SET deleted_at = ?,
+                updated_at = ?
+            WHERE uuid = ?
+              AND (
+                    COALESCE(updated_at, created_at) IS NULL
+                    OR COALESCE(updated_at, created_at) < ?
+                    OR (
+                        COALESCE(updated_at, created_at) = ?
+                        AND uuid <= ?
+                    )
+              )
+            """,
+            (
+                deleted_at,
+                effective_updated_at,
+                row_uuid,
+                effective_updated_at,
+                effective_updated_at,
+                row_uuid,
+            ),
+        )
+        self._connection.commit()
+
     def reflections_between(
         self,
         from_date: str | None = None,
@@ -788,9 +1084,87 @@ class ActivityRepository:
                 (row_uuid, self._user_id, self._device_id, updated_at_value, row["id"]),
             )
 
+    def _list_entity_changes(
+        self,
+        *,
+        table_name: str,
+        cursor: str | None,
+        limit: int,
+    ) -> list[sqlite3.Row]:
+        updated_at_cursor, uuid_cursor = _parse_sync_cursor(cursor)
+        query = f"""
+            SELECT *
+            FROM {table_name}
+            WHERE 1=1
+        """
+        params: list = []
+
+        if updated_at_cursor is not None:
+            query += """
+              AND (
+                  COALESCE(updated_at, created_at) > ?
+                  OR (
+                      COALESCE(updated_at, created_at) = ?
+                      AND COALESCE(uuid, '') > ?
+                  )
+              )
+            """
+            params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+
+        query += """
+            ORDER BY COALESCE(updated_at, created_at) ASC, COALESCE(uuid, '') ASC
+            LIMIT ?
+        """
+        params.append(limit)
+
+        cursor_obj = self._connection.execute(query, params)
+        return list(cursor_obj.fetchall())
+
 
 def _format_datetime(value: datetime) -> str:
     return value.isoformat(timespec="seconds")
+
+
+def _parse_sync_cursor(cursor: str | None) -> tuple[str | None, str | None]:
+    if not cursor:
+        return None, None
+    if "|" not in cursor:
+        return cursor, None
+    updated_at, row_uuid = cursor.split("|", 1)
+    return updated_at or None, row_uuid or None
+
+
+def _is_incoming_newer(
+    *,
+    incoming_updated_at: str,
+    incoming_id: str,
+    existing_updated_at: str,
+    existing_id: str,
+) -> bool:
+    if incoming_updated_at > existing_updated_at:
+        return True
+    if incoming_updated_at < existing_updated_at:
+        return False
+    return incoming_id >= existing_id
+
+
+def _resolve_entity_table(entity: str) -> str:
+    normalized = entity.strip().lower()
+    if normalized in {"sessions", "session", "activity_sessions"}:
+        return "activity_sessions"
+    if normalized in {"journal", "journal_entries", "journals"}:
+        return "journal_entries"
+    if normalized in {"reflections", "reflection", "daily_reflections"}:
+        return "daily_reflections"
+    raise ValueError(f"Unsupported sync entity: {entity}")
+
+
+def _to_json_text(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return json.dumps(value)
 
 
 def _default_user_id() -> str:

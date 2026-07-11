@@ -256,6 +256,162 @@ class ActivityRepositoryTests(unittest.TestCase):
         self.assertIsNotNone(rows[0]["device_id"])
         self.assertIsNotNone(rows[0]["updated_at"])
 
+    def test_repository_lists_session_changes_since_cursor(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            with ActivityRepository(db_path) as repository:
+                repository.upsert_session_by_uuid(
+                    {
+                        "uuid": "00000000-0000-0000-0000-000000000001",
+                        "start_time": "2026-07-10T10:00:00+00:00",
+                        "end_time": "2026-07-10T10:05:00+00:00",
+                        "duration_sec": 300,
+                        "app_name": "Code",
+                        "is_idle": 0,
+                        "idle_seconds": 0,
+                        "platform": "linux",
+                        "updated_at": "2026-07-10T10:05:00+00:00",
+                    }
+                )
+                repository.upsert_session_by_uuid(
+                    {
+                        "uuid": "00000000-0000-0000-0000-000000000002",
+                        "start_time": "2026-07-10T11:00:00+00:00",
+                        "end_time": "2026-07-10T11:10:00+00:00",
+                        "duration_sec": 600,
+                        "app_name": "Chrome",
+                        "is_idle": 0,
+                        "idle_seconds": 0,
+                        "platform": "linux",
+                        "updated_at": "2026-07-10T11:10:00+00:00",
+                    }
+                )
+
+                first_page = repository.list_session_changes_since(limit=1)
+                cursor = f"{first_page[0]['updated_at']}|{first_page[0]['uuid']}"
+                second_page = repository.list_session_changes_since(cursor=cursor, limit=10)
+
+        self.assertEqual(len(first_page), 1)
+        self.assertEqual(first_page[0]["uuid"], "00000000-0000-0000-0000-000000000001")
+        self.assertEqual(len(second_page), 1)
+        self.assertEqual(second_page[0]["uuid"], "00000000-0000-0000-0000-000000000002")
+
+    def test_repository_upsert_session_by_uuid_keeps_newer_version(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            with ActivityRepository(db_path) as repository:
+                repository.upsert_session_by_uuid(
+                    {
+                        "uuid": "11111111-1111-1111-1111-111111111111",
+                        "start_time": "2026-07-10T10:00:00+00:00",
+                        "end_time": "2026-07-10T10:05:00+00:00",
+                        "duration_sec": 300,
+                        "app_name": "Code",
+                        "is_idle": 0,
+                        "idle_seconds": 0,
+                        "platform": "linux",
+                        "updated_at": "2026-07-10T10:05:00+00:00",
+                    }
+                )
+                repository.upsert_session_by_uuid(
+                    {
+                        "uuid": "11111111-1111-1111-1111-111111111111",
+                        "start_time": "2026-07-10T10:00:00+00:00",
+                        "end_time": "2026-07-10T10:05:00+00:00",
+                        "duration_sec": 300,
+                        "app_name": "Overwritten-App",
+                        "is_idle": 0,
+                        "idle_seconds": 0,
+                        "platform": "linux",
+                        "updated_at": "2026-07-10T09:59:00+00:00",
+                    }
+                )
+                repository.upsert_session_by_uuid(
+                    {
+                        "uuid": "11111111-1111-1111-1111-111111111111",
+                        "start_time": "2026-07-10T10:00:00+00:00",
+                        "end_time": "2026-07-10T10:05:00+00:00",
+                        "duration_sec": 300,
+                        "app_name": "Code Final",
+                        "is_idle": 0,
+                        "idle_seconds": 0,
+                        "platform": "linux",
+                        "updated_at": "2026-07-10T10:06:00+00:00",
+                    }
+                )
+                row = repository._connection.execute(
+                    "SELECT * FROM activity_sessions WHERE uuid = ?",
+                    ("11111111-1111-1111-1111-111111111111",),
+                ).fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["app_name"], "Code Final")
+        self.assertEqual(row["updated_at"], "2026-07-10T10:06:00+00:00")
+
+    def test_repository_mark_deleted_sets_tombstone(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            with ActivityRepository(db_path) as repository:
+                repository.upsert_session_by_uuid(
+                    {
+                        "uuid": "22222222-2222-2222-2222-222222222222",
+                        "start_time": "2026-07-10T12:00:00+00:00",
+                        "end_time": "2026-07-10T12:15:00+00:00",
+                        "duration_sec": 900,
+                        "app_name": "Terminal",
+                        "is_idle": 0,
+                        "idle_seconds": 0,
+                        "platform": "linux",
+                        "updated_at": "2026-07-10T12:15:00+00:00",
+                    }
+                )
+                repository.mark_deleted(
+                    entity="sessions",
+                    row_uuid="22222222-2222-2222-2222-222222222222",
+                    deleted_at="2026-07-10T12:30:00+00:00",
+                    updated_at="2026-07-10T12:30:00+00:00",
+                )
+                row = repository._connection.execute(
+                    "SELECT deleted_at, updated_at FROM activity_sessions WHERE uuid = ?",
+                    ("22222222-2222-2222-2222-222222222222",),
+                ).fetchone()
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["deleted_at"], "2026-07-10T12:30:00+00:00")
+        self.assertEqual(row["updated_at"], "2026-07-10T12:30:00+00:00")
+
+    def test_repository_upsert_reflection_by_uuid_resolves_same_date_conflict(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            with ActivityRepository(db_path, user_id="user-1") as repository:
+                repository.upsert_reflection_by_uuid(
+                    {
+                        "uuid": "33333333-3333-3333-3333-333333333333",
+                        "user_id": "user-1",
+                        "date": "2026-07-11",
+                        "wins": "Initial",
+                        "updated_at": "2026-07-11T08:00:00+00:00",
+                    }
+                )
+                repository.upsert_reflection_by_uuid(
+                    {
+                        "uuid": "44444444-4444-4444-4444-444444444444",
+                        "user_id": "user-1",
+                        "date": "2026-07-11",
+                        "wins": "Latest",
+                        "updated_at": "2026-07-11T09:00:00+00:00",
+                    }
+                )
+                rows = repository.reflections_between("2026-07-11", "2026-07-11")
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["wins"], "Latest")
+        self.assertEqual(rows[0]["uuid"], "44444444-4444-4444-4444-444444444444")
+
 
 if __name__ == "__main__":
     unittest.main()
