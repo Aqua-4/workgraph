@@ -11,6 +11,10 @@ logs/
 # Personal configuration files
 config/my-tags.yaml
 config/my-goals.yaml
+config/my-settings.yaml
+config/settings.local.yaml
+config/settings.*.local.yaml
+config/identity.json
 
 # C extensions
 *.so

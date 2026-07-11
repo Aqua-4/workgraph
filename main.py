@@ -25,6 +25,10 @@ from services.collector_service import (
 from workgraph.models import ActivitySession
 
 
+DEFAULT_SETTINGS_PATH = Path("config/settings.yaml")
+PERSONAL_SETTINGS_PATH = Path("config/my-settings.yaml")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the WorkGraph v1 collector.")
     parser.add_argument(
@@ -291,7 +295,8 @@ def run_goals_analyze_command(args: argparse.Namespace) -> None:
 
 def run_sync_once_command(args: argparse.Namespace) -> None:
     settings = load_settings(args.config)
-    raw_values = _read_simple_yaml(Path(args.config)) if Path(args.config).exists() else {}
+    resolved_config_path = _resolve_settings_path(args.config)
+    raw_values = _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
 
     base_url = args.base_url or raw_values.get("sync_base_url")
     token = args.token or raw_values.get("sync_token")
@@ -325,7 +330,8 @@ def run_sync_once_command(args: argparse.Namespace) -> None:
 
 def run_sync_daemon_command(args: argparse.Namespace) -> None:
     settings = load_settings(args.config)
-    raw_values = _read_simple_yaml(Path(args.config)) if Path(args.config).exists() else {}
+    resolved_config_path = _resolve_settings_path(args.config)
+    raw_values = _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
 
     base_url = args.base_url or raw_values.get("sync_base_url")
     token = args.token or raw_values.get("sync_token")
@@ -455,7 +461,7 @@ def load_settings(path: str) -> CollectorSettings:
         "log_path": "logs/workgraph.log",
         "identity_path": "config/identity.json",
     }
-    config_path = Path(path)
+    config_path = _resolve_settings_path(path)
     if config_path.exists():
         values.update(_read_simple_yaml(config_path))
     return CollectorSettings(
@@ -467,6 +473,13 @@ def load_settings(path: str) -> CollectorSettings:
         log_path=str(values["log_path"]),
         identity_path=str(values["identity_path"]),
     )
+
+
+def _resolve_settings_path(path: str) -> Path:
+    config_path = Path(path)
+    if config_path == DEFAULT_SETTINGS_PATH and PERSONAL_SETTINGS_PATH.exists():
+        return PERSONAL_SETTINGS_PATH
+    return config_path
 
 
 def _read_simple_yaml(path: Path) -> dict[str, str]:

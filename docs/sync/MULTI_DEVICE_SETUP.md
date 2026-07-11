@@ -54,12 +54,16 @@ You should receive a JSON response with sync health counters.
 uv sync
 ```
 
-2. Ensure settings file exists at `config/settings.yaml`.
+2. Create a per-user settings override file (recommended):
+
+```bash
+cp config/settings.yaml config/my-settings.yaml
+```
 
 3. Run local sync migration once:
 
 ```bash
-uv run python main.py sync migrate --config config/settings.yaml
+uv run python main.py sync migrate
 ```
 
 This upgrades or backfills local schema metadata required for sync.
@@ -103,7 +107,7 @@ Save the `device_token` safely for that device.
 
 ### 4.4 Configure device sync settings
 
-In `config/settings.yaml` on that device, set:
+In `config/my-settings.yaml` on that device, set:
 
 ```yaml
 database_path: activity.db
@@ -130,13 +134,13 @@ Run this sequence on each new device after setup.
 1. Run migration:
 
 ```bash
-uv run python main.py sync migrate --config config/settings.yaml
+uv run python main.py sync migrate
 ```
 
 2. Run one sync cycle:
 
 ```bash
-uv run python main.py sync once --config config/settings.yaml
+uv run python main.py sync once
 ```
 
 3. Verify dashboard/health on server:
@@ -150,14 +154,13 @@ curl http://<SERVER_HOST>:8000/api/sync/health
 To keep device data continuously synced:
 
 ```bash
-uv run python main.py sync daemon --config config/settings.yaml
+uv run python main.py sync daemon
 ```
 
 Useful overrides:
 
 ```bash
 uv run python main.py sync daemon \
-  --config config/settings.yaml \
   --interval-seconds 30 \
   --backoff-base-seconds 1 \
   --backoff-max-seconds 60
@@ -181,7 +184,7 @@ Symptoms:
   - `sync_token missing. Pass --token or set sync_token in config.`
 
 Fix:
-- Update `config/settings.yaml`, or pass `--base-url` and `--token` explicitly.
+- Update `config/my-settings.yaml`, or pass `--base-url` and `--token` explicitly.
 
 ### Auth failures during push/pull
 
@@ -198,7 +201,7 @@ Fix:
 - Re-run:
 
 ```bash
-uv run python main.py sync migrate --config config/settings.yaml
+uv run python main.py sync migrate
 ```
 
 ### Server reachable locally but not from other devices
@@ -213,3 +216,4 @@ Fix:
 - Back up server SQLite database regularly.
 - Treat `sync_token` as secret credential.
 - Use HTTPS when exposing sync over non-local networks.
+- Keep secrets and per-device values in local config files (for example, `config/my-settings.yaml`) rather than committed shared files.

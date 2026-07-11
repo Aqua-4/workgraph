@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import logging
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -16,6 +18,7 @@ import sqlite3
 from services.activity_tagger import ActivityTagger
 
 app = FastAPI(title="WorkGraph Dashboard")
+sync_logger = logging.getLogger("workgraph.sync")
 
 WORK_EVENT_TYPES = [
     "Achievement",
@@ -196,6 +199,26 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_updated
             ON sync_daily_reflections (user_id, updated_at, uuid);
+
+        CREATE TABLE IF NOT EXISTS sync_request_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            endpoint TEXT NOT NULL,
+            status_code INTEGER NOT NULL,
+            device_id TEXT,
+            user_id TEXT,
+            batch_id TEXT,
+            accepted_count INTEGER NOT NULL DEFAULT 0,
+            conflict_count INTEGER NOT NULL DEFAULT 0,
+            has_more INTEGER,
+            latency_ms INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_sync_request_logs_endpoint_created
+            ON sync_request_logs (endpoint, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_request_logs_device_created
+            ON sync_request_logs (device_id, created_at);
         """
     )
     conn.commit()
@@ -334,6 +357,70 @@ def _serialize_work_event_row(row: sqlite3.Row) -> dict:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _log_sync_request(
+    conn: sqlite3.Connection,
+    *,
+    endpoint: str,
+    status_code: int,
+    latency_ms: int,
+    device_id: str | None,
+    user_id: str | None,
+    batch_id: str | None = None,
+    accepted_count: int = 0,
+    conflict_count: int = 0,
+    has_more: bool | None = None,
+) -> None:
+    now_iso = _now_iso()
+    conn.execute(
+        """
+        INSERT INTO sync_request_logs (
+            endpoint,
+            status_code,
+            device_id,
+            user_id,
+            batch_id,
+            accepted_count,
+            conflict_count,
+            has_more,
+            latency_ms,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            endpoint,
+            status_code,
+            device_id,
+            user_id,
+            batch_id,
+            accepted_count,
+            conflict_count,
+            None if has_more is None else int(has_more),
+            latency_ms,
+            now_iso,
+        ),
+    )
+    sync_logger.info(
+        json.dumps(
+            {
+                "kind": "sync_request",
+                "endpoint": endpoint,
+                "status_code": status_code,
+                "device_id": device_id,
+                "user_id": user_id,
+                "batch_id": batch_id,
+                "accepted_count": accepted_count,
+                "conflict_count": conflict_count,
+                "has_more": has_more,
+                "latency_ms": latency_ms,
+                "created_at": now_iso,
+            },
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+    )
 
 
 def _request_hash(payload: dict) -> str:
@@ -716,16 +803,62 @@ def get_sync_health(db_path: Path) -> dict:
         FROM sync_checkpoints
         """
     ).fetchone()
+    metrics_row = conn.execute(
+        """
+        SELECT
+            SUM(CASE WHEN endpoint = '/api/sync/v1/push' THEN 1 ELSE 0 END) AS push_total,
+            SUM(CASE WHEN endpoint = '/api/sync/v1/push' AND status_code >= 200 AND status_code < 300 THEN 1 ELSE 0 END) AS push_success,
+            SUM(CASE WHEN endpoint = '/api/sync/v1/push' AND status_code = 409 THEN 1 ELSE 0 END) AS push_conflicts,
+            SUM(CASE WHEN endpoint = '/api/sync/v1/pull' THEN 1 ELSE 0 END) AS pull_total,
+            SUM(CASE WHEN endpoint = '/api/sync/v1/pull' AND status_code >= 200 AND status_code < 300 THEN 1 ELSE 0 END) AS pull_success,
+            AVG(CASE WHEN endpoint = '/api/sync/v1/push' THEN latency_ms END) AS avg_push_latency_ms,
+            AVG(CASE WHEN endpoint = '/api/sync/v1/pull' THEN latency_ms END) AS avg_pull_latency_ms,
+            MAX(created_at) AS last_request_at
+        FROM sync_request_logs
+        """
+    ).fetchone()
     conn.close()
 
     active_tokens = int(token_row["active_tokens"] if token_row is not None else 0)
     registered_devices = int(device_row["registered_devices"] if device_row is not None else 0)
+    push_total = int(metrics_row["push_total"] if metrics_row and metrics_row["push_total"] is not None else 0)
+    push_success = int(metrics_row["push_success"] if metrics_row and metrics_row["push_success"] is not None else 0)
+    push_conflicts = int(metrics_row["push_conflicts"] if metrics_row and metrics_row["push_conflicts"] is not None else 0)
+    pull_total = int(metrics_row["pull_total"] if metrics_row and metrics_row["pull_total"] is not None else 0)
+    pull_success = int(metrics_row["pull_success"] if metrics_row and metrics_row["pull_success"] is not None else 0)
+    avg_push_latency = (
+        int(round(float(metrics_row["avg_push_latency_ms"])))
+        if metrics_row and metrics_row["avg_push_latency_ms"] is not None
+        else 0
+    )
+    avg_pull_latency = (
+        int(round(float(metrics_row["avg_pull_latency_ms"])))
+        if metrics_row and metrics_row["avg_pull_latency_ms"] is not None
+        else 0
+    )
+    last_sync_at = checkpoint_row["last_sync_at"] if checkpoint_row is not None else None
+    lag_seconds = None
+    if last_sync_at:
+        try:
+            lag_seconds = max(0, int((datetime.now(timezone.utc) - datetime.fromisoformat(last_sync_at)).total_seconds()))
+        except ValueError:
+            lag_seconds = None
+
     return {
         "enabled": active_tokens > 0,
         "active_tokens": active_tokens,
         "registered_devices": registered_devices,
         "last_seen_at": device_row["last_seen_at"] if device_row is not None else None,
-        "last_sync_at": checkpoint_row["last_sync_at"] if checkpoint_row is not None else None,
+        "last_sync_at": last_sync_at,
+        "lag_seconds": lag_seconds,
+        "push_requests_total": push_total,
+        "push_success_rate": (push_success / push_total) if push_total else None,
+        "push_conflict_rate": (push_conflicts / push_total) if push_total else None,
+        "pull_requests_total": pull_total,
+        "pull_success_rate": (pull_success / pull_total) if pull_total else None,
+        "avg_push_latency_ms": avg_push_latency,
+        "avg_pull_latency_ms": avg_pull_latency,
+        "last_request_at": metrics_row["last_request_at"] if metrics_row is not None else None,
     }
 
 
@@ -1656,6 +1789,7 @@ async def list_reflections(
 
 @app.post("/api/sync/v1/devices/register")
 async def sync_register_device(payload: SyncRegisterRequest):
+    started = time.perf_counter()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -1717,6 +1851,14 @@ async def sync_register_device(payload: SyncRegisterRequest):
         """,
         (token, payload.device.id, payload.user.id, now_iso),
     )
+    _log_sync_request(
+        conn,
+        endpoint="/api/sync/v1/devices/register",
+        status_code=200,
+        latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+        device_id=payload.device.id,
+        user_id=payload.user.id,
+    )
     conn.commit()
     conn.close()
     return {"device_token": token, "server_time": now_iso}
@@ -1724,6 +1866,7 @@ async def sync_register_device(payload: SyncRegisterRequest):
 
 @app.post("/api/sync/v1/push")
 async def sync_push_changes(payload: SyncPushRequest, authorization: str | None = Header(default=None)):
+    started = time.perf_counter()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -1746,11 +1889,36 @@ async def sync_push_changes(payload: SyncPushRequest, authorization: str | None 
     existing_batch = cursor.fetchone()
     if existing_batch is not None:
         if existing_batch["request_hash"] != req_hash:
+            _log_sync_request(
+                conn,
+                endpoint="/api/sync/v1/push",
+                status_code=409,
+                latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+                device_id=payload.device_id,
+                user_id=payload.user_id,
+                batch_id=payload.batch_id,
+                conflict_count=1,
+            )
+            conn.commit()
             conn.close()
             raise HTTPException(status_code=409, detail="batch_id already exists with different payload")
         response_json = existing_batch["response_json"]
+        replay_response = json.loads(response_json)
+        accepted = replay_response.get("accepted", {})
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/push",
+            status_code=200,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+            accepted_count=int(sum(int(accepted.get(k, 0)) for k in ["sessions", "journal_entries", "daily_reflections"])),
+            conflict_count=int(len(replay_response.get("conflicts", []))),
+        )
+        conn.commit()
         conn.close()
-        return json.loads(response_json)
+        return replay_response
 
     sessions = payload.changes.get("sessions") or []
     journal_entries = payload.changes.get("journal_entries") or []
@@ -1851,6 +2019,18 @@ async def sync_push_changes(payload: SyncPushRequest, authorization: str | None 
         ),
     )
 
+    _log_sync_request(
+        conn,
+        endpoint="/api/sync/v1/push",
+        status_code=200,
+        latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+        device_id=payload.device_id,
+        user_id=payload.user_id,
+        batch_id=payload.batch_id,
+        accepted_count=len(sessions) + len(journal_entries) + len(reflections),
+        conflict_count=0,
+    )
+
     conn.commit()
     conn.close()
     return response_body
@@ -1858,6 +2038,7 @@ async def sync_push_changes(payload: SyncPushRequest, authorization: str | None 
 
 @app.post("/api/sync/v1/pull")
 async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None = Header(default=None)):
+    started = time.perf_counter()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -1933,6 +2114,17 @@ async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None 
             updated_at = excluded.updated_at
         """,
         (payload.device_id, payload.user_id, payload.device_id, next_cursor, now_iso),
+    )
+
+    _log_sync_request(
+        conn,
+        endpoint="/api/sync/v1/pull",
+        status_code=200,
+        latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+        device_id=payload.device_id,
+        user_id=payload.user_id,
+        accepted_count=len(active_sessions) + len(active_journal_entries) + len(active_daily_reflections),
+        has_more=has_more,
     )
     conn.commit()
     conn.close()

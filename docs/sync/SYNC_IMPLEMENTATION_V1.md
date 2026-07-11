@@ -1,6 +1,6 @@
 # WorkGraph Sync Implementation Spec v1
 
-Status: Draft for implementation
+Status: Implemented (v1 core complete)
 Owner: WorkGraph
 Last updated: 2026-07-11
 
@@ -420,6 +420,11 @@ Load/safety tests:
 - Batch push of 100k sessions.
 - Retry storm with duplicate `batch_id`.
 
+Implementation note (2026-07-11):
+- Core unit/integration coverage is implemented and runs in default test suite.
+- Retry-storm idempotency coverage is implemented in automated tests.
+- 100k batch push safety test is implemented as opt-in (`WORKGRAPH_RUN_LOAD_TESTS=1`) to avoid slowing regular CI runs.
+
 ## 14) Operational Considerations
 
 - Server SQLite constraints enforce UUID uniqueness.
@@ -427,17 +432,22 @@ Load/safety tests:
 - Structured logging per request: `device_id`, `user_id`, `batch_id`, counts, latency.
 - Metrics: push success rate, conflict rate, lag seconds, pending local changes.
 
+Implementation note (2026-07-11):
+- Server sync health now exposes push/pull success rates, conflict rate, lag seconds, and average request latency.
+- Sync endpoints emit structured request telemetry with `device_id`, `user_id`, `batch_id`, status, and latency.
+- Pending local changes remains a client-side concern and should be reported by client sync worker diagnostics in a future incremental update.
+
 ## 15) Implementation Checklist
 
-1. Add UUID + sync metadata columns in local schema.
-2. Implement migration/backfill command for existing local DB.
-3. Add identity config and device registration.
-4. Build server SQLite schema on Pi.
-5. Build sync endpoints with idempotency and cursors.
-6. Implement client sync worker with push/pull loops.
-7. Add deterministic conflict handling and tombstones.
-8. Add test coverage (unit + integration).
-9. Add sync health section in dashboard.
+1. [x] Add UUID + sync metadata columns in local schema.
+2. [x] Implement migration/backfill command for existing local DB.
+3. [x] Add identity config and device registration.
+4. [x] Build server SQLite schema on Pi.
+5. [x] Build sync endpoints with idempotency and cursors.
+6. [x] Implement client sync worker with push/pull loops.
+7. [x] Add deterministic conflict handling and tombstones.
+8. [x] Add test coverage (unit + integration).
+9. [x] Add sync health section in dashboard.
 
 ## 16) Defaults for v1
 

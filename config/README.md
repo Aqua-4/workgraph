@@ -17,6 +17,32 @@ Controls the core collection parameters:
 | `browser_history_lookback_seconds` | `600` | How far back to look in browser history for domain detection (10 minutes default) |
 | `log_path` | `logs/workgraph.log` | Where to write debug logs |
 
+#### Personal Override (recommended)
+
+To match the same pattern as `my-tags.yaml` and `my-goals.yaml`:
+
+- Keep `config/settings.yaml` as shared defaults in the repo.
+- Create `config/my-settings.yaml` with personal/per-device values.
+
+Load order used by the app:
+
+1. `config/my-settings.yaml` (if present)
+2. `config/settings.yaml` (fallback)
+
+This keeps user-specific config and secrets out of shared settings while preserving a simple default.
+
+Example:
+
+```bash
+uv run python main.py sync once
+```
+
+Explicit override still works:
+
+```bash
+uv run python main.py sync once --config config/settings.yaml
+```
+
 **Example: Reduce CPU usage by polling less frequently**
 
 ```yaml

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -334,6 +335,121 @@ class SyncApiTests(unittest.TestCase):
         self.assertTrue(health["enabled"])
         self.assertEqual(health["registered_devices"], 2)
         self.assertEqual(health["active_tokens"], 2)
+        self.assertIn("push_success_rate", health)
+        self.assertIn("push_conflict_rate", health)
+        self.assertIn("avg_push_latency_ms", health)
+
+    def test_retry_storm_duplicate_batch_id_is_idempotent(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-1", "name": "Parashar"},
+                "device": {
+                    "id": "device-1",
+                    "name": "Office Laptop",
+                    "type": "work",
+                    "hostname": "LAT-001",
+                    "category": "employer",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+        token = register_response.json()["device_token"]
+        auth_headers = {"Authorization": f"Bearer {token}"}
+
+        push_payload = {
+            "device_id": "device-1",
+            "user_id": "user-1",
+            "client_cursor": None,
+            "batch_id": "batch-retry-storm-1",
+            "changes": {
+                "sessions": [
+                    {
+                        "uuid": "sess-storm-1",
+                        "created_at": "2026-07-11T10:00:00+00:00",
+                        "updated_at": "2026-07-11T10:00:00+00:00",
+                        "app_name": "Code",
+                        "duration_sec": 600,
+                    }
+                ],
+                "journal_entries": [],
+                "daily_reflections": [],
+            },
+        }
+
+        first_response = self.client.post(
+            "/api/sync/v1/push",
+            json=push_payload,
+            headers=auth_headers,
+        )
+        self.assertEqual(first_response.status_code, 200)
+        first_body = first_response.json()
+
+        for _ in range(30):
+            replay_response = self.client.post(
+                "/api/sync/v1/push",
+                json=push_payload,
+                headers=auth_headers,
+            )
+            self.assertEqual(replay_response.status_code, 200)
+            self.assertEqual(replay_response.json(), first_body)
+
+        health = self.client.get("/api/sync/health").json()
+        self.assertEqual(health["push_requests_total"], 31)
+        self.assertEqual(health["push_conflict_rate"], 0.0)
+        self.assertEqual(health["push_success_rate"], 1.0)
+
+    @unittest.skipUnless(
+        os.getenv("WORKGRAPH_RUN_LOAD_TESTS") == "1",
+        "Set WORKGRAPH_RUN_LOAD_TESTS=1 to run 100k batch push safety test.",
+    )
+    def test_load_batch_push_100k_sessions(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-load", "name": "Load Tester"},
+                "device": {
+                    "id": "device-load",
+                    "name": "Load Device",
+                    "type": "work",
+                    "hostname": "LOAD-001",
+                    "category": "test",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+        token = register_response.json()["device_token"]
+        auth_headers = {"Authorization": f"Bearer {token}"}
+
+        sessions = [
+            {
+                "uuid": f"sess-load-{i}",
+                "created_at": "2026-07-11T10:00:00+00:00",
+                "updated_at": f"2026-07-11T10:00:{i % 60:02d}+00:00",
+                "app_name": "Code",
+                "duration_sec": 60,
+            }
+            for i in range(100_000)
+        ]
+
+        push_response = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-load",
+                "user_id": "user-load",
+                "client_cursor": None,
+                "batch_id": "batch-load-100k",
+                "changes": {
+                    "sessions": sessions,
+                    "journal_entries": [],
+                    "daily_reflections": [],
+                },
+            },
+            headers=auth_headers,
+        )
+        self.assertEqual(push_response.status_code, 200)
+        body = push_response.json()
+        self.assertEqual(body["accepted"]["sessions"], 100_000)
 
 
 if __name__ == "__main__":
