@@ -24,16 +24,10 @@
     padding: 12px;
 }
 
-#journal-tags {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 8px;
-    border: 1px solid #d7dfea;
-    border-radius: 8px;
-    padding: 10px;
-    max-height: 220px;
+#journal-tags-menu {
+    width: 100%;
+    max-height: 320px;
     overflow-y: auto;
-    background: #fff;
 }
 
 .journal-tag-row {
@@ -97,26 +91,39 @@
             <div class="field" style="grid-column: 1 / -1;">
                 <label class="mb-1" for="journal-tags">Tag Assignment</label>
                 <div class="tag-panel">
-                <div class="d-flex gap-2 flex-wrap mb-2">
-                    <input
-                        type="text"
-                        id="journal-tags-search"
-                        placeholder="Search tags..."
-                        class="form-control"
-                        style="flex: 1; min-width: 220px;"
-                    >
-                    <button class="btn btn-outline-primary" id="tags-select-all" type="button">Select All</button>
-                    <button class="btn btn-outline-secondary" id="tags-select-visible" type="button">Select Visible</button>
-                    <button class="btn btn-outline-danger" id="tags-clear-all" type="button">Clear All</button>
-                </div>
-                <div id="journal-tags">
-                    {% for tag in available_tags %}
-                    <label class="journal-tag-row" data-tag-name="{{ tag|lower }}">
-                        <input type="checkbox" class="journal-tag-option" value="{{ tag }}">
-                        <span>{{ tag }}</span>
-                    </label>
-                    {% endfor %}
-                </div>
+                    <div class="dropdown w-100">
+                        <button
+                            class="btn btn-outline-primary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center"
+                            type="button"
+                            id="journal-tags-trigger"
+                            data-bs-toggle="dropdown"
+                            data-bs-auto-close="outside"
+                        >
+                            <span id="journal-tags-summary">No tags selected</span>
+                        </button>
+                        <div class="dropdown-menu p-3 shadow-sm" id="journal-tags-menu" aria-labelledby="journal-tags-trigger">
+                            <input
+                                type="text"
+                                id="journal-tags-search"
+                                placeholder="Search tags..."
+                                class="form-control mb-2"
+                            >
+                            <div class="d-flex gap-2 flex-wrap mb-2">
+                                <button class="btn btn-outline-primary btn-sm" id="tags-select-all" type="button">Select All</button>
+                                <button class="btn btn-outline-secondary btn-sm" id="tags-select-visible" type="button">Select Visible</button>
+                                <button class="btn btn-outline-danger btn-sm" id="tags-clear-all" type="button">Clear All</button>
+                            </div>
+                            <div id="journal-tags-list" class="d-flex flex-column gap-1">
+                                {% for tag in available_tags %}
+                                <label class="dropdown-item journal-tag-row journal-tag-item" data-tag-name="{{ tag|lower }}">
+                                    <input type="checkbox" class="journal-tag-option" value="{{ tag }}">
+                                    <span>{{ tag }}</span>
+                                </label>
+                                {% endfor %}
+                            </div>
+                            <div id="journal-tags-empty" class="small text-muted" style="display: none;">No matching tags</div>
+                        </div>
+                    </div>
                 </div>
                 <p class="muted">Pick one or more configured tags to associate with this entry.</p>
             </div>
@@ -254,10 +261,12 @@
     const journalSubmitButton = document.getElementById("journal-submit");
     const journalCancelButton = document.getElementById("journal-cancel");
     const journalFormTitle = document.getElementById("journal-form-title");
+    const tagsSummary = document.getElementById("journal-tags-summary");
     const tagsSearchInput = document.getElementById("journal-tags-search");
     const tagsSelectAllButton = document.getElementById("tags-select-all");
     const tagsSelectVisibleButton = document.getElementById("tags-select-visible");
     const tagsClearAllButton = document.getElementById("tags-clear-all");
+    const tagsEmpty = document.getElementById("journal-tags-empty");
     const journalFeedback = document.getElementById("journal-feedback");
     const reflectionFeedback = document.getElementById("reflection-feedback");
     const correlationPanel = document.getElementById("correlation-panel");
@@ -312,6 +321,7 @@
         Array.from(document.querySelectorAll(".journal-tag-option")).forEach((opt) => {
             opt.checked = false;
         });
+        updateTagSummary();
     }
 
     function getSelectedTags() {
@@ -323,19 +333,38 @@
         Array.from(document.querySelectorAll(".journal-tag-option")).forEach((opt) => {
             opt.checked = selected.has(opt.value);
         });
+        updateTagSummary();
+    }
+
+    function updateTagSummary() {
+        const selectedTags = getSelectedTags();
+        if (selectedTags.length === 0) {
+            tagsSummary.textContent = "No tags selected";
+            return;
+        }
+        if (selectedTags.length <= 3) {
+            tagsSummary.textContent = selectedTags.join(", ");
+            return;
+        }
+        tagsSummary.textContent = `${selectedTags.length} tags selected`;
     }
 
     function filterTags(searchTerm) {
         const normalized = (searchTerm || "").trim().toLowerCase();
-        Array.from(document.querySelectorAll(".journal-tag-row")).forEach((row) => {
+        let visibleCount = 0;
+        Array.from(document.querySelectorAll(".journal-tag-item")).forEach((row) => {
             const tagName = row.getAttribute("data-tag-name") || "";
             const visible = !normalized || tagName.includes(normalized);
             row.style.display = visible ? "flex" : "none";
+            if (visible) {
+                visibleCount += 1;
+            }
         });
+        tagsEmpty.style.display = visibleCount === 0 ? "block" : "none";
     }
 
     function setTagsChecked(checked, onlyVisible) {
-        Array.from(document.querySelectorAll(".journal-tag-row")).forEach((row) => {
+        Array.from(document.querySelectorAll(".journal-tag-item")).forEach((row) => {
             if (onlyVisible && row.style.display === "none") {
                 return;
             }
@@ -344,6 +373,7 @@
                 checkbox.checked = checked;
             }
         });
+        updateTagSummary();
     }
 
     function splitIsoForInputs(isoValue) {
@@ -587,6 +617,12 @@
     tagsClearAllButton.addEventListener("click", () => {
         setTagsChecked(false, false);
     });
+
+    document.querySelectorAll(".journal-tag-option").forEach((checkbox) => {
+        checkbox.addEventListener("change", updateTagSummary);
+    });
+
+    updateTagSummary();
 })();
 </script>
 {% endblock %}
