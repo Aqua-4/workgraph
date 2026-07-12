@@ -21,5 +21,8 @@
   "notebook.codeActionsOnSave": {
     "source.fixAll.ruff": "always",
     "source.organizeImports.ruff": "always"
-  }
+  },
+  "github.copilot.chat.codeGeneration.instructions": [
+    { "file": "prompts/copilot-instructions.md" }
+  ]
 }
