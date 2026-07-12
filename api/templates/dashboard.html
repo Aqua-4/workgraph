@@ -1,0 +1,405 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - WorkGraph{% endblock %}
+
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div>
+    <h2>This Week Overview</h2>
+
+    <div class="card" style="margin-bottom: 12px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <span class="stat-label" style="margin: 0;">Configured Mode</span>
+            <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 12px;">
+        {% if dashboard_mode == "standalone" %}
+        <div class="stat-label" style="margin-bottom: 8px;">Standalone Mode</div>
+        <div style="font-size: 0.95em; color: #4b5563;">
+            Local-only dashboard and collection. No remote sync APIs are required.
+        </div>
+        {% elif dashboard_mode == "sync-client" %}
+        <div class="stat-label" style="margin-bottom: 8px;">Sync Client Mode</div>
+        <div style="font-size: 0.95em; color: #4b5563;">
+            Local dashboard remains primary. Register this device on your sync server to obtain a device token.
+        </div>
+        {% else %}
+        <div class="stat-label" style="margin-bottom: 8px;">Sync Server Mode</div>
+        <div style="font-size: 0.95em; color: #4b5563;">
+            Server-hosted dashboard reads synced multi-device analytics and user-scoped rollups.
+        </div>
+        {% endif %}
+    </div>
+
+    {% if dashboard_mode == "sync-client" and client_sync and client_sync.registered %}
+    <div class="card" style="margin-bottom: 12px;">
+        <h3 style="margin-top: 0;">Sync Client Status</h3>
+        <div class="stat-label" style="margin-bottom: 8px; color: #166534;">Device already registered</div>
+        <div style="font-size: 0.9em; color: #4b5563; line-height: 1.6;">
+            <div><strong>Last Synced:</strong> {{ client_sync.last_synced_at|human_datetime }}</div>
+            {% if client_sync.user_id %}
+            <div><strong>User ID:</strong> {{ client_sync.user_id }}</div>
+            {% endif %}
+            {% if client_sync.device_id %}
+            <div><strong>Device ID:</strong> {{ client_sync.device_id }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="card" style="margin-bottom: 12px;">
+        <h3 style="margin-top: 0;">Device Registration</h3>
+        <div style="font-size: 0.9em; color: #6b7280; margin-bottom: 10px;">
+            {% if dashboard_mode == "standalone" %}
+            Register this device for local identity and auditing.
+            {% elif dashboard_mode == "sync-client" %}
+            Register this client against a sync server and copy the returned token into your config as sync_token.
+            {% else %}
+            Register devices directly on this sync server.
+            {% endif %}
+        </div>
+        <form id="device-register-form" style="display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+            {% if dashboard_mode == "sync-client" %}
+            <input
+                type="text"
+                id="register-sync-base-url"
+                value="{{ client_sync.sync_base_url if client_sync else '' }}"
+                placeholder="sync_base_url (e.g. http://192.168.1.10:8000)"
+                style="grid-column: 1 / -1;"
+            />
+            {% endif %}
+            <input type="text" id="register-user-id" placeholder="user_id" value="{{ selected_user_id or '' }}" required />
+            <input type="text" id="register-user-name" placeholder="user_name" required />
+            <input type="text" id="register-device-id" placeholder="device_id" required />
+            <input type="text" id="register-device-name" placeholder="device_name" required />
+            <input type="text" id="register-device-type" placeholder="device_type (work/personal)" required />
+            <input type="text" id="register-device-hostname" placeholder="hostname (optional)" />
+            <input type="text" id="register-device-category" placeholder="category/platform (optional)" />
+            <div style="grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button type="submit">
+                    {% if dashboard_mode == "sync-client" %}
+                    Register On Sync Server
+                    {% elif dashboard_mode == "sync-server" %}
+                    Register On This Server
+                    {% else %}
+                    Register Standalone Device
+                    {% endif %}
+                </button>
+                <span id="register-result" style="font-size: 0.9em; color: #374151;"></span>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if sync_health %}
+    <h2>Sync Health</h2>
+    <div class="card">
+        {% if sync_health.registered_devices == 0 %}
+        <div class="stat-label" style="margin-bottom: 10px; color: #6b7280;">
+            No devices registered yet.
+        </div>
+        {% endif %}
+        <div class="stat-label" style="margin-bottom: 10px;">
+            Synced devices: {{ sync_health.synced_devices }} / {{ sync_health.registered_devices }}
+            {% if sync_health.unsynced_devices and sync_health.unsynced_devices > 0 %}
+            ({{ sync_health.unsynced_devices }} pending first sync)
+            {% endif %}
+        </div>
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Registered Devices</div>
+                <div class="stat-value">{{ sync_health.registered_devices }}</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    active sync clients
+                </div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Active Tokens</div>
+                <div class="stat-value">{{ sync_health.active_tokens }}</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    valid device tokens
+                </div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Last Sync</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at|human_datetime }}</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    latest checkpoint update
+                </div>
+            </div>
+        </div>
+        {% if sync_health.device_statuses %}
+        <div style="margin-top: 12px; font-size: 0.85em; color: #6b7280;">
+            {% for item in sync_health.device_statuses %}
+            <div>
+                <strong>{{ item.device_name or item.device_id }}</strong>
+                {% if item.is_synced %}
+                - last synced: {{ item.last_sync_at|human_datetime }}
+                {% else %}
+                - not synced yet (registered)
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-label">Total Active Time</div>
+            <div class="stat-value">{{ "%.1f"|format(stats.total_hours) }}h</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                {{ "%.0f"|format(stats.total_seconds / 60) }} minutes
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Categories Tagged</div>
+            <div class="stat-value">{{ stats.tag_stats|length }}</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                active projects
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Apps Used</div>
+            <div class="stat-value">{{ stats.app_stats|length }}</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                different applications
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Goal Coverage</div>
+            <div class="stat-value">{{ "%.0f"|format(stats.tagged_ratio * 100) }}%</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                active time tagged
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Context Switch Rate</div>
+            <div class="stat-value">{{ "%.1f"|format(stats.switch_rate_per_hour) }}</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                switches per active hour
+            </div>
+        </div>
+
+        <div class="stat-box">
+            <div class="stat-label">Meeting Load (Proxy)</div>
+            <div class="stat-value">{{ "%.1f"|format(stats.meeting_hours) }}h</div>
+            <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                {{ "%.0f"|format(stats.meeting_ratio * 100) }}% of active time
+            </div>
+        </div>
+    </div>
+
+    <h2>Focus Quality</h2>
+    <div class="card">
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Deep Work Blocks</div>
+                <div class="stat-value">{{ stats.deep_work_blocks }}</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    sessions >= 30 minutes
+                </div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Longest Focus Block</div>
+                <div class="stat-value">{{ "%.1f"|format(stats.longest_focus_hours) }}h</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    max uninterrupted active block
+                </div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Average Focus Block</div>
+                <div class="stat-value">{{ "%.0f"|format(stats.avg_focus_minutes) }}m</div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
+                    among deep work blocks
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Time by Goal (Tagged)</h2>
+    <div class="card">
+        {% if stats.tag_stats %}
+        <div class="bar-chart">
+            {% set max_seconds = stats.tag_stats.values()|max %}
+            {% for tag, seconds in stats.tag_stats.items()|sort(attribute='1', reverse=True) %}
+            <div class="bar-item">
+                <div class="bar-label">
+                    <span class="tag-badge">{{ tag }}</span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
+                        {% if (seconds / max_seconds * 100) > 15 %}
+                        {{ "%.1f"|format(seconds / 3600) }}h
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #999; padding: 20px; text-align: center;">No tagged activities yet. Configure tags in config/tags.yaml</p>
+        {% endif %}
+    </div>
+
+    <h2>Time by Application</h2>
+    <div class="card">
+        {% if stats.app_stats %}
+        <div class="bar-chart">
+            {% set max_seconds = stats.app_stats.values()|max %}
+            {% for app, seconds in stats.app_stats.items()|sort(attribute='1', reverse=True) %}
+            <div class="bar-item">
+                <div class="bar-label">{{ app }}</div>
+                <div class="bar-container">
+                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
+                        {% if (seconds / max_seconds * 100) > 15 %}
+                        {{ "%.1f"|format(seconds / 3600) }}h
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #999; padding: 20px; text-align: center;">No activity data yet. Run the collector.</p>
+        {% endif %}
+    </div>
+
+    <h2>Repository Focus</h2>
+    <div class="card">
+        {% if stats.repo_stats %}
+        <div class="bar-chart">
+            {% set max_seconds = stats.repo_stats.values()|max %}
+            {% for repo, seconds in stats.repo_stats.items()|sort(attribute='1', reverse=True) %}
+            <div class="bar-item">
+                <div class="bar-label">{{ repo }}</div>
+                <div class="bar-container">
+                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
+                        {% if (seconds / max_seconds * 100) > 15 %}
+                        {{ "%.1f"|format(seconds / 3600) }}h
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #999; padding: 20px; text-align: center;">No repository activity detected in this window.</p>
+        {% endif %}
+    </div>
+
+    <h2>Daily Trend (Last 7 Days)</h2>
+    <div class="card">
+        {% if stats.daily_trend %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Day</th>
+                    <th>Active Hours</th>
+                    <th>Meeting Hours (Proxy)</th>
+                    <th>Switches / Hour</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in stats.daily_trend %}
+                <tr>
+                    <td title="{{ row.day|human_datetime }}">{{ row.day_label or row.day|human_datetime }}</td>
+                    <td>{{ "%.2f"|format(row.active_hours) }}h</td>
+                    <td>{{ "%.2f"|format(row.meeting_hours) }}h</td>
+                    <td>{{ "%.2f"|format(row.switches_per_hour) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #999; padding: 20px; text-align: center;">Not enough daily data yet.</p>
+        {% endif %}
+    </div>
+
+    <h2>Quick Tips</h2>
+    <div class="card">
+        <ul style="margin-left: 20px; line-height: 1.8;">
+            <li><strong>Goal Attribution:</strong> Edit <code>config/tags.yaml</code> to tag your projects and goals.</li>
+            <li><strong>Check Timeline:</strong> Visit the <a href="/timeline">Timeline</a> view to see a detailed chronological breakdown.</li>
+            <li><strong>More Data:</strong> Run the collector for a week to see meaningful patterns emerge.</li>
+            <li><strong>Meeting Detection:</strong> Version 1.2 will auto-detect Teams, Zoom, and Meet meetings.</li>
+        </ul>
+    </div>
+</div>
+
+<script>
+(() => {
+    const form = document.getElementById("device-register-form");
+    if (!form) {
+        return;
+    }
+
+    const resultNode = document.getElementById("register-result");
+    const readValue = (id) => {
+        const node = document.getElementById(id);
+        return node ? (node.value || "").trim() : "";
+    };
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (resultNode) {
+            resultNode.textContent = "Registering device...";
+            resultNode.style.color = "#374151";
+        }
+
+        const payload = {
+            mode: "{{ dashboard_mode }}",
+            user: {
+                id: readValue("register-user-id"),
+                name: readValue("register-user-name"),
+            },
+            device: {
+                id: readValue("register-device-id"),
+                name: readValue("register-device-name"),
+                type: readValue("register-device-type"),
+                hostname: readValue("register-device-hostname") || null,
+                category: readValue("register-device-category") || null,
+            },
+            sync_base_url: readValue("register-sync-base-url") || null,
+        };
+
+        try {
+            const response = await fetch("/api/device/register", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                const detail = data && data.detail ? data.detail : "Registration failed";
+                throw new Error(detail);
+            }
+
+            let message = data.message || "Device registered";
+            if (data.device_token) {
+                message += ` device_token=${data.device_token}`;
+            }
+            if (resultNode) {
+                resultNode.textContent = message;
+                resultNode.style.color = "#166534";
+            }
+        } catch (error) {
+            if (resultNode) {
+                resultNode.textContent = error instanceof Error ? error.message : "Registration failed";
+                resultNode.style.color = "#b91c1c";
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

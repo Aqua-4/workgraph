@@ -3,6 +3,20 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# WorkGraph runtime data
+activity.db
+activity.db-*
+backups/*.db
+logs/
+# Personal configuration files
+config/my-tags.yaml
+config/my-goals.yaml
+config/my-settings.yaml
+config/my-identity.json
+config/settings.local.yaml
+config/settings.*.local.yaml
+config/identity.json
+
 # C extensions
 *.so
 

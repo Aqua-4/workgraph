@@ -1,0 +1,354 @@
+tags:
+  # NOTE: Keep this list limited to non-sensitive historical project aliases only.
+  # Do NOT add current client names, repos, or internal identifiers here.
+  # Approved placeholders: compass, tenet, atlas.
+  Client Delivery:
+    repos:
+      - compass
+      - tenet
+      - atlas
+    domains: []
+    keywords:
+      - client
+      - delivery
+
+  # Active coding work in repos and IDE/editor windows.
+  Development:
+    repos:
+      - workgraph
+      - app
+      - api
+      - backend
+      - frontend
+    domains:
+      - github.com
+      - stackoverflow.com
+      - gitlab.com
+      - bitbucket.org
+      - dev.to
+      - medium.com
+      - sourcegraph.com
+      - github.dev
+      - codeberg.org
+    keywords:
+      - vscode
+      - code
+      - terminal
+      - debug
+      - commit
+      - branch
+      - pull request
+      - issue
+      - review
+      - build
+      - deploy
+      - docker
+      - kubernetes
+      - aws
+      - azure
+      - gcp
+      - kubectl
+      - terraform
+
+  # AI assistants, LLM playgrounds, and prompt workflows.
+  AI Tools:
+    repos: []
+    domains:
+      - chat.openai.com
+      - claude.ai
+      - chatgpt.com
+      - gemini.google.com
+      - copilot.microsoft.com
+      - perplexity.ai
+      - huggingface.co
+      - openai.com
+      - ai.google
+      - autoresearch.ai
+    keywords:
+      - prompt
+      - llm
+      - ai chat
+      - assistant
+      - chatbot
+      - generative ai
+      - model
+      - inference
+
+  # Research, writing docs, notes, and documentation portals.
+  Research:
+    repos: []
+    domains:
+      - scholar.google.com
+      - arxiv.org
+      - researchgate.net
+      - medium.com
+      - dev.to
+      - towardsdatascience.com
+      - science.org
+    keywords:
+      - research
+      - analysis
+      - study
+      - benchmark
+      - whitepaper
+      - reference
+      - investigation
+
+  Documentation:
+    repos: []
+    domains:
+      - readthedocs.io
+      - developer.mozilla.org
+      - devdocs.io
+      - wikipedia.org
+      - notion.so
+      - confluence.com
+      - docs.microsoft.com
+      - docs.google.com
+    keywords:
+      - docs
+      - documentation
+      - notes
+      - guide
+      - reference
+      - manual
+
+  # Package registries and dependency lookup.
+  Package Management:
+    repos: []
+    domains:
+      - pypi.org
+      - npmjs.com
+      - crates.io
+      - rubygems.org
+      - anaconda.org
+      - maven.org
+      - nuget.org
+      - packagist.org
+      - docker.com
+      - artifactory.com
+    keywords:
+      - dependency
+      - package
+      - release
+      - registry
+      - library
+
+  # Learning and skill development resources.
+  Learning:
+    repos: []
+    domains:
+      - docs.python.org
+      - udemy.com
+      - coursera.org
+      - edx.org
+      - pluralsight.com
+      - freecodecamp.org
+      - khanacademy.org
+    keywords:
+      - tutorial
+      - course
+      - learn
+      - lecture
+      - certification
+
+  # Online meetings, chats, and team communication.
+  Collaboration:
+    repos: []
+    domains:
+      - teams.microsoft.com
+      - slack.com
+      - discord.com
+      - meet.google.com
+      - zoom.us
+      - webex.com
+      - t.me
+      - telegram.org
+      - matrix.org
+      - whatsapp.com
+      - googlechat.com
+    keywords:
+      - meeting
+      - standup
+      - review
+      - retro
+      - sync
+      - chat
+      - message
+      - call
+      - conference
+      - collaboration
+
+  # Email, calendar, and operations tasks.
+  Admin:
+    repos: []
+    domains:
+      - mail.google.com
+      - outlook.office.com
+      - calendar.google.com
+      - drive.google.com
+      - docs.google.com
+      - sheets.google.com
+    keywords:
+      - email
+      - calendar
+      - invoice
+      - reimbursement
+      - timesheet
+
+  # Entertainment, streaming, and media consumption.
+  Entertainment:
+    repos: []
+    domains:
+      - youtube.com
+      - music.youtube.com
+      - open.spotify.com
+      - spotify.com
+      - netflix.com
+      - primevideo.com
+      - amazon.com
+      - twitch.tv
+      - disneyplus.com
+      - hulu.com
+    keywords:
+      - playlist
+      - podcast
+      - trailer
+      - episode
+      - movie
+      - series
+
+  # Social browsing and community platforms.
+  Social:
+    repos: []
+    domains:
+      - x.com
+      - twitter.com
+      - linkedin.com
+      - reddit.com
+      - instagram.com
+      - facebook.com
+    keywords:
+      - feed
+      - post
+      - thread
+
+  # E-commerce, shopping, and consumer browsing.
+  Shopping:
+    repos: []
+    domains:
+      - amazon.com
+      - ebay.com
+      - walmart.com
+      - target.com
+      - aliexpress.com
+      - etsy.com
+      - flipkart.com
+    keywords:
+      - cart
+      - checkout
+      - order
+      - wishlist
+
+  # Finance and banking related activity.
+  Finance:
+    repos: []
+    domains:
+      - paypal.com
+      - stripe.com
+      - wise.com
+      - banking
+      - tradingview.com
+      - coinbase.com
+      - binance.com
+      - kraken.com
+      - coinmarketcap.com
+      - coingecko.com
+      - trade.fyers.in
+      - robinhood.com
+      - fidelity.com
+      - schwab.com
+      - paypal.me
+    keywords:
+      - transfer
+      - payment
+      - statement
+      - transaction
+      - investment
+      - portfolio
+      - crypto
+      - trading
+      - binance
+      - market
+
+  # Travel planning and commute tools.
+  Travel:
+    repos: []
+    domains:
+      - maps.google.com
+      - uber.com
+      - lyft.com
+      - booking.com
+      - airbnb.com
+      - expedia.com
+      - tripadvisor.com
+    keywords:
+      - itinerary
+      - booking
+      - route
+      - flight
+
+  # Health, fitness, and wellness websites/apps.
+  Health:
+    repos: []
+    domains:
+      - myfitnesspal.com
+      - fitbit.com
+      - strava.com
+      - healthline.com
+      - webmd.com
+    keywords:
+      - workout
+      - nutrition
+      - sleep
+      - meditation
+
+  # Job-search and interview practice.
+  Interview Prep:
+    repos: []
+    domains:
+      - leetcode.com
+      - hackerrank.com
+      - codewars.com
+      - pramp.com
+      - interviewing.io
+    keywords:
+      - interview
+      - coding challenge
+
+  # Catch-all for productivity workflows and task tracking.
+  Productivity:
+    repos: []
+    domains:
+      - trello.com
+      - asana.com
+      - jira
+      - clickup.com
+      - monday.com
+      - airtable.com
+      - notion.so
+      - evernote.com
+      - todoist.com
+      - confluence.com
+      - microsoft.com
+    keywords:
+      - task
+      - backlog
+      - sprint
+      - roadmap
+      - planning
+      - todo
+      - project
+      - goal
+      - organize
+      - workflow

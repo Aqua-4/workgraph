@@ -1,0 +1,17 @@
+database_path: activity.db
+poll_interval_seconds: 5
+idle_threshold_seconds: 300
+session_gap_seconds: 90
+browser_history_lookback_seconds: 600
+log_path: logs/workgraph.log
+identity_path: config/identity.json
+dashboard_mode: standalone
+sync_base_url: http://127.0.0.1:9000
+sync_token: ""
+sync_batch_size: 1000
+sync_pull_limit: 1000
+sync_max_pull_pages: 20
+sync_timeout_seconds: 10
+sync_interval_seconds: 60
+sync_backoff_base_seconds: 1
+sync_backoff_max_seconds: 60
