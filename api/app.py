@@ -206,6 +206,13 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             uuid TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
             device_id TEXT NOT NULL,
+            utc_start TEXT,
+            utc_end TEXT,
+            timezone_name TEXT,
+            active_seconds INTEGER,
+            application_name TEXT,
+            tag TEXT,
+            repo_name TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             deleted_at TEXT,
@@ -236,6 +243,18 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_updated
             ON sync_sessions (user_id, updated_at, uuid);
 
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_utc_start
+            ON sync_sessions (user_id, utc_start);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_device_utc_start
+            ON sync_sessions (user_id, device_id, utc_start);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_tag_utc_start
+            ON sync_sessions (user_id, tag, utc_start);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_app_utc_start
+            ON sync_sessions (user_id, application_name, utc_start);
+
         CREATE INDEX IF NOT EXISTS idx_sync_journal_user_updated
             ON sync_journal_entries (user_id, updated_at, uuid);
 
@@ -261,8 +280,39 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_device_created
             ON sync_request_logs (device_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS sync_metrics_daily (
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            day_utc TEXT NOT NULL,
+            active_seconds INTEGER NOT NULL DEFAULT 0,
+            focus_seconds INTEGER NOT NULL DEFAULT 0,
+            meeting_seconds INTEGER NOT NULL DEFAULT 0,
+            context_switches INTEGER NOT NULL DEFAULT 0,
+            updated_at_utc TEXT NOT NULL,
+            UNIQUE(user_id, device_id, day_utc)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_sync_metrics_daily_user_day
+            ON sync_metrics_daily (user_id, day_utc);
         """
     )
+
+    for stmt in [
+        "ALTER TABLE sync_sessions ADD COLUMN utc_start TEXT",
+        "ALTER TABLE sync_sessions ADD COLUMN utc_end TEXT",
+        "ALTER TABLE sync_sessions ADD COLUMN timezone_name TEXT",
+        "ALTER TABLE sync_sessions ADD COLUMN active_seconds INTEGER",
+        "ALTER TABLE sync_sessions ADD COLUMN application_name TEXT",
+        "ALTER TABLE sync_sessions ADD COLUMN tag TEXT",
+        "ALTER TABLE sync_sessions ADD COLUMN repo_name TEXT",
+    ]:
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError:
+            pass
+
+    _backfill_sync_session_columns(conn)
     conn.commit()
 
 
@@ -280,6 +330,163 @@ def _to_utc_iso(value: datetime | str | None) -> str | None:
         dt = dt.replace(tzinfo=local_tz)
 
     return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def _parse_datetime_safe(raw_value: str | None) -> datetime | None:
+    if raw_value is None:
+        return None
+    text = str(raw_value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _extract_sync_session_fields(payload: dict) -> dict[str, object | None]:
+    start_raw = payload.get("start_time") or payload.get("utc_start")
+    end_raw = payload.get("end_time") or payload.get("utc_end")
+
+    start_dt = _parse_datetime_safe(str(start_raw)) if start_raw is not None else None
+    end_dt = _parse_datetime_safe(str(end_raw)) if end_raw is not None else None
+
+    timezone_name = None
+    if payload.get("timezone_name"):
+        timezone_name = str(payload.get("timezone_name"))
+    elif isinstance(start_raw, str) and ("+" in start_raw[10:] or start_raw.endswith("Z")):
+        timezone_name = "offset"
+
+    duration_val = payload.get("duration_sec")
+    if duration_val is None:
+        duration_val = payload.get("active_seconds")
+    try:
+        active_seconds = int(duration_val) if duration_val is not None else None
+    except (TypeError, ValueError):
+        active_seconds = None
+
+    return {
+        "utc_start": start_dt.astimezone(timezone.utc).isoformat(timespec="seconds") if start_dt else None,
+        "utc_end": end_dt.astimezone(timezone.utc).isoformat(timespec="seconds") if end_dt else None,
+        "timezone_name": timezone_name,
+        "active_seconds": active_seconds,
+        "application_name": payload.get("app_name") or payload.get("application_name"),
+        "tag": payload.get("tag"),
+        "repo_name": payload.get("git_repo") or payload.get("repo_name"),
+    }
+
+
+def _recompute_sync_daily_rollup(
+    conn: sqlite3.Connection,
+    *,
+    user_id: str,
+    device_id: str,
+    day_utc: str,
+) -> None:
+    row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS row_count,
+            COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS active_seconds,
+            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)), 0) AS focus_seconds,
+            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER), 0)), 0) AS meeting_seconds,
+            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.context_switches') AS INTEGER), 0)), 0) AS context_switches
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND device_id = ?
+          AND deleted_at IS NULL
+          AND utc_start IS NOT NULL
+          AND substr(utc_start, 1, 10) = ?
+        """,
+        (user_id, device_id, day_utc),
+    ).fetchone()
+
+    if row is None or int(row["row_count"]) == 0:
+        conn.execute(
+            "DELETE FROM sync_metrics_daily WHERE user_id = ? AND device_id = ? AND day_utc = ?",
+            (user_id, device_id, day_utc),
+        )
+        return
+
+    conn.execute(
+        """
+        INSERT INTO sync_metrics_daily (
+            user_id,
+            device_id,
+            day_utc,
+            active_seconds,
+            focus_seconds,
+            meeting_seconds,
+            context_switches,
+            updated_at_utc
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, device_id, day_utc) DO UPDATE SET
+            active_seconds = excluded.active_seconds,
+            focus_seconds = excluded.focus_seconds,
+            meeting_seconds = excluded.meeting_seconds,
+            context_switches = excluded.context_switches,
+            updated_at_utc = excluded.updated_at_utc
+        """,
+        (
+            user_id,
+            device_id,
+            day_utc,
+            int(row["active_seconds"]),
+            int(row["focus_seconds"]),
+            int(row["meeting_seconds"]),
+            int(row["context_switches"]),
+            _now_iso(),
+        ),
+    )
+
+
+def _backfill_sync_session_columns(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT uuid, payload_json
+        FROM sync_sessions
+        WHERE utc_start IS NULL OR active_seconds IS NULL OR application_name IS NULL OR repo_name IS NULL
+        LIMIT 5000
+        """
+    ).fetchall()
+
+    for row in rows:
+        payload_json = row["payload_json"]
+        if not payload_json:
+            continue
+        try:
+            payload = json.loads(payload_json)
+        except (TypeError, json.JSONDecodeError):
+            continue
+
+        fields = _extract_sync_session_fields(payload)
+        conn.execute(
+            """
+            UPDATE sync_sessions
+            SET utc_start = COALESCE(utc_start, ?),
+                utc_end = COALESCE(utc_end, ?),
+                timezone_name = COALESCE(timezone_name, ?),
+                active_seconds = COALESCE(active_seconds, ?),
+                application_name = COALESCE(application_name, ?),
+                tag = COALESCE(tag, ?),
+                repo_name = COALESCE(repo_name, ?)
+            WHERE uuid = ?
+            """,
+            (
+                fields["utc_start"],
+                fields["utc_end"],
+                fields["timezone_name"],
+                fields["active_seconds"],
+                fields["application_name"],
+                fields["tag"],
+                fields["repo_name"],
+                row["uuid"],
+            ),
+        )
 
 
 class JournalCreate(BaseModel):
@@ -551,15 +758,20 @@ def _upsert_sync_payload_row(
     created_at = str(payload.get("created_at") or updated_at)
     deleted_at = payload.get("deleted_at")
     date_value = payload.get("date") if table_name == "sync_daily_reflections" else None
+    is_session_table = table_name == "sync_sessions"
+    extracted_fields: dict[str, object | None] = _extract_sync_session_fields(payload) if is_session_table else {}
 
     cursor = conn.cursor()
     cursor.execute(
-        f"SELECT uuid, updated_at FROM {table_name} WHERE uuid = ?",
+        f"SELECT * FROM {table_name} WHERE uuid = ?",
         (row_uuid,),
     )
     existing = cursor.fetchone()
 
     if existing is not None:
+        if str(existing["user_id"]) != user_id:
+            return str(existing["updated_at"]), str(existing["uuid"])
+
         if not _is_incoming_newer(
             incoming_updated_at=updated_at,
             incoming_uuid=row_uuid,
@@ -568,100 +780,197 @@ def _upsert_sync_payload_row(
         ):
             return str(existing["updated_at"]), str(existing["uuid"])
 
-        cursor.execute(
-            f"""
-            UPDATE {table_name}
-            SET user_id = ?,
-                device_id = ?,
-                created_at = ?,
-                updated_at = ?,
-                deleted_at = ?,
-                payload_json = ?,
-                date = COALESCE(?, date)
-            WHERE uuid = ?
-            """
-            if table_name == "sync_daily_reflections"
-            else f"""
-            UPDATE {table_name}
-            SET user_id = ?,
-                device_id = ?,
-                created_at = ?,
-                updated_at = ?,
-                deleted_at = ?,
-                payload_json = ?
-            WHERE uuid = ?
-            """,
-            (
-                user_id,
-                device_id,
-                created_at,
-                updated_at,
-                deleted_at,
-                json.dumps(payload, separators=(",", ":")),
-                date_value,
-                row_uuid,
+        if table_name == "sync_daily_reflections":
+            cursor.execute(
+                f"""
+                UPDATE {table_name}
+                SET user_id = ?,
+                    device_id = ?,
+                    created_at = ?,
+                    updated_at = ?,
+                    deleted_at = ?,
+                    payload_json = ?,
+                    date = COALESCE(?, date)
+                WHERE uuid = ?
+                """,
+                (
+                    user_id,
+                    device_id,
+                    created_at,
+                    updated_at,
+                    deleted_at,
+                    json.dumps(payload, separators=(",", ":")),
+                    date_value,
+                    row_uuid,
+                ),
             )
-            if table_name == "sync_daily_reflections"
-            else (
-                user_id,
-                device_id,
-                created_at,
-                updated_at,
-                deleted_at,
-                json.dumps(payload, separators=(",", ":")),
-                row_uuid,
-            ),
-        )
+        elif is_session_table:
+            cursor.execute(
+                f"""
+                UPDATE {table_name}
+                SET user_id = ?,
+                    device_id = ?,
+                    created_at = ?,
+                    updated_at = ?,
+                    deleted_at = ?,
+                    payload_json = ?,
+                    utc_start = ?,
+                    utc_end = ?,
+                    timezone_name = ?,
+                    active_seconds = ?,
+                    application_name = ?,
+                    tag = ?,
+                    repo_name = ?
+                WHERE uuid = ?
+                """,
+                (
+                    user_id,
+                    device_id,
+                    created_at,
+                    updated_at,
+                    deleted_at,
+                    json.dumps(payload, separators=(",", ":")),
+                    extracted_fields.get("utc_start"),
+                    extracted_fields.get("utc_end"),
+                    extracted_fields.get("timezone_name"),
+                    extracted_fields.get("active_seconds"),
+                    extracted_fields.get("application_name"),
+                    extracted_fields.get("tag"),
+                    extracted_fields.get("repo_name"),
+                    row_uuid,
+                ),
+            )
+        else:
+            cursor.execute(
+                f"""
+                UPDATE {table_name}
+                SET user_id = ?,
+                    device_id = ?,
+                    created_at = ?,
+                    updated_at = ?,
+                    deleted_at = ?,
+                    payload_json = ?
+                WHERE uuid = ?
+                """,
+                (
+                    user_id,
+                    device_id,
+                    created_at,
+                    updated_at,
+                    deleted_at,
+                    json.dumps(payload, separators=(",", ":")),
+                    row_uuid,
+                ),
+            )
+
+        if is_session_table:
+            day_candidates: set[str] = set()
+            if "utc_start" in existing.keys() and existing["utc_start"]:
+                day_candidates.add(str(existing["utc_start"])[:10])
+            if extracted_fields.get("utc_start"):
+                day_candidates.add(str(extracted_fields["utc_start"])[:10])
+            for day_utc in day_candidates:
+                _recompute_sync_daily_rollup(conn, user_id=user_id, device_id=device_id, day_utc=day_utc)
+
         return updated_at, row_uuid
 
-    cursor.execute(
-        f"""
-        INSERT INTO {table_name} (
-            uuid,
-            user_id,
-            device_id,
-            date,
-            created_at,
-            updated_at,
-            deleted_at,
-            payload_json
+    if table_name == "sync_daily_reflections":
+        cursor.execute(
+            f"""
+            INSERT INTO {table_name} (
+                uuid,
+                user_id,
+                device_id,
+                date,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row_uuid,
+                user_id,
+                device_id,
+                date_value,
+                created_at,
+                updated_at,
+                deleted_at,
+                json.dumps(payload, separators=(",", ":")),
+            ),
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        if table_name == "sync_daily_reflections"
-        else f"""
-        INSERT INTO {table_name} (
-            uuid,
-            user_id,
-            device_id,
-            created_at,
-            updated_at,
-            deleted_at,
-            payload_json
+    elif is_session_table:
+        cursor.execute(
+            f"""
+            INSERT INTO {table_name} (
+                uuid,
+                user_id,
+                device_id,
+                utc_start,
+                utc_end,
+                timezone_name,
+                active_seconds,
+                application_name,
+                tag,
+                repo_name,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row_uuid,
+                user_id,
+                device_id,
+                extracted_fields.get("utc_start"),
+                extracted_fields.get("utc_end"),
+                extracted_fields.get("timezone_name"),
+                extracted_fields.get("active_seconds"),
+                extracted_fields.get("application_name"),
+                extracted_fields.get("tag"),
+                extracted_fields.get("repo_name"),
+                created_at,
+                updated_at,
+                deleted_at,
+                json.dumps(payload, separators=(",", ":")),
+            ),
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            row_uuid,
-            user_id,
-            device_id,
-            date_value,
-            created_at,
-            updated_at,
-            deleted_at,
-            json.dumps(payload, separators=(",", ":")),
+    else:
+        cursor.execute(
+            f"""
+            INSERT INTO {table_name} (
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row_uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                deleted_at,
+                json.dumps(payload, separators=(",", ":")),
+            ),
         )
-        if table_name == "sync_daily_reflections"
-        else (
-            row_uuid,
-            user_id,
-            device_id,
-            created_at,
-            updated_at,
-            deleted_at,
-            json.dumps(payload, separators=(",", ":")),
-        ),
-    )
+
+    if is_session_table and extracted_fields.get("utc_start"):
+        _recompute_sync_daily_rollup(
+            conn,
+            user_id=user_id,
+            device_id=device_id,
+            day_utc=str(extracted_fields["utc_start"])[:10],
+        )
+
     return updated_at, row_uuid
 
 
@@ -757,6 +1066,7 @@ def _max_cursor_from_changes(changes: list[dict]) -> str | None:
 def _list_sync_union_rows(
     conn: sqlite3.Connection,
     *,
+    user_id: str,
     cursor_value: str | None,
     limit: int,
 ) -> list[sqlite3.Row]:
@@ -764,18 +1074,18 @@ def _list_sync_union_rows(
     query = """
         SELECT entity, id, updated_at, deleted_at, payload_json
         FROM (
-            SELECT 'sessions' AS entity, uuid AS id, updated_at, deleted_at, payload_json
+            SELECT 'sessions' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
             FROM sync_sessions
             UNION ALL
-            SELECT 'journal_entries' AS entity, uuid AS id, updated_at, deleted_at, payload_json
+            SELECT 'journal_entries' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
             FROM sync_journal_entries
             UNION ALL
-            SELECT 'daily_reflections' AS entity, uuid AS id, updated_at, deleted_at, payload_json
+            SELECT 'daily_reflections' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
             FROM sync_daily_reflections
         )
-        WHERE 1=1
+        WHERE user_id = ?
     """
-    params: list[str | int] = []
+    params: list[str | int] = [user_id]
     if updated_at_cursor is not None:
         query += """
           AND (
@@ -792,21 +1102,22 @@ def _list_sync_union_rows(
 def _count_sync_union_rows_after_cursor(
     conn: sqlite3.Connection,
     *,
+    user_id: str,
     cursor_value: str | None,
 ) -> int:
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = """
         SELECT COUNT(*) AS total_rows
         FROM (
-            SELECT uuid AS id, updated_at FROM sync_sessions
+            SELECT uuid AS id, user_id, updated_at FROM sync_sessions
             UNION ALL
-            SELECT uuid AS id, updated_at FROM sync_journal_entries
+            SELECT uuid AS id, user_id, updated_at FROM sync_journal_entries
             UNION ALL
-            SELECT uuid AS id, updated_at FROM sync_daily_reflections
+            SELECT uuid AS id, user_id, updated_at FROM sync_daily_reflections
         )
-        WHERE 1=1
+        WHERE user_id = ?
     """
-    params: list[str] = []
+    params: list[str] = [user_id]
     if updated_at_cursor is not None:
         query += """
           AND (
@@ -1509,6 +1820,72 @@ async def api_sync_health():
     return get_sync_health(db_path)
 
 
+@app.get("/api/sync/users")
+async def api_sync_users(user_id: str | None = Query(None)):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+
+    query = "SELECT id, name, created_at, updated_at FROM sync_users"
+    params: list[str] = []
+    if user_id:
+        query += " WHERE id = ?"
+        params.append(user_id)
+    query += " ORDER BY updated_at DESC, id ASC"
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    return {
+        "users": [
+            {
+                "id": row["id"],
+                "display_name": row["name"],
+                "created_at_utc": row["created_at"],
+                "updated_at_utc": row["updated_at"],
+            }
+            for row in rows
+        ]
+    }
+
+
+@app.get("/api/sync/devices")
+async def api_sync_devices(user_id: str = Query(..., min_length=1)):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+
+    rows = conn.execute(
+        """
+        SELECT id, user_id, name, type, hostname, category, last_seen_at, created_at, updated_at
+        FROM sync_devices
+        WHERE user_id = ?
+        ORDER BY COALESCE(last_seen_at, updated_at) DESC, id ASC
+        """,
+        (user_id,),
+    ).fetchall()
+    conn.close()
+
+    return {
+        "devices": [
+            {
+                "device_id": row["id"],
+                "user_id": row["user_id"],
+                "device_name": row["name"],
+                "device_type": row["type"],
+                "platform": row["category"],
+                "hostname": row["hostname"],
+                "last_seen_utc": row["last_seen_at"],
+                "created_at_utc": row["created_at"],
+                "updated_at_utc": row["updated_at"],
+            }
+            for row in rows
+        ]
+    }
+
+
 @app.post("/api/journal")
 async def create_journal_entry(payload: JournalCreate):
     """Create a journal entry with optional historical timestamps."""
@@ -2159,7 +2536,12 @@ async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None 
         user_id=payload.user_id,
     )
 
-    rows = _list_sync_union_rows(conn, cursor_value=payload.cursor, limit=payload.limit)
+    rows = _list_sync_union_rows(
+        conn,
+        user_id=payload.user_id,
+        cursor_value=payload.cursor,
+        limit=payload.limit,
+    )
     active_sessions: list[dict] = []
     active_journal_entries: list[dict] = []
     active_daily_reflections: list[dict] = []
@@ -2197,7 +2579,11 @@ async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None 
         last_row = rows[-1]
         next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
 
-    total_after_cursor = _count_sync_union_rows_after_cursor(conn, cursor_value=payload.cursor)
+    total_after_cursor = _count_sync_union_rows_after_cursor(
+        conn,
+        user_id=payload.user_id,
+        cursor_value=payload.cursor,
+    )
     has_more = total_after_cursor > len(rows)
 
     now_iso = _now_iso()

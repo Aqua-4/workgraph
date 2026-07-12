@@ -455,6 +455,117 @@ class SyncApiTests(unittest.TestCase):
         body = push_response.json()
         self.assertEqual(body["accepted"]["sessions"], 100_000)
 
+    def test_pull_is_scoped_to_user_and_metadata_endpoints_work(self) -> None:
+        reg_user_1 = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-a", "name": "User A"},
+                "device": {
+                    "id": "device-a1",
+                    "name": "A Laptop",
+                    "type": "work",
+                    "hostname": "A-1",
+                    "category": "linux",
+                },
+            },
+        )
+        reg_user_2 = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-b", "name": "User B"},
+                "device": {
+                    "id": "device-b1",
+                    "name": "B Laptop",
+                    "type": "work",
+                    "hostname": "B-1",
+                    "category": "windows",
+                },
+            },
+        )
+        self.assertEqual(reg_user_1.status_code, 200)
+        self.assertEqual(reg_user_2.status_code, 200)
+
+        token_a = reg_user_1.json()["device_token"]
+        token_b = reg_user_2.json()["device_token"]
+
+        push_a = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-a1",
+                "user_id": "user-a",
+                "client_cursor": None,
+                "batch_id": "batch-a",
+                "changes": {
+                    "sessions": [
+                        {
+                            "uuid": "sess-a",
+                            "created_at": "2026-07-11T10:00:00+00:00",
+                            "updated_at": "2026-07-11T10:00:00+00:00",
+                            "start_time": "2026-07-11T10:00:00+00:00",
+                            "end_time": "2026-07-11T10:30:00+00:00",
+                            "duration_sec": 1800,
+                            "app_name": "Code",
+                        }
+                    ],
+                    "journal_entries": [],
+                    "daily_reflections": [],
+                },
+            },
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        push_b = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-b1",
+                "user_id": "user-b",
+                "client_cursor": None,
+                "batch_id": "batch-b",
+                "changes": {
+                    "sessions": [
+                        {
+                            "uuid": "sess-b",
+                            "created_at": "2026-07-11T11:00:00+00:00",
+                            "updated_at": "2026-07-11T11:00:00+00:00",
+                            "start_time": "2026-07-11T11:00:00+00:00",
+                            "end_time": "2026-07-11T11:45:00+00:00",
+                            "duration_sec": 2700,
+                            "app_name": "Browser",
+                        }
+                    ],
+                    "journal_entries": [],
+                    "daily_reflections": [],
+                },
+            },
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        self.assertEqual(push_a.status_code, 200)
+        self.assertEqual(push_b.status_code, 200)
+
+        pull_a = self.client.post(
+            "/api/sync/v1/pull",
+            json={
+                "device_id": "device-a1",
+                "user_id": "user-a",
+                "cursor": None,
+                "limit": 100,
+            },
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        self.assertEqual(pull_a.status_code, 200)
+        sessions_a = pull_a.json()["changes"]["sessions"]
+        self.assertEqual(len(sessions_a), 1)
+        self.assertEqual(sessions_a[0]["uuid"], "sess-a")
+
+        users_response = self.client.get("/api/sync/users")
+        self.assertEqual(users_response.status_code, 200)
+        self.assertGreaterEqual(len(users_response.json()["users"]), 2)
+
+        devices_response = self.client.get("/api/sync/devices", params={"user_id": "user-a"})
+        self.assertEqual(devices_response.status_code, 200)
+        devices = devices_response.json()["devices"]
+        self.assertEqual(len(devices), 1)
+        self.assertEqual(devices[0]["device_id"], "device-a1")
+
 
 if __name__ == "__main__":
     unittest.main()
