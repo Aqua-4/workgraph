@@ -44,7 +44,7 @@ def _process_name(pid: int | None) -> str | None:
 def _app_name_from_process(process_name: str | None) -> str:
     if not process_name:
         return UNKNOWN_APP
-    return process_name.removesuffix(".exe")
+    return process_name.removesuffix(".exe").lower()
 
 
 def _get_windows_active_window() -> ActiveWindow:

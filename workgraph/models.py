@@ -52,5 +52,5 @@ class ActivitySession:
 def normalize_text(value: str | None) -> str | None:
     if value is None:
         return None
-    value = " ".join(value.split())
+    value = " ".join(value.split()).lower()
     return value or None
