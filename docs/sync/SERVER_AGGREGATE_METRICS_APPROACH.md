@@ -1,12 +1,12 @@
 # Server Aggregate Metrics Approach
 
-Status: Proposed
+Status: Implemented (current baseline)
 Owner: WorkGraph
 Last updated: 2026-07-12
 
 ## 1) Goal
 
-Define how server dashboard metrics should be computed from synced multi-device data so totals represent all registered devices for a user, not only local `activity_sessions`.
+Document how server dashboard metrics are computed from synced multi-device data so totals represent all registered devices for a user, not only local `activity_sessions`.
 
 ## 2) Current Behavior
 
@@ -15,17 +15,17 @@ Define how server dashboard metrics should be computed from synced multi-device 
   - `sync_journal_entries`
   - `sync_daily_reflections`
 - Sync health and registration indicators are server-backed and working.
-- Dashboard summary metrics are still computed from local-style `activity_sessions` queries.
+- Dashboard summary metrics support explicit sync-backed computation.
 
 Result:
 - Sync status is accurate.
-- Time allocation metrics are not yet true cross-device aggregates.
+- Sync-server mode time allocation metrics are computed as cross-device aggregates.
 
 ## 3) Target Behavior
 
-When server is used as sync hub, dashboard/timeline/reporting should compute aggregates from `sync_sessions` payloads by user scope.
+When server is used as sync hub, dashboard/timeline/reporting compute aggregates from `sync_sessions` payloads by user scope.
 
-Expected outcomes:
+Implemented outcomes:
 - Total active time includes all synced devices for selected user.
 - App/tag/repo breakdowns represent cross-device totals.
 - Optional filtering supports per-device drilldown.
@@ -59,9 +59,9 @@ No extra dedupe layer required for standard reads.
 
 ## 5) API and Query Design
 
-## 5.1 Add aggregate query helpers
+## 5.1 Aggregate query helpers
 
-Add server-side helpers in API layer, e.g.:
+Implemented server-side helpers in API layer include:
 - `query_sync_sessions(...)`
 - `get_sync_summary_stats(...)`
 
@@ -70,16 +70,15 @@ Behavior:
 - Apply user/device/date filters.
 - Build same output structure as current `get_summary_stats(...)` so templates remain compatible.
 
-## 5.2 Suggested mode switch
+## 5.2 Source mode switch
 
-Introduce a simple source mode selection:
+Source mode selection is implemented:
 - `local`: current `activity_sessions` path
 - `sync`: server aggregate path using `sync_sessions`
 
-Possible trigger options:
-1. Query param on dashboard/timeline (`source=sync`).
-2. Server setting in config.
-3. Automatic fallback to `sync` when `sync_sessions` has data and user scope is provided.
+Triggers currently used:
+1. Dashboard runtime mode in config (`dashboard_mode`).
+2. Query parameter override paths where supported (`source=sync`).
 
 ## 5.3 User selection
 
@@ -87,8 +86,8 @@ Because server may contain multiple users, require explicit user scope in aggreg
 - Option A: query parameter `user_id`.
 - Option B: default to most recently active user and show selector.
 
-Recommended initial step:
-- Use `user_id` query param with a simple UI selector sourced from `sync_users`.
+Current baseline:
+- `user_id` is supported with selectors sourced from `sync_users` in sync-server flows.
 
 ## 6) UI Updates
 
@@ -121,20 +120,15 @@ If user is registered but no synced sessions:
 - Validate `user_id` exists in `sync_users` before aggregate queries.
 - Keep internal server APIs private if server is single-tenant.
 
-## 9) Rollout Plan
+## 9) Rollout Status
 
-Phase 1:
-- Implement read helpers over `sync_sessions`.
-- Add query-param gated aggregate mode (`source=sync&user_id=...`).
-- Keep existing local path as default.
+Completed:
+- Read helpers over `sync_sessions` and sync rollups.
+- Explicit aggregate mode and user/device-scoped filtering.
+- Dashboard selectors and sync-server dashboard template.
 
-Phase 2:
-- Add dashboard UI selectors for user/device.
-- Persist selected filters in query string.
-
-Phase 3:
-- Consider making sync mode default on server deployments.
-- Add optional pre-aggregation if needed.
+In progress / next:
+- Expand pre-aggregation and operational tooling as dataset size grows.
 
 ## 10) Validation Plan
 
@@ -157,7 +151,7 @@ Operational:
 - Whether to support mixed mode (local + sync) in same chart.
 - When to introduce summary rollups vs direct JSON parsing.
 
-## 12) Implementation Readiness
+## 12) Current Readiness
 
-This approach can be implemented incrementally without schema migrations.
-Recommended first code change: add `get_sync_summary_stats(...)` that mirrors current `get_summary_stats(...)` return shape and gate usage behind explicit query parameters.
+This approach is implemented as the current sync-server analytics baseline.
+Further improvements should focus on scale/performance optimizations and operational runbooks.

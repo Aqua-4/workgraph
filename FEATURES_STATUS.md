@@ -62,7 +62,7 @@ Verification basis:
 |---|---|---|
 | Goal drift detection | Implemented | Planned-vs-actual goal allocation drift via CLI |
 | Focus block analysis | Partial | Core focus metrics exist in dashboard stats |
-| Weekly/monthly reports | Planned | Not present in current code |
+| Weekly/monthly reports | Partial | Weekly CLI report is implemented; monthly report not yet implemented |
 | Burnout risk indicators | Planned | No burnout model/heuristics yet |
 | Trend analysis | Partial | 7-day trend rows implemented in dashboard stats |
 

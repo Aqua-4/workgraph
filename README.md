@@ -655,12 +655,11 @@ Run a one-shot snapshot every hour:
 
 ### Future
 
-* FastAPI
-* SQLAlchemy
-* PostgreSQL
-* Redis
-* Ollama
-* OpenAI-compatible LLMs
+* Advanced focus block analytics and coaching heuristics
+* Monthly report generation
+* Burnout risk indicators and trend alerts
+* Optional PostgreSQL backend for larger team/retention scenarios
+* AI-assisted productivity coaching (opt-in)
 
 ---
 
@@ -686,12 +685,17 @@ Run a one-shot snapshot every hour:
 
 * [x] Local dashboard
 * [x] Timeline view
-* [ ] Weekly reports
+* [x] Weekly reports
+* [x] Structured work events and journal/reflection APIs
+* [x] Multi-device sync API (SQLite sync backend)
+* [x] Sync server analytics mode + metadata endpoints
 
 ### v2.0
 
-* [ ] Analytics engine
-* [ ] Focus session detection
+* [x] Goal drift detection
+* [x] Trend analysis (7-day rollups)
+* [ ] Focus session detection (advanced)
+* [ ] Monthly reports
 * [ ] Burnout risk detection
 
 ### v3.0

@@ -1,6 +1,6 @@
-# WorkGraph Dashboard & Timeline
+# WorkGraph Dashboard, Timeline, and Journal
 
-The WorkGraph web dashboard provides a visual interface to view your activity data and analyze patterns.
+The WorkGraph web app provides local and sync-backed visibility into activity sessions, trends, journaling, and structured work events.
 
 ## Quick Start
 
@@ -54,27 +54,47 @@ run.bat           # Windows
 uv run python main.py --web --port 4000
 ```
 
+## Dashboard Modes
+
+Dashboard behavior is controlled by `dashboard_mode` in settings.
+
+- `standalone`: local-only dashboard and local registration
+- `sync-client`: local dashboard with remote sync-server registration flow
+- `sync-server`: server-side aggregated dashboard for multi-device sync data
+
 ## Features
 
 ### Dashboard
 
 The dashboard homepage shows:
 
-- **Total Active Time** — How many hours you've been actively working (not idle)
-- **Categories Tagged** — How many different project tags have been detected
-- **Apps Used** — Number of distinct applications tracked
-- **Time by Goal** — Stacked bar chart showing hours spent on each tagged project
-- **Time by Application** — Stacked bar chart showing hours in each app
+- **Total Active Time** — Active hours in selected mode/source
+- **Time by Goal/Tag** — Allocation by tag
+- **Time by Application** — Top applications by active time
+- **Repository breakdown** — Top repos by active time
+- **Meeting proxy and switch metrics** — Meeting-time proxy and context-switch rate
+- **Daily trend row** — 7-day active, meeting, and switch density trend
+- **Sync health summary** — Available in sync-server mode
+
+When running in sync-server mode, overview values are aggregated from synced multi-device records.
 
 ### Timeline
 
-The timeline view shows a detailed chronological breakdown of your activity:
+The timeline view shows a detailed chronological breakdown of activity sessions:
 
-- **Chronological sessions** — All tracked sessions in order
-- **Rich metadata** — App name, window title, domain, git repo, branch
-- **Filtering** — Filter by date range, tag, or application
-- **Status indicator** — Visual indicator for active vs idle time
-- **Duration display** — Hours and minutes for each session
+- **Chronological sessions** — Ordered sessions with optional sync-source backing
+- **Rich metadata** — App, title, domain, repo, branch, tag, idle/active state
+- **Filtering** — Days, tag, app, and sync dimensions (user/device where applicable)
+- **Chart + table view** — Trend visualization plus recent rows
+
+### Journal and Work Events
+
+The journal page supports:
+
+- Free-form journal entries with optional time windows
+- Correlated activity session summaries for each entry window
+- Daily reflections (wins, problems, tomorrow, energy, stress)
+- Structured work events (achievement, incident, decision, risk, blocker, etc.)
 
 ### API Endpoints
 
@@ -82,6 +102,15 @@ Access raw data via REST API:
 
 - `GET /api/sessions?days=7&limit=100` — Get raw session data
 - `GET /api/stats?days=7` — Get summary statistics
+- `GET /api/stats?source=sync&user_id=<id>&days=7` — Sync-backed summary stats
+- `POST /api/device/register` — Mode-aware device registration
+- `GET /api/sync/users` — List sync users
+- `GET /api/sync/devices?user_id=<id>` — List user devices
+- `GET /api/sync/stats?user_id=<id>&days=30` — Rollup stats from sync tables
+- `POST /api/sync/rollups/rebuild?user_id=<id>` — Rebuild sync daily rollups
+- `POST /api/journal` / `GET /api/journal` / `PUT /api/journal/{id}` — Journal CRUD
+- `GET /api/journal/{id}/correlated-sessions` — Time-overlap session summary
+- `PUT /api/reflections/{date}` / `GET /api/reflections` — Reflection APIs
 
 ### HTML/CSS
 
@@ -122,15 +151,12 @@ The dashboard consists of:
 
 No external CSS frameworks, no JavaScript bundling, no frontend build step. Designed for simplicity and minimal resource usage.
 
-## Future Enhancements (V1.2+)
+## Future Enhancements
 
-- Real-time updates (WebSocket)
-- Interactive charts and graphs
-- Goal drift alerts
-- Weekly reports
-- Export to CSV/JSON
-- Dark mode toggle
-- Mobile-responsive improvements
+- Monthly reports
+- Burnout indicators and alerts
+- Deeper focus-block heuristics
+- Additional sync operations tooling
 
 ## Troubleshooting
 
@@ -146,6 +172,7 @@ uv run python main.py --web --port 8001
 1. Run unified mode: `./run-dashboard.sh` (or `run-dashboard.bat` on Windows)
 2. Or run collector self-healing mode: `./run.sh` and dashboard in another terminal
 3. For a quick sample, use: `uv run python main.py --once`
+4. In sync-server mode, ensure at least one device has pushed data
 
 ### Server won't start
 
@@ -153,6 +180,12 @@ Ensure FastAPI and Uvicorn are installed:
 
 ```bash
 uv sync
+```
+
+If port 8000 is already in use, choose another port:
+
+```bash
+uv run python main.py --web --port 8001
 ```
 
 ## Performance
