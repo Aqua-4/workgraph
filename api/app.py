@@ -1558,6 +1558,13 @@ def query_sessions(
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
+    activity_table = cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='activity_sessions'"
+    ).fetchone()
+    if activity_table is None:
+        conn.close()
+        return []
+
     query = "SELECT * FROM activity_sessions WHERE 1=1"
     params = []
 
@@ -2660,7 +2667,7 @@ async def dashboard(
         )
     else:
         stats = get_summary_stats(db_path, days=7)
-    sync_health = get_sync_health(db_path) if dashboard_mode == "sync-server" else None
+    sync_health = get_sync_health(db_path)
 
     template = jinja_env.get_template("dashboard.html")
     return template.render(
@@ -2679,7 +2686,7 @@ async def timeline(
     days: int = Query(7, ge=1, le=30),
     tag: str | None = Query(None),
     app: str | None = Query(None),
-    source: str = Query("local"),
+    source: str | None = Query(None),
     user_id: str | None = Query(None),
     device_id: str | None = Query(None),
 ):
@@ -2689,8 +2696,10 @@ async def timeline(
     if not db_path.exists():
         return "<h1>WorkGraph Timeline</h1><p>No data collected yet.</p>"
 
+    dashboard_mode = _configured_dashboard_mode()
+    default_source = _source_for_dashboard_mode(dashboard_mode)
+    normalized_source = _normalize_source(source or default_source)
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
-    normalized_source = _normalize_source(source)
     if normalized_source == "sync":
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row

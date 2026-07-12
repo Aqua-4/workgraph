@@ -21,10 +21,13 @@ class JournalApiTests(unittest.TestCase):
             pass
 
         self.patcher = patch("api.app.get_db_path", return_value=self.db_path)
+        self.mode_patcher = patch("api.app._configured_dashboard_mode", return_value="standalone")
         self.patcher.start()
+        self.mode_patcher.start()
         self.client = TestClient(app)
 
     def tearDown(self) -> None:
+        self.mode_patcher.stop()
         self.patcher.stop()
         self.temp_dir.cleanup()
 
