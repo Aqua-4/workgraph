@@ -197,10 +197,11 @@
     </div>
 
     <div class="card journal-card p-3 p-md-4">
-        <h3 class="mb-1">Daily Reflection + Energy</h3>
+        <h3 id="reflection-form-title" class="mb-1">Daily Reflection + Energy</h3>
         <p class="muted mb-3">Track wins, setbacks, and your energy/stress for trend analysis.</p>
         <div id="reflection-feedback" style="display: none;"></div>
         <form id="reflection-form" class="form-grid">
+            <input type="hidden" id="reflection-edit-date">
             <div class="field">
                 <label for="reflection-date">Date</label>
                 <input type="date" id="reflection-date" required>
@@ -226,16 +227,18 @@
                 <textarea id="tomorrow" rows="3"></textarea>
             </div>
             <div style="grid-column: 1 / -1;" class="d-flex gap-2">
-                <button class="btn btn-primary" type="submit">Save Reflection</button>
+                <button class="btn btn-primary" id="reflection-submit" type="submit">Save Reflection</button>
+                <button class="btn btn-outline-secondary" id="reflection-cancel" type="button" style="display: none;">Cancel Edit</button>
             </div>
         </form>
     </div>
 
     <div class="card journal-card p-3 p-md-4">
-        <h3 class="mb-1">Structured Work Events</h3>
+        <h3 id="work-event-form-title" class="mb-1">Structured Work Events</h3>
         <p class="muted mb-3">Capture high-signal milestones like incidents, decisions, blockers, and releases.</p>
         <div id="work-event-feedback" style="display: none;"></div>
         <form id="work-event-form" class="form-grid">
+            <input type="hidden" id="work-event-id">
             <div class="field">
                 <label for="work-event-date">Date</label>
                 <input type="date" id="work-event-date" required>
@@ -278,7 +281,8 @@
                 <input type="text" id="work-event-labels" placeholder="customer-facing,auth,postmortem">
             </div>
             <div style="grid-column: 1 / -1;" class="d-flex gap-2">
-                <button class="btn btn-primary" type="submit">Save Work Event</button>
+                <button class="btn btn-primary" id="work-event-submit" type="submit">Save Work Event</button>
+                <button class="btn btn-outline-secondary" id="work-event-cancel" type="button" style="display: none;">Cancel Edit</button>
             </div>
         </form>
     </div>
@@ -344,6 +348,7 @@
                     <th>Stress</th>
                     <th>Wins</th>
                     <th>Problems</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -354,10 +359,28 @@
                     <td>{{ r.stress or "-" }}</td>
                     <td>{{ (r.wins or "")[:80] }}{% if r.wins and r.wins|length > 80 %}...{% endif %}</td>
                     <td>{{ (r.problems or "")[:80] }}{% if r.problems and r.problems|length > 80 %}...{% endif %}</td>
+                    <td>
+                        <button
+                            class="btn btn-outline-dark btn-sm edit-reflection-btn"
+                            type="button"
+                            data-reflection-date="{{ r.date }}"
+                            style="margin-right: 6px;"
+                        >
+                            Edit
+                        </button>
+                        <button
+                            class="btn btn-primary btn-sm correlate-reflection-btn"
+                            type="button"
+                            data-reflection-date="{{ r.date }}"
+                        >
+                            Correlate
+                        </button>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        <div id="reflection-correlation-panel" class="card" style="margin-top: 14px; display: none;"></div>
         {% else %}
         <p class="muted">No reflections yet.</p>
         {% endif %}
@@ -374,6 +397,7 @@
                     <th>Impact</th>
                     <th>Title</th>
                     <th>Project</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -395,10 +419,28 @@
                         {% endif %}
                     </td>
                     <td>{{ event.project or "-" }}</td>
+                    <td>
+                        <button
+                            class="btn btn-outline-dark btn-sm edit-work-event-btn"
+                            type="button"
+                            data-event-id="{{ event.id }}"
+                            style="margin-right: 6px;"
+                        >
+                            Edit
+                        </button>
+                        <button
+                            class="btn btn-primary btn-sm correlate-work-event-btn"
+                            type="button"
+                            data-event-id="{{ event.id }}"
+                        >
+                            Correlate
+                        </button>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        <div id="work-event-correlation-panel" class="card" style="margin-top: 14px; display: none;"></div>
         {% else %}
         <p class="muted">No work events yet.</p>
         {% endif %}
@@ -412,10 +454,18 @@
 
     const dateInput = document.getElementById("journal-date");
     const reflectionDate = document.getElementById("reflection-date");
+    const reflectionEditDate = document.getElementById("reflection-edit-date");
     const journalIdInput = document.getElementById("journal-id");
     const journalSubmitButton = document.getElementById("journal-submit");
     const journalCancelButton = document.getElementById("journal-cancel");
     const journalFormTitle = document.getElementById("journal-form-title");
+    const reflectionFormTitle = document.getElementById("reflection-form-title");
+    const reflectionSubmitButton = document.getElementById("reflection-submit");
+    const reflectionCancelButton = document.getElementById("reflection-cancel");
+    const workEventFormTitle = document.getElementById("work-event-form-title");
+    const workEventIdInput = document.getElementById("work-event-id");
+    const workEventSubmitButton = document.getElementById("work-event-submit");
+    const workEventCancelButton = document.getElementById("work-event-cancel");
     const tagsSearchInput = document.getElementById("journal-tags-search");
     const tagsSelectAllButton = document.getElementById("tags-select-all");
     const tagsClearAllButton = document.getElementById("tags-clear-all");
@@ -426,6 +476,8 @@
     const reflectionFeedback = document.getElementById("reflection-feedback");
     const workEventFeedback = document.getElementById("work-event-feedback");
     const correlationPanel = document.getElementById("correlation-panel");
+    const reflectionCorrelationPanel = document.getElementById("reflection-correlation-panel");
+    const workEventCorrelationPanel = document.getElementById("work-event-correlation-panel");
     dateInput.value = dateValue;
     reflectionDate.value = dateValue;
     const workEventDate = document.getElementById("work-event-date");
@@ -482,6 +534,88 @@
             opt.checked = false;
         });
         refreshSelectedTagsUi();
+    }
+
+    function resetReflectionForm() {
+        reflectionEditDate.value = "";
+        reflectionFormTitle.textContent = "Daily Reflection + Energy";
+        reflectionSubmitButton.textContent = "Save Reflection";
+        reflectionCancelButton.style.display = "none";
+        reflectionDate.disabled = false;
+
+        reflectionDate.value = dateValue;
+        document.getElementById("energy").value = "";
+        document.getElementById("stress").value = "";
+        document.getElementById("wins").value = "";
+        document.getElementById("problems").value = "";
+        document.getElementById("tomorrow").value = "";
+    }
+
+    function resetWorkEventForm() {
+        workEventIdInput.value = "";
+        workEventFormTitle.textContent = "Structured Work Events";
+        workEventSubmitButton.textContent = "Save Work Event";
+        workEventCancelButton.style.display = "none";
+
+        document.getElementById("work-event-date").value = dateValue;
+        document.getElementById("work-event-time").value = "";
+        document.getElementById("work-event-type").selectedIndex = 0;
+        document.getElementById("work-event-impact").value = "";
+        document.getElementById("work-event-title").value = "";
+        document.getElementById("work-event-project").value = "";
+        document.getElementById("work-event-notes").value = "";
+        document.getElementById("work-event-labels").value = "";
+    }
+
+    function renderCorrelation(panel, data) {
+        const summary = data.summary || {};
+        const apps = (summary.apps || []).join(", ") || "-";
+        const repos = (summary.repos || []).join(", ") || "-";
+
+        panel.innerHTML = `
+            <h3 style="margin-bottom: 10px;">Correlation Summary</h3>
+            <p class="muted" style="margin-bottom: 12px;">Range: ${data.range.start_time} to ${data.range.end_time}</p>
+            <div class="stats-grid" style="margin-bottom: 12px;">
+                <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                    <div class="stat-label">Active Hours</div>
+                    <div class="stat-value">${summary.total_active_hours || 0}</div>
+                </div>
+                <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                    <div class="stat-label">Context Switches</div>
+                    <div class="stat-value">${summary.total_context_switches || 0}</div>
+                </div>
+                <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                    <div class="stat-label">Sessions</div>
+                    <div class="stat-value">${summary.session_count || 0}</div>
+                </div>
+            </div>
+            <p><strong>Apps:</strong> ${apps}</p>
+            <p><strong>Repos:</strong> ${repos}</p>
+        `;
+    }
+
+    async function loadCorrelation(url, panel) {
+        if (!panel) {
+            return;
+        }
+        panel.style.display = "block";
+        panel.innerHTML = "<p class=\"muted\">Loading correlation...</p>";
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            let detail = "Unable to load correlation.";
+            try {
+                const errorPayload = await response.json();
+                detail = errorPayload.detail || detail;
+            } catch (_err) {
+                // ignore JSON parse errors and show default detail.
+            }
+            panel.innerHTML = `<div class="error">${detail}</div>`;
+            return;
+        }
+
+        const data = await response.json();
+        renderCorrelation(panel, data);
     }
 
     function getSelectedTags() {
@@ -626,6 +760,7 @@
         clearFeedback(reflectionFeedback);
 
         const date = document.getElementById("reflection-date").value;
+        const editingDate = reflectionEditDate.value;
         const energyValue = document.getElementById("energy").value;
         const stressValue = document.getElementById("stress").value;
         const energy = energyValue ? Number(energyValue) : null;
@@ -648,7 +783,8 @@
             stress
         };
 
-        const response = await fetch(`/api/reflections/${date}`, {
+        const targetDate = editingDate || date;
+        const response = await fetch(`/api/reflections/${targetDate}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -666,7 +802,7 @@
             return;
         }
 
-        setFeedback(reflectionFeedback, "success", "Reflection saved.");
+        setFeedback(reflectionFeedback, "success", editingDate ? "Reflection updated." : "Reflection saved.");
         window.location.href = "/journal?saved=reflection";
     });
 
@@ -698,8 +834,12 @@
             }
         };
 
-        const response = await fetch("/api/work-events", {
-            method: "POST",
+        const editingId = workEventIdInput.value;
+        const method = editingId ? "PUT" : "POST";
+        const url = editingId ? `/api/work-events/${editingId}` : "/api/work-events";
+
+        const response = await fetch(url, {
+            method,
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
         });
@@ -716,7 +856,7 @@
             return;
         }
 
-        setFeedback(workEventFeedback, "success", "Work event saved.");
+        setFeedback(workEventFeedback, "success", editingId ? "Work event updated." : "Work event saved.");
         window.location.href = "/journal?saved=work-event";
     });
 
@@ -726,48 +866,27 @@
             if (!journalId || !correlationPanel) {
                 return;
             }
+            loadCorrelation(`/api/journal/${journalId}/correlated-sessions`, correlationPanel);
+        });
+    });
 
-            correlationPanel.style.display = "block";
-            correlationPanel.innerHTML = "<p class=\"muted\">Loading correlation...</p>";
-
-            const response = await fetch(`/api/journal/${journalId}/correlated-sessions`);
-            if (!response.ok) {
-                let detail = "Unable to load correlation.";
-                try {
-                    const errorPayload = await response.json();
-                    detail = errorPayload.detail || detail;
-                } catch (_err) {
-                    // ignore JSON parse errors and show default detail.
-                }
-                correlationPanel.innerHTML = `<div class=\"error\">${detail}</div>`;
+    document.querySelectorAll(".correlate-reflection-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const reflectionDateValue = button.getAttribute("data-reflection-date");
+            if (!reflectionDateValue || !reflectionCorrelationPanel) {
                 return;
             }
+            loadCorrelation(`/api/reflections/${reflectionDateValue}/correlated-sessions`, reflectionCorrelationPanel);
+        });
+    });
 
-            const data = await response.json();
-            const summary = data.summary || {};
-            const apps = (summary.apps || []).join(", ") || "-";
-            const repos = (summary.repos || []).join(", ") || "-";
-
-            correlationPanel.innerHTML = `
-                <h3 style="margin-bottom: 10px;">Correlation Summary</h3>
-                <p class="muted" style="margin-bottom: 12px;">Range: ${data.range.start_time} to ${data.range.end_time}</p>
-                <div class="stats-grid" style="margin-bottom: 12px;">
-                    <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                        <div class="stat-label">Active Hours</div>
-                        <div class="stat-value">${summary.total_active_hours || 0}</div>
-                    </div>
-                    <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                        <div class="stat-label">Context Switches</div>
-                        <div class="stat-value">${summary.total_context_switches || 0}</div>
-                    </div>
-                    <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                        <div class="stat-label">Sessions</div>
-                        <div class="stat-value">${summary.session_count || 0}</div>
-                    </div>
-                </div>
-                <p><strong>Apps:</strong> ${apps}</p>
-                <p><strong>Repos:</strong> ${repos}</p>
-            `;
+    document.querySelectorAll(".correlate-work-event-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const eventId = button.getAttribute("data-event-id");
+            if (!eventId || !workEventCorrelationPanel) {
+                return;
+            }
+            loadCorrelation(`/api/work-events/${eventId}/correlated-sessions`, workEventCorrelationPanel);
         });
     });
 
@@ -812,6 +931,87 @@
     journalCancelButton.addEventListener("click", () => {
         clearFeedback(journalFeedback);
         resetJournalForm();
+    });
+
+    document.querySelectorAll(".edit-reflection-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+            clearFeedback(reflectionFeedback);
+            const reflectionDateValue = button.getAttribute("data-reflection-date");
+            if (!reflectionDateValue) {
+                return;
+            }
+
+            const response = await fetch(`/api/reflections/${reflectionDateValue}`);
+            if (!response.ok) {
+                setFeedback(reflectionFeedback, "error", "Unable to load reflection for editing.");
+                return;
+            }
+
+            const payload = await response.json();
+            const reflection = payload.reflection || {};
+
+            reflectionEditDate.value = String(reflection.date || "");
+            reflectionFormTitle.textContent = "Edit Daily Reflection + Energy";
+            reflectionSubmitButton.textContent = "Update Reflection";
+            reflectionCancelButton.style.display = "inline-block";
+
+            reflectionDate.value = reflection.date || dateValue;
+            reflectionDate.disabled = true;
+            document.getElementById("energy").value = reflection.energy ?? "";
+            document.getElementById("stress").value = reflection.stress ?? "";
+            document.getElementById("wins").value = reflection.wins || "";
+            document.getElementById("problems").value = reflection.problems || "";
+            document.getElementById("tomorrow").value = reflection.tomorrow || "";
+
+            reflectionFormTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    });
+
+    reflectionCancelButton.addEventListener("click", () => {
+        clearFeedback(reflectionFeedback);
+        resetReflectionForm();
+    });
+
+    document.querySelectorAll(".edit-work-event-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+            clearFeedback(workEventFeedback);
+            const eventId = button.getAttribute("data-event-id");
+            if (!eventId) {
+                return;
+            }
+
+            const response = await fetch(`/api/work-events/${eventId}`);
+            if (!response.ok) {
+                setFeedback(workEventFeedback, "error", "Unable to load work event for editing.");
+                return;
+            }
+
+            const payload = await response.json();
+            const eventItem = payload.event || {};
+            const metadata = eventItem.metadata || {};
+            const eventParts = splitIsoForInputs(eventItem.event_time || eventItem.created_at);
+
+            workEventIdInput.value = String(eventItem.id || "");
+            workEventFormTitle.textContent = "Edit Structured Work Event";
+            workEventSubmitButton.textContent = "Update Work Event";
+            workEventCancelButton.style.display = "inline-block";
+
+            document.getElementById("work-event-date").value = eventParts.date || dateValue;
+            document.getElementById("work-event-time").value = eventParts.time;
+            document.getElementById("work-event-type").value = eventItem.event_type || "";
+            document.getElementById("work-event-impact").value = eventItem.impact || "";
+            document.getElementById("work-event-title").value = eventItem.title || "";
+            document.getElementById("work-event-project").value = eventItem.project || "";
+            document.getElementById("work-event-notes").value = eventItem.notes || "";
+            document.getElementById("work-event-labels").value = (metadata.labels || []).join(", ");
+
+            workEventFormTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+    });
+
+    workEventCancelButton.addEventListener("click", () => {
+        clearFeedback(workEventFeedback);
+        resetWorkEventForm();
     });
 
     tagsSearchInput.addEventListener("input", () => {

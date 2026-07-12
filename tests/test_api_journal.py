@@ -163,6 +163,49 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["reflections"][0]["energy"], 7)
 
+    def test_get_and_correlate_reflection(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc),
+                    duration_sec=3600,
+                    app_name="Code",
+                    process_name="Code",
+                    window_title="journal.html",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=1,
+                    tag="Learning",
+                )
+            )
+
+        save_response = self.client.put(
+            "/api/reflections/2026-07-10",
+            json={
+                "wins": "Good focus block",
+                "problems": "None",
+                "tomorrow": "Continue",
+                "energy": 8,
+                "stress": 3,
+            },
+        )
+        self.assertEqual(save_response.status_code, 200)
+
+        get_response = self.client.get("/api/reflections/2026-07-10")
+        self.assertEqual(get_response.status_code, 200)
+        self.assertEqual(get_response.json()["reflection"]["wins"], "Good focus block")
+
+        correlate_response = self.client.get("/api/reflections/2026-07-10/correlated-sessions")
+        self.assertEqual(correlate_response.status_code, 200)
+        correlate_payload = correlate_response.json()
+        self.assertEqual(correlate_payload["summary"]["session_count"], 1)
+        self.assertIn("Code", correlate_payload["summary"]["apps"])
+
     def test_create_and_filter_work_events(self) -> None:
         create_response = self.client.post(
             "/api/work-events",
@@ -186,6 +229,70 @@ class JournalApiTests(unittest.TestCase):
         payload = list_response.json()
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["events"][0]["title"], "Demo auth outage")
+
+    def test_get_update_and_correlate_work_event(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 10, 10, 45, tzinfo=timezone.utc),
+                    end_time=datetime(2026, 7, 10, 11, 15, tzinfo=timezone.utc),
+                    duration_sec=1800,
+                    app_name="Code",
+                    process_name="Code",
+                    window_title="incident.md",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=4,
+                    tag="Client Delivery",
+                )
+            )
+
+        create_response = self.client.post(
+            "/api/work-events",
+            json={
+                "event_time": "2026-07-10T11:00:00+00:00",
+                "event_type": "Incident",
+                "title": "Initial title",
+                "impact": "High",
+                "project": "MCP Platform",
+                "notes": "Initial notes",
+                "metadata": {"labels": ["auth"]},
+            },
+        )
+        self.assertEqual(create_response.status_code, 200)
+        event_id = create_response.json()["id"]
+
+        get_response = self.client.get(f"/api/work-events/{event_id}")
+        self.assertEqual(get_response.status_code, 200)
+        self.assertEqual(get_response.json()["event"]["title"], "Initial title")
+
+        update_response = self.client.put(
+            f"/api/work-events/{event_id}",
+            json={
+                "event_time": "2026-07-10T11:00:00+00:00",
+                "event_type": "Decision",
+                "title": "Updated title",
+                "impact": "Medium",
+                "project": "MCP Platform",
+                "notes": "Updated notes",
+                "metadata": {"labels": ["postmortem"]},
+            },
+        )
+        self.assertEqual(update_response.status_code, 200)
+
+        updated_get_response = self.client.get(f"/api/work-events/{event_id}")
+        self.assertEqual(updated_get_response.status_code, 200)
+        self.assertEqual(updated_get_response.json()["event"]["event_type"], "Decision")
+
+        correlate_response = self.client.get(f"/api/work-events/{event_id}/correlated-sessions")
+        self.assertEqual(correlate_response.status_code, 200)
+        correlate_payload = correlate_response.json()
+        self.assertEqual(correlate_payload["summary"]["session_count"], 1)
+        self.assertEqual(correlate_payload["summary"]["total_context_switches"], 4)
 
     def test_work_event_type_validation(self) -> None:
         response = self.client.post(
