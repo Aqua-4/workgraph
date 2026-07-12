@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Server Dashboard - WorkGraph{% endblock %}
+
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div>
+    <h2>Sync Server Dashboard</h2>
+
+    <div class="card" style="margin-bottom: 12px;">
+        <form method="get" action="/" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <span class="stat-label" style="margin: 0;">Configured Mode</span>
+            <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
+            <input
+                type="text"
+                name="user_id"
+                value="{{ overview.selected_user_id or '' }}"
+                placeholder="user_id (optional: blank = all users)"
+                style="min-width: 260px;"
+            />
+            <input
+                type="text"
+                name="device_id"
+                value="{{ overview.selected_device_id or '' }}"
+                placeholder="device_id (optional)"
+                style="min-width: 220px;"
+            />
+            <button type="submit">Apply</button>
+        </form>
+    </div>
+
+    <div class="card" style="margin-bottom: 12px;">
+        <h3 style="margin-top: 0;">Server Aggregation Scope</h3>
+        <div style="font-size: 0.95em; color: #4b5563;">
+            This dashboard is server-only and reads aggregated sync metrics across registered devices.
+        </div>
+    </div>
+
+    <h2>Sync Health</h2>
+    <div class="card">
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Registered Devices</div>
+                <div class="stat-value">{{ sync_health.registered_devices }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Synced Devices</div>
+                <div class="stat-value">{{ sync_health.synced_devices }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Active Tokens</div>
+                <div class="stat-value">{{ sync_health.active_tokens }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Last Sync</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at|human_datetime }}</div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Aggregated Metrics (7 Days)</h2>
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-label">Total Active Time</div>
+            <div class="stat-value">{{ "%.1f"|format(overview.global_stats.total_hours) }}h</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Focus Time</div>
+            <div class="stat-value">{{ "%.1f"|format(overview.global_stats.focus_hours) }}h</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Meeting Time (Proxy)</div>
+            <div class="stat-value">{{ "%.1f"|format(overview.global_stats.meeting_hours) }}h</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">Context Switches</div>
+            <div class="stat-value">{{ overview.global_stats.total_switches }}</div>
+        </div>
+    </div>
+
+    {% if overview.user_stats %}
+    <h2>Selected User Breakdown</h2>
+    <div class="card">
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Active Hours</div>
+                <div class="stat-value">{{ "%.1f"|format(overview.user_stats.total_hours) }}h</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Tagged Coverage</div>
+                <div class="stat-value">{{ "%.0f"|format(overview.user_stats.tagged_ratio * 100) }}%</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Apps Used</div>
+                <div class="stat-value">{{ overview.user_stats.app_stats|length }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Repos Active</div>
+                <div class="stat-value">{{ overview.user_stats.repo_stats|length }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <h2>Registered Users</h2>
+    <div class="card">
+        {% if overview.users %}
+        <table>
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Name</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in overview.users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.name }}</td>
+                    <td>{{ user.updated_at|human_datetime }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #999;">No users registered yet.</p>
+        {% endif %}
+    </div>
+
+    <h2>Registered Devices</h2>
+    <div class="card">
+        {% if overview.devices %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Device ID</th>
+                    <th>Name</th>
+                    <th>User</th>
+                    <th>Type</th>
+                    <th>Last Seen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in overview.devices %}
+                <tr>
+                    <td>{{ device.id }}</td>
+                    <td>{{ device.name }}</td>
+                    <td>{{ device.user_id }}</td>
+                    <td>{{ device.type }}</td>
+                    <td>{{ device.last_seen_at|human_datetime }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #999;">No devices registered for the current filter.</p>
+        {% endif %}
+    </div>
+
+    <h2>Daily Trend (Aggregated)</h2>
+    <div class="card">
+        {% if overview.global_stats.daily_trend %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Date (UTC)</th>
+                        <th>Day</th>
+                        <th>Active Hours</th>
+                        <th>Meeting Hours</th>
+                        <th>Switches / Hour</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in overview.global_stats.daily_trend %}
+                    <tr>
+                        <td>{{ row.day }}</td>
+                        <td>{{ row.day_label }}</td>
+                        <td>{{ "%.2f"|format(row.active_hours) }}h</td>
+                        <td>{{ "%.2f"|format(row.meeting_hours) }}h</td>
+                        <td>{{ "%.2f"|format(row.switches_per_hour) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: #999;">No aggregated sync trend data yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -2031,6 +2031,132 @@ def get_sync_summary_stats(
     }
 
 
+def get_sync_server_overview(
+    db_path: Path,
+    *,
+    days: int = 7,
+    user_id: str | None = None,
+    device_id: str | None = None,
+) -> dict:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+
+    users = conn.execute(
+        """
+        SELECT id, name, created_at, updated_at
+        FROM sync_users
+        ORDER BY updated_at DESC, id ASC
+        """
+    ).fetchall()
+
+    selected_user_id = user_id
+    if selected_user_id is None and users:
+        selected_user_id = str(users[0]["id"])
+
+    devices_query = """
+        SELECT id, user_id, name, type, hostname, category, last_seen_at, created_at, updated_at
+        FROM sync_devices
+    """
+    devices_params: list[str] = []
+    if selected_user_id:
+        devices_query += " WHERE user_id = ?"
+        devices_params.append(selected_user_id)
+    devices_query += " ORDER BY COALESCE(last_seen_at, updated_at) DESC, id ASC"
+    devices = conn.execute(devices_query, devices_params).fetchall()
+
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_iso = start_date.isoformat(timespec="seconds")
+    start_day = start_date.strftime("%Y-%m-%d")
+
+    global_query = """
+        SELECT
+            COALESCE(SUM(active_seconds), 0) AS total_seconds,
+            COALESCE(SUM(focus_seconds), 0) AS focus_seconds,
+            COALESCE(SUM(meeting_seconds), 0) AS meeting_seconds,
+            COALESCE(SUM(context_switches), 0) AS total_switches
+        FROM sync_metrics_daily
+        WHERE day_utc >= ?
+    """
+    global_params: list[str] = [start_day]
+    if selected_user_id:
+        global_query += " AND user_id = ?"
+        global_params.append(selected_user_id)
+    if device_id:
+        global_query += " AND device_id = ?"
+        global_params.append(device_id)
+    global_row = conn.execute(global_query, global_params).fetchone()
+
+    trend_query = """
+        SELECT
+            day_utc,
+            COALESCE(SUM(active_seconds), 0) AS active_seconds,
+            COALESCE(SUM(meeting_seconds), 0) AS meeting_seconds,
+            COALESCE(SUM(context_switches), 0) AS context_switches
+        FROM sync_metrics_daily
+        WHERE day_utc >= ?
+    """
+    trend_params: list[str] = [start_day]
+    if selected_user_id:
+        trend_query += " AND user_id = ?"
+        trend_params.append(selected_user_id)
+    if device_id:
+        trend_query += " AND device_id = ?"
+        trend_params.append(device_id)
+    trend_query += " GROUP BY day_utc ORDER BY day_utc DESC LIMIT 7"
+
+    daily_trend: list[dict[str, object]] = []
+    for row in conn.execute(trend_query, trend_params).fetchall():
+        day_value = str(row["day_utc"])
+        active_seconds = int(row["active_seconds"] or 0)
+        meeting_seconds = int(row["meeting_seconds"] or 0)
+        switches = int(row["context_switches"] or 0)
+        daily_trend.append(
+            {
+                "day": day_value,
+                "day_label": datetime.strptime(day_value, "%Y-%m-%d").strftime("%a"),
+                "active_hours": round(active_seconds / 3600, 2),
+                "meeting_hours": round(meeting_seconds / 3600, 2),
+                "switches_per_hour": round(switches / max(active_seconds / 3600, 0.001), 2),
+            }
+        )
+
+    user_stats: dict | None = None
+    if selected_user_id:
+        conn.close()
+        user_stats = get_sync_summary_stats(
+            db_path,
+            user_id=selected_user_id,
+            days=days,
+            device_id=device_id,
+        )
+    else:
+        conn.close()
+
+    total_seconds = int((global_row["total_seconds"] if global_row else 0) or 0)
+    focus_seconds = int((global_row["focus_seconds"] if global_row else 0) or 0)
+    meeting_seconds = int((global_row["meeting_seconds"] if global_row else 0) or 0)
+    total_switches = int((global_row["total_switches"] if global_row else 0) or 0)
+
+    return {
+        "users": [dict(row) for row in users],
+        "devices": [dict(row) for row in devices],
+        "selected_user_id": selected_user_id,
+        "selected_device_id": device_id,
+        "global_stats": {
+            "total_seconds": total_seconds,
+            "total_hours": round(total_seconds / 3600, 1),
+            "focus_seconds": focus_seconds,
+            "focus_hours": round(focus_seconds / 3600, 1),
+            "meeting_seconds": meeting_seconds,
+            "meeting_hours": round(meeting_seconds / 3600, 1),
+            "total_switches": total_switches,
+            "daily_trend": daily_trend,
+        },
+        "user_stats": user_stats,
+    }
+
+
 def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     """Get summary statistics for the past N days."""
     conn = sqlite3.connect(db_path)
@@ -2405,6 +2531,21 @@ async def dashboard(
         return "<h1>WorkGraph Dashboard</h1><p>No data collected yet. Run the collector first.</p>"
 
     dashboard_mode = _configured_dashboard_mode()
+    if dashboard_mode == "sync-server":
+        overview = get_sync_server_overview(
+            db_path,
+            user_id=user_id,
+            device_id=device_id,
+            days=7,
+        )
+        sync_health = get_sync_health(db_path)
+        template = jinja_env.get_template("sync_server_dashboard.html")
+        return template.render(
+            dashboard_mode=dashboard_mode,
+            overview=overview,
+            sync_health=sync_health,
+        )
+
     normalized_source = _source_for_dashboard_mode(dashboard_mode)
     resolved_user_id = user_id
     if normalized_source == "sync":

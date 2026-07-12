@@ -915,6 +915,28 @@ class SyncApiTests(unittest.TestCase):
             body = response.json()
             self.assertIn("total_seconds", body)
 
+    def test_dashboard_sync_server_mode_uses_aggregated_template(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-server-dash", "name": "Server Dash User"},
+                "device": {
+                    "id": "device-server-dash-1",
+                    "name": "Server Dash Device",
+                    "type": "work",
+                    "hostname": "SD-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+
+        with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
+            response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Sync Server Dashboard", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()

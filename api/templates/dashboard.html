@@ -9,27 +9,10 @@
     <h2>This Week Overview</h2>
 
     <div class="card" style="margin-bottom: 12px;">
-        <form method="get" action="/" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
             <span class="stat-label" style="margin: 0;">Configured Mode</span>
             <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
-            {% if dashboard_mode == "sync-server" %}
-            <input
-                type="text"
-                name="user_id"
-                value="{{ selected_user_id or '' }}"
-                placeholder="sync user_id (optional)"
-                style="min-width: 220px;"
-            />
-            <input
-                type="text"
-                name="device_id"
-                value="{{ selected_device_id or '' }}"
-                placeholder="device_id (optional)"
-                style="min-width: 220px;"
-            />
-            {% endif %}
-            <button type="submit">Apply</button>
-        </form>
+        </div>
     </div>
 
     <div class="card" style="margin-bottom: 12px;">
