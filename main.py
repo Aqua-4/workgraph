@@ -31,11 +31,15 @@ DEFAULT_IDENTITY_PATH = Path("config/identity.json")
 PERSONAL_IDENTITY_PATH = Path("config/my-identity.json")
 
 
+def _default_config_path_str() -> str:
+    return str(PERSONAL_SETTINGS_PATH if PERSONAL_SETTINGS_PATH.exists() else DEFAULT_SETTINGS_PATH)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the WorkGraph v1 collector.")
     parser.add_argument(
         "--config",
-        default="config/settings.yaml",
+        default=_default_config_path_str(),
         help="Path to a simple YAML settings file.",
     )
     parser.add_argument(
@@ -118,8 +122,18 @@ def main() -> None:
         help="Path to goals yaml file.",
     )
     sync_parser = subparsers.add_parser("sync", help="Synchronize local data with central sync service.")
+    sync_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
+    )
     sync_subparsers = sync_parser.add_subparsers(dest="sync_command")
     sync_once_parser = sync_subparsers.add_parser("once", help="Run one push/pull sync cycle.")
+    sync_once_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
+    )
     sync_once_parser.add_argument(
         "--base-url",
         default=None,
@@ -157,6 +171,11 @@ def main() -> None:
     sync_catchup_parser = sync_subparsers.add_parser(
         "catchup",
         help="Run repeated sync cycles until local pending changes are drained.",
+    )
+    sync_catchup_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
     )
     sync_catchup_parser.add_argument(
         "--base-url",
@@ -206,6 +225,11 @@ def main() -> None:
     )
     sync_daemon_parser = sync_subparsers.add_parser(
         "daemon", help="Run continuous sync loop with retry/backoff."
+    )
+    sync_daemon_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
     )
     sync_daemon_parser.add_argument(
         "--base-url",
@@ -259,9 +283,14 @@ def main() -> None:
         default=None,
         help="Maximum retry backoff seconds (fallback: sync_backoff_max_seconds in config or default 60).",
     )
-    sync_subparsers.add_parser(
+    sync_migrate_parser = sync_subparsers.add_parser(
         "migrate",
         help="Run local sync schema migration/backfill on the configured SQLite database.",
+    )
+    sync_migrate_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
     )
     args = parser.parse_args()
 

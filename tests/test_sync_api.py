@@ -340,8 +340,133 @@ class SyncApiTests(unittest.TestCase):
         self.assertIn("avg_push_latency_ms", health)
         self.assertIn("synced_devices", health)
         self.assertIn("unsynced_devices", health)
+        self.assertIn("pending_pull_rows", health)
+        self.assertIn("pending_sessions", health)
+        self.assertIn("pending_journal_entries", health)
+        self.assertIn("pending_reflections", health)
+        self.assertIn("sync_failures", health)
+        self.assertIn("recent_errors", health)
         self.assertIn("device_statuses", health)
         self.assertEqual(len(health["device_statuses"]), 2)
+
+    def test_sync_health_reports_pending_pull_counts(self) -> None:
+        register_device_1 = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-pending", "name": "Pending User"},
+                "device": {
+                    "id": "device-pending-1",
+                    "name": "Pending Source",
+                    "type": "work",
+                    "hostname": "PD-1",
+                    "category": "linux",
+                },
+            },
+        )
+        register_device_2 = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-pending", "name": "Pending User"},
+                "device": {
+                    "id": "device-pending-2",
+                    "name": "Pending Target",
+                    "type": "work",
+                    "hostname": "PD-2",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_device_1.status_code, 200)
+        self.assertEqual(register_device_2.status_code, 200)
+
+        token_1 = register_device_1.json()["device_token"]
+        push_response = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-pending-1",
+                "user_id": "user-pending",
+                "client_cursor": None,
+                "batch_id": "batch-pending-health-1",
+                "changes": {
+                    "sessions": [
+                        {
+                            "uuid": "sess-pending-1",
+                            "created_at": "2026-07-11T10:00:00+00:00",
+                            "updated_at": "2026-07-11T10:00:00+00:00",
+                            "app_name": "Code",
+                            "duration_sec": 300,
+                        }
+                    ],
+                    "journal_entries": [
+                        {
+                            "uuid": "journal-pending-1",
+                            "created_at": "2026-07-11T10:05:00+00:00",
+                            "updated_at": "2026-07-11T10:05:00+00:00",
+                            "title": "Pending journal",
+                        }
+                    ],
+                    "daily_reflections": [
+                        {
+                            "uuid": "reflection-pending-1",
+                            "date": "2026-07-11",
+                            "created_at": "2026-07-11T10:10:00+00:00",
+                            "updated_at": "2026-07-11T10:10:00+00:00",
+                            "wins": "Pending reflection",
+                        }
+                    ],
+                },
+            },
+            headers={"Authorization": f"Bearer {token_1}"},
+        )
+        self.assertEqual(push_response.status_code, 200)
+
+        health_response = self.client.get("/api/sync/health")
+        self.assertEqual(health_response.status_code, 200)
+        health = health_response.json()
+        self.assertGreaterEqual(health["pending_pull_rows"], 3)
+        self.assertGreaterEqual(health["pending_sessions"], 1)
+        self.assertGreaterEqual(health["pending_journal_entries"], 1)
+        self.assertGreaterEqual(health["pending_reflections"], 1)
+        device_two = next(
+            item for item in health["device_statuses"] if item["device_id"] == "device-pending-2"
+        )
+        self.assertGreaterEqual(device_two["pending_pull_rows"], 3)
+
+    def test_sync_errors_endpoint_lists_failed_requests(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-error", "name": "Error User"},
+                "device": {
+                    "id": "device-error-1",
+                    "name": "Error Device",
+                    "type": "work",
+                    "hostname": "ER-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+
+        failed_push = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-error-1",
+                "user_id": "user-error",
+                "client_cursor": None,
+                "batch_id": "batch-error-1",
+                "changes": {},
+            },
+            headers={"Authorization": "Bearer invalid-token"},
+        )
+        self.assertEqual(failed_push.status_code, 401)
+
+        errors_response = self.client.get("/api/sync/errors")
+        self.assertEqual(errors_response.status_code, 200)
+        body = errors_response.json()
+        self.assertGreaterEqual(body["count"], 1)
+        self.assertEqual(body["errors"][0]["endpoint"], "/api/sync/v1/push")
+        self.assertEqual(body["errors"][0]["status_code"], 401)
 
     def test_retry_storm_duplicate_batch_id_is_idempotent(self) -> None:
         register_response = self.client.post(

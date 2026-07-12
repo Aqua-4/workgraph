@@ -56,6 +56,21 @@
                 <div class="stat-label">Last Sync</div>
                 <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at|human_datetime }}</div>
             </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Pending Pull Rows</div>
+                <div class="stat-value">{{ sync_health.pending_pull_rows }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Pending Upload Failures</div>
+                <div class="stat-value">{{ sync_health.pending_upload_failures }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Open Sync Failures</div>
+                <div class="stat-value">{{ sync_health.sync_failures }}</div>
+            </div>
+        </div>
+        <div style="margin-top: 10px; color: #4b5563; font-size: 0.9em;">
+            Pending pull queue: sessions {{ sync_health.pending_sessions }}, journals {{ sync_health.pending_journal_entries }}, reflections {{ sync_health.pending_reflections }}.
         </div>
     </div>
 
@@ -138,6 +153,9 @@
                     <th>Device</th>
                     <th>User</th>
                     <th>Type</th>
+                    <th>Status</th>
+                    <th>Last Sync</th>
+                    <th>Pending Pull</th>
                     <th>Last Seen</th>
                 </tr>
             </thead>
@@ -153,6 +171,31 @@
                         <div style="color: #6b7280; font-size: 0.85em;">{{ device.user_id }}</div>
                     </td>
                     <td>{{ device.type }}</td>
+                    <td>
+                        {% set health_item = (sync_health.device_statuses | selectattr('device_id', 'equalto', device.id) | list | first) %}
+                        {% if health_item %}
+                            <span class="tag-badge" style="text-transform: none;">{{ health_item.status }}</span>
+                        {% else %}
+                            <span style="color: #6b7280;">unknown</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if health_item %}
+                            {{ health_item.last_sync_at|human_datetime }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if health_item %}
+                            {{ health_item.pending_pull_rows }}
+                            <div style="color: #6b7280; font-size: 0.8em;">
+                                s:{{ health_item.pending_sessions }} j:{{ health_item.pending_journal_entries }} r:{{ health_item.pending_reflections }}
+                            </div>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
                     <td>{{ device.last_seen_at|human_datetime }}</td>
                 </tr>
                 {% endfor %}
@@ -160,6 +203,39 @@
         </table>
         {% else %}
         <p style="color: #999;">No devices registered for the current filter.</p>
+        {% endif %}
+    </div>
+
+    <h2>Recent Sync Errors</h2>
+    <div class="card">
+        {% if sync_health.recent_errors %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Endpoint</th>
+                    <th>Status</th>
+                    <th>Error</th>
+                    <th>Device</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in sync_health.recent_errors %}
+                <tr>
+                    <td>{{ item.created_at|human_datetime }}</td>
+                    <td>{{ item.endpoint }}</td>
+                    <td>{{ item.status_code or '-' }}</td>
+                    <td>
+                        <div>{{ item.error_type }}</div>
+                        <div style="color: #6b7280; font-size: 0.85em;">{{ item.message }}</div>
+                    </td>
+                    <td>{{ item.device_id or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #999;">No sync failures recorded.</p>
         {% endif %}
     </div>
 

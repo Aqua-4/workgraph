@@ -268,11 +268,35 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS sync_error_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            endpoint TEXT NOT NULL,
+            error_type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'open',
+            status_code INTEGER,
+            device_id TEXT,
+            user_id TEXT,
+            batch_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_endpoint_created
             ON sync_request_logs (endpoint, created_at);
 
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_device_created
             ON sync_request_logs (device_id, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_created
+            ON sync_error_logs (created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_status
+            ON sync_error_logs (status, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_endpoint
+            ON sync_error_logs (endpoint, created_at);
 
         CREATE TABLE IF NOT EXISTS sync_metrics_daily (
             user_id TEXT NOT NULL,
@@ -524,6 +548,15 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_device_created
             ON sync_request_logs (device_id, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_created
+            ON sync_error_logs (created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_status
+            ON sync_error_logs (status, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_endpoint
+            ON sync_error_logs (endpoint, created_at);
 
         CREATE INDEX IF NOT EXISTS idx_sync_metrics_daily_user_day
             ON sync_metrics_daily (user_id, day_utc);
@@ -1022,6 +1055,54 @@ def _log_sync_request(
     )
 
 
+def _log_sync_error(
+    conn: sqlite3.Connection,
+    *,
+    endpoint: str,
+    error_type: str,
+    message: str,
+    status_code: int | None,
+    device_id: str | None,
+    user_id: str | None,
+    batch_id: str | None = None,
+    retry_count: int = 0,
+    status: str = "open",
+) -> None:
+    now_iso = _now_iso()
+    normalized_message = (message or "unknown sync error").strip() or "unknown sync error"
+    conn.execute(
+        """
+        INSERT INTO sync_error_logs (
+            endpoint,
+            error_type,
+            message,
+            retry_count,
+            status,
+            status_code,
+            device_id,
+            user_id,
+            batch_id,
+            created_at,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            endpoint,
+            error_type,
+            normalized_message,
+            max(0, int(retry_count)),
+            status,
+            status_code,
+            device_id,
+            user_id,
+            batch_id,
+            now_iso,
+            now_iso,
+        ),
+    )
+
+
 def _request_hash(payload: dict) -> str:
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
@@ -1481,6 +1562,54 @@ def _count_sync_union_rows_after_cursor(
     return int(row["total_rows"] if row is not None else 0)
 
 
+def _count_sync_table_rows_after_cursor(
+    conn: sqlite3.Connection,
+    *,
+    table_name: str,
+    user_id: str,
+    cursor_value: str | None,
+) -> int:
+    updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
+    query = f"SELECT COUNT(*) AS total_rows FROM {table_name} WHERE user_id = ?"
+    params: list[str] = [user_id]
+    if updated_at_cursor is not None:
+        query += """
+          AND (
+                updated_at > ?
+                OR (updated_at = ? AND uuid > ?)
+              )
+        """
+        params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+
+    row = conn.execute(query, params).fetchone()
+    return int(row["total_rows"] if row is not None else 0)
+
+
+def _recent_sync_errors(conn: sqlite3.Connection, *, limit: int = 20) -> list[dict[str, object | None]]:
+    rows = conn.execute(
+        """
+        SELECT
+            id,
+            endpoint,
+            error_type,
+            message,
+            retry_count,
+            status,
+            status_code,
+            device_id,
+            user_id,
+            batch_id,
+            created_at,
+            updated_at
+        FROM sync_error_logs
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+        """,
+        (max(1, limit),),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_sync_health(db_path: Path) -> dict:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -1510,11 +1639,13 @@ def get_sync_health(db_path: Path) -> dict:
         """
         SELECT
             d.id AS device_id,
+            d.user_id AS user_id,
             d.name AS device_name,
             d.type AS device_type,
             d.category AS device_category,
             d.last_seen_at AS last_seen_at,
-            c.updated_at AS last_sync_at
+            c.updated_at AS last_sync_at,
+            c.last_pull_cursor AS last_pull_cursor
         FROM sync_devices d
         LEFT JOIN sync_checkpoints c
             ON c.device_id = d.id
@@ -1535,7 +1666,14 @@ def get_sync_health(db_path: Path) -> dict:
         FROM sync_request_logs
         """
     ).fetchone()
-    conn.close()
+    error_count_row = conn.execute(
+        """
+        SELECT COUNT(*) AS open_errors, MAX(created_at) AS last_error_at
+        FROM sync_error_logs
+        WHERE status = 'open'
+        """
+    ).fetchone()
+    recent_errors = _recent_sync_errors(conn, limit=20)
 
     active_tokens = int(token_row["active_tokens"] if token_row is not None else 0)
     registered_devices = int(device_row["registered_devices"] if device_row is not None else 0)
@@ -1564,22 +1702,76 @@ def get_sync_health(db_path: Path) -> dict:
 
     device_statuses: list[dict[str, object]] = []
     synced_devices = 0
+    pending_pull_rows_total = 0
+    pending_sessions_total = 0
+    pending_journal_entries_total = 0
+    pending_reflections_total = 0
     for row in device_status_rows:
         device_last_sync = row["last_sync_at"]
+        last_pull_cursor = row["last_pull_cursor"]
+        row_user_id = str(row["user_id"] or "").strip()
+        pending_sessions = 0
+        pending_journal_entries = 0
+        pending_reflections = 0
+        pending_pull_rows = 0
+        if row_user_id:
+            pending_sessions = _count_sync_table_rows_after_cursor(
+                conn,
+                table_name="sync_sessions",
+                user_id=row_user_id,
+                cursor_value=last_pull_cursor,
+            )
+            pending_journal_entries = _count_sync_table_rows_after_cursor(
+                conn,
+                table_name="sync_journal_entries",
+                user_id=row_user_id,
+                cursor_value=last_pull_cursor,
+            )
+            pending_reflections = _count_sync_table_rows_after_cursor(
+                conn,
+                table_name="sync_daily_reflections",
+                user_id=row_user_id,
+                cursor_value=last_pull_cursor,
+            )
+            pending_pull_rows = pending_sessions + pending_journal_entries + pending_reflections
+
+        pending_pull_rows_total += pending_pull_rows
+        pending_sessions_total += pending_sessions
+        pending_journal_entries_total += pending_journal_entries
+        pending_reflections_total += pending_reflections
+
         is_synced = bool(device_last_sync)
         if is_synced:
             synced_devices += 1
+        health_status = "healthy"
+        if not is_synced:
+            health_status = "not-synced"
+        elif pending_pull_rows > 0:
+            health_status = "pending-pull"
         device_statuses.append(
             {
                 "device_id": row["device_id"],
+                "user_id": row["user_id"],
                 "device_name": row["device_name"],
                 "device_type": row["device_type"],
                 "device_category": row["device_category"],
                 "last_seen_at": row["last_seen_at"],
                 "last_sync_at": device_last_sync,
                 "is_synced": is_synced,
+                "status": health_status,
+                "last_pull_cursor": last_pull_cursor,
+                "pending_pull_rows": pending_pull_rows,
+                "pending_sessions": pending_sessions,
+                "pending_journal_entries": pending_journal_entries,
+                "pending_reflections": pending_reflections,
             }
         )
+
+    open_errors = int(error_count_row["open_errors"] if error_count_row is not None else 0)
+    pending_upload_failures = sum(
+        1 for item in recent_errors if str(item.get("endpoint") or "") == "/api/sync/v1/push"
+    )
+    conn.close()
 
     return {
         "enabled": active_tokens > 0,
@@ -1598,6 +1790,14 @@ def get_sync_health(db_path: Path) -> dict:
         "last_request_at": metrics_row["last_request_at"] if metrics_row is not None else None,
         "synced_devices": synced_devices,
         "unsynced_devices": max(0, registered_devices - synced_devices),
+        "pending_pull_rows": pending_pull_rows_total,
+        "pending_sessions": pending_sessions_total,
+        "pending_journal_entries": pending_journal_entries_total,
+        "pending_reflections": pending_reflections_total,
+        "pending_upload_failures": pending_upload_failures,
+        "sync_failures": open_errors,
+        "last_error_at": error_count_row["last_error_at"] if error_count_row is not None else None,
+        "recent_errors": recent_errors,
         "device_statuses": device_statuses,
     }
 
@@ -3249,9 +3449,37 @@ async def api_sync_health():
             "last_sync_at": None,
             "synced_devices": 0,
             "unsynced_devices": 0,
+            "pending_pull_rows": 0,
+            "pending_sessions": 0,
+            "pending_journal_entries": 0,
+            "pending_reflections": 0,
+            "pending_upload_failures": 0,
+            "sync_failures": 0,
+            "last_error_at": None,
+            "recent_errors": [],
             "device_statuses": [],
         }
     return get_sync_health(db_path)
+
+
+@app.get("/api/sync/errors")
+async def api_sync_errors(limit: int = Query(20, ge=1, le=200)):
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {"errors": [], "count": 0}
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    try:
+        errors = _recent_sync_errors(conn, limit=limit)
+    finally:
+        conn.close()
+
+    return {
+        "errors": errors,
+        "count": len(errors),
+    }
 
 
 @app.get("/api/sync/users")
@@ -3950,40 +4178,142 @@ async def sync_push_changes(payload: SyncPushRequest, authorization: str | None 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     _ensure_sync_tables(conn)
-    _require_sync_auth(
-        conn,
-        authorization=authorization,
-        device_id=payload.device_id,
-        user_id=payload.user_id,
-    )
-    cursor = conn.cursor()
+    try:
+        _require_sync_auth(
+            conn,
+            authorization=authorization,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        cursor = conn.cursor()
 
-    raw_payload = payload.model_dump(mode="python")
-    req_hash = _request_hash(raw_payload)
+        raw_payload = payload.model_dump(mode="python")
+        req_hash = _request_hash(raw_payload)
 
-    cursor.execute(
-        "SELECT request_hash, response_json FROM sync_batches WHERE batch_id = ?",
-        (payload.batch_id,),
-    )
-    existing_batch = cursor.fetchone()
-    if existing_batch is not None:
-        if existing_batch["request_hash"] != req_hash:
+        cursor.execute(
+            "SELECT request_hash, response_json FROM sync_batches WHERE batch_id = ?",
+            (payload.batch_id,),
+        )
+        existing_batch = cursor.fetchone()
+        if existing_batch is not None:
+            if existing_batch["request_hash"] != req_hash:
+                raise HTTPException(status_code=409, detail="batch_id already exists with different payload")
+            response_json = existing_batch["response_json"]
+            replay_response = json.loads(response_json)
+            accepted = replay_response.get("accepted", {})
             _log_sync_request(
                 conn,
                 endpoint="/api/sync/v1/push",
-                status_code=409,
+                status_code=200,
                 latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
                 device_id=payload.device_id,
                 user_id=payload.user_id,
                 batch_id=payload.batch_id,
-                conflict_count=1,
+                accepted_count=int(sum(int(accepted.get(k, 0)) for k in ["sessions", "journal_entries", "daily_reflections"])),
+                conflict_count=int(len(replay_response.get("conflicts", []))),
             )
             conn.commit()
-            conn.close()
-            raise HTTPException(status_code=409, detail="batch_id already exists with different payload")
-        response_json = existing_batch["response_json"]
-        replay_response = json.loads(response_json)
-        accepted = replay_response.get("accepted", {})
+            return replay_response
+
+        sessions = payload.changes.get("sessions") or []
+        journal_entries = payload.changes.get("journal_entries") or []
+        reflections = payload.changes.get("daily_reflections") or []
+
+        cursors: list[tuple[str, str]] = []
+        for row in sessions:
+            updated_at, row_uuid = _upsert_sync_payload_row(
+                conn,
+                table_name="sync_sessions",
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                payload=row,
+            )
+            if updated_at and row_uuid:
+                cursors.append((updated_at, row_uuid))
+        for row in journal_entries:
+            updated_at, row_uuid = _upsert_sync_payload_row(
+                conn,
+                table_name="sync_journal_entries",
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                payload=row,
+            )
+            if updated_at and row_uuid:
+                cursors.append((updated_at, row_uuid))
+        for row in reflections:
+            updated_at, row_uuid = _upsert_sync_payload_row(
+                conn,
+                table_name="sync_daily_reflections",
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                payload=row,
+            )
+            if updated_at and row_uuid:
+                cursors.append((updated_at, row_uuid))
+
+        now_iso = _now_iso()
+        next_push_cursor = payload.client_cursor
+        if cursors:
+            max_updated_at, max_uuid = max(cursors)
+            next_push_cursor = _build_cursor(max_updated_at, max_uuid)
+
+        response_body = {
+            "accepted": {
+                "sessions": len(sessions),
+                "journal_entries": len(journal_entries),
+                "daily_reflections": len(reflections),
+            },
+            "conflicts": [],
+            "next_push_cursor": next_push_cursor,
+            "server_time": now_iso,
+        }
+
+        cursor.execute(
+            """
+            INSERT INTO sync_checkpoints (
+                device_id,
+                user_id,
+                last_push_cursor,
+                last_pull_cursor,
+                updated_at
+            )
+            VALUES (
+                ?,
+                ?,
+                ?,
+                COALESCE((SELECT last_pull_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
+                ?
+            )
+            ON CONFLICT(device_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                last_push_cursor = excluded.last_push_cursor,
+                updated_at = excluded.updated_at
+            """,
+            (payload.device_id, payload.user_id, next_push_cursor, payload.device_id, now_iso),
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO sync_batches (
+                batch_id,
+                device_id,
+                user_id,
+                request_hash,
+                response_json,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload.batch_id,
+                payload.device_id,
+                payload.user_id,
+                req_hash,
+                json.dumps(response_body, separators=(",", ":")),
+                now_iso,
+            ),
+        )
+
         _log_sync_request(
             conn,
             endpoint="/api/sync/v1/push",
@@ -3992,127 +4322,59 @@ async def sync_push_changes(payload: SyncPushRequest, authorization: str | None 
             device_id=payload.device_id,
             user_id=payload.user_id,
             batch_id=payload.batch_id,
-            accepted_count=int(sum(int(accepted.get(k, 0)) for k in ["sessions", "journal_entries", "daily_reflections"])),
-            conflict_count=int(len(replay_response.get("conflicts", []))),
+            accepted_count=len(sessions) + len(journal_entries) + len(reflections),
+            conflict_count=0,
+        )
+
+        conn.commit()
+        return response_body
+    except HTTPException as exc:
+        _log_sync_error(
+            conn,
+            endpoint="/api/sync/v1/push",
+            error_type="http_error",
+            message=str(exc.detail),
+            status_code=exc.status_code,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+        )
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/push",
+            status_code=exc.status_code,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+            conflict_count=1 if exc.status_code == 409 else 0,
         )
         conn.commit()
+        raise
+    except Exception as exc:
+        _log_sync_error(
+            conn,
+            endpoint="/api/sync/v1/push",
+            error_type=exc.__class__.__name__,
+            message=str(exc),
+            status_code=500,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+        )
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/push",
+            status_code=500,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+        )
+        conn.commit()
+        raise
+    finally:
         conn.close()
-        return replay_response
-
-    sessions = payload.changes.get("sessions") or []
-    journal_entries = payload.changes.get("journal_entries") or []
-    reflections = payload.changes.get("daily_reflections") or []
-
-    cursors: list[tuple[str, str]] = []
-    for row in sessions:
-        updated_at, row_uuid = _upsert_sync_payload_row(
-            conn,
-            table_name="sync_sessions",
-            user_id=payload.user_id,
-            device_id=payload.device_id,
-            payload=row,
-        )
-        if updated_at and row_uuid:
-            cursors.append((updated_at, row_uuid))
-    for row in journal_entries:
-        updated_at, row_uuid = _upsert_sync_payload_row(
-            conn,
-            table_name="sync_journal_entries",
-            user_id=payload.user_id,
-            device_id=payload.device_id,
-            payload=row,
-        )
-        if updated_at and row_uuid:
-            cursors.append((updated_at, row_uuid))
-    for row in reflections:
-        updated_at, row_uuid = _upsert_sync_payload_row(
-            conn,
-            table_name="sync_daily_reflections",
-            user_id=payload.user_id,
-            device_id=payload.device_id,
-            payload=row,
-        )
-        if updated_at and row_uuid:
-            cursors.append((updated_at, row_uuid))
-
-    now_iso = _now_iso()
-    next_push_cursor = payload.client_cursor
-    if cursors:
-        max_updated_at, max_uuid = max(cursors)
-        next_push_cursor = _build_cursor(max_updated_at, max_uuid)
-
-    response_body = {
-        "accepted": {
-            "sessions": len(sessions),
-            "journal_entries": len(journal_entries),
-            "daily_reflections": len(reflections),
-        },
-        "conflicts": [],
-        "next_push_cursor": next_push_cursor,
-        "server_time": now_iso,
-    }
-
-    cursor.execute(
-        """
-        INSERT INTO sync_checkpoints (
-            device_id,
-            user_id,
-            last_push_cursor,
-            last_pull_cursor,
-            updated_at
-        )
-        VALUES (
-            ?,
-            ?,
-            ?,
-            COALESCE((SELECT last_pull_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
-            ?
-        )
-        ON CONFLICT(device_id) DO UPDATE SET
-            user_id = excluded.user_id,
-            last_push_cursor = excluded.last_push_cursor,
-            updated_at = excluded.updated_at
-        """,
-        (payload.device_id, payload.user_id, next_push_cursor, payload.device_id, now_iso),
-    )
-
-    cursor.execute(
-        """
-        INSERT INTO sync_batches (
-            batch_id,
-            device_id,
-            user_id,
-            request_hash,
-            response_json,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            payload.batch_id,
-            payload.device_id,
-            payload.user_id,
-            req_hash,
-            json.dumps(response_body, separators=(",", ":")),
-            now_iso,
-        ),
-    )
-
-    _log_sync_request(
-        conn,
-        endpoint="/api/sync/v1/push",
-        status_code=200,
-        latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
-        device_id=payload.device_id,
-        user_id=payload.user_id,
-        batch_id=payload.batch_id,
-        accepted_count=len(sessions) + len(journal_entries) + len(reflections),
-        conflict_count=0,
-    )
-
-    conn.commit()
-    conn.close()
-    return response_body
 
 
 @app.post("/api/sync/v1/pull")
@@ -4122,112 +4384,154 @@ async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     _ensure_sync_tables(conn)
-    _require_sync_auth(
-        conn,
-        authorization=authorization,
-        device_id=payload.device_id,
-        user_id=payload.user_id,
-    )
+    try:
+        _require_sync_auth(
+            conn,
+            authorization=authorization,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
 
-    rows = _list_sync_union_rows(
-        conn,
-        user_id=payload.user_id,
-        cursor_value=payload.cursor,
-        limit=payload.limit,
-    )
-    active_sessions: list[dict] = []
-    active_journal_entries: list[dict] = []
-    active_daily_reflections: list[dict] = []
-    tombstones: list[dict] = []
+        rows = _list_sync_union_rows(
+            conn,
+            user_id=payload.user_id,
+            cursor_value=payload.cursor,
+            limit=payload.limit,
+        )
+        active_sessions: list[dict] = []
+        active_journal_entries: list[dict] = []
+        active_daily_reflections: list[dict] = []
+        tombstones: list[dict] = []
 
-    for row in rows:
-        entity = str(row["entity"])
-        row_id = str(row["id"])
-        updated_at = row["updated_at"]
-        deleted_at = row["deleted_at"]
-        if deleted_at:
-            tombstones.append(
-                {
-                    "entity": entity,
-                    "id": row_id,
-                    "deleted_at": deleted_at,
-                    "updated_at": updated_at,
-                }
+        for row in rows:
+            entity = str(row["entity"])
+            row_id = str(row["id"])
+            updated_at = row["updated_at"]
+            deleted_at = row["deleted_at"]
+            if deleted_at:
+                tombstones.append(
+                    {
+                        "entity": entity,
+                        "id": row_id,
+                        "deleted_at": deleted_at,
+                        "updated_at": updated_at,
+                    }
+                )
+                continue
+
+            payload_json = row["payload_json"]
+            if not payload_json:
+                continue
+            item = json.loads(payload_json)
+            if entity == "sessions":
+                active_sessions.append(item)
+            elif entity == "journal_entries":
+                active_journal_entries.append(item)
+            elif entity == "daily_reflections":
+                active_daily_reflections.append(item)
+
+        next_cursor = payload.cursor
+        if rows:
+            last_row = rows[-1]
+            next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
+
+        total_after_cursor = _count_sync_union_rows_after_cursor(
+            conn,
+            user_id=payload.user_id,
+            cursor_value=payload.cursor,
+        )
+        has_more = total_after_cursor > len(rows)
+
+        now_iso = _now_iso()
+        conn.execute(
+            """
+            INSERT INTO sync_checkpoints (
+                device_id,
+                user_id,
+                last_push_cursor,
+                last_pull_cursor,
+                updated_at
             )
-            continue
-
-        payload_json = row["payload_json"]
-        if not payload_json:
-            continue
-        item = json.loads(payload_json)
-        if entity == "sessions":
-            active_sessions.append(item)
-        elif entity == "journal_entries":
-            active_journal_entries.append(item)
-        elif entity == "daily_reflections":
-            active_daily_reflections.append(item)
-
-    next_cursor = payload.cursor
-    if rows:
-        last_row = rows[-1]
-        next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
-
-    total_after_cursor = _count_sync_union_rows_after_cursor(
-        conn,
-        user_id=payload.user_id,
-        cursor_value=payload.cursor,
-    )
-    has_more = total_after_cursor > len(rows)
-
-    now_iso = _now_iso()
-    conn.execute(
-        """
-        INSERT INTO sync_checkpoints (
-            device_id,
-            user_id,
-            last_push_cursor,
-            last_pull_cursor,
-            updated_at
+            VALUES (
+                ?,
+                ?,
+                COALESCE((SELECT last_push_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
+                ?,
+                ?
+            )
+            ON CONFLICT(device_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                last_pull_cursor = excluded.last_pull_cursor,
+                updated_at = excluded.updated_at
+            """,
+            (payload.device_id, payload.user_id, payload.device_id, next_cursor, now_iso),
         )
-        VALUES (
-            ?,
-            ?,
-            COALESCE((SELECT last_push_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
-            ?,
-            ?
+
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            status_code=200,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            accepted_count=len(active_sessions) + len(active_journal_entries) + len(active_daily_reflections),
+            has_more=has_more,
         )
-        ON CONFLICT(device_id) DO UPDATE SET
-            user_id = excluded.user_id,
-            last_pull_cursor = excluded.last_pull_cursor,
-            updated_at = excluded.updated_at
-        """,
-        (payload.device_id, payload.user_id, payload.device_id, next_cursor, now_iso),
-    )
+        conn.commit()
 
-    _log_sync_request(
-        conn,
-        endpoint="/api/sync/v1/pull",
-        status_code=200,
-        latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
-        device_id=payload.device_id,
-        user_id=payload.user_id,
-        accepted_count=len(active_sessions) + len(active_journal_entries) + len(active_daily_reflections),
-        has_more=has_more,
-    )
-    conn.commit()
-    conn.close()
-
-    return {
-        "changes": {
-            "sessions": active_sessions,
-            "journal_entries": active_journal_entries,
-            "daily_reflections": active_daily_reflections,
-            "tombstones": tombstones,
-        },
-        "next_cursor": next_cursor,
-        "has_more": has_more,
-        "server_time": now_iso,
-    }
+        return {
+            "changes": {
+                "sessions": active_sessions,
+                "journal_entries": active_journal_entries,
+                "daily_reflections": active_daily_reflections,
+                "tombstones": tombstones,
+            },
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+            "server_time": now_iso,
+        }
+    except HTTPException as exc:
+        _log_sync_error(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            error_type="http_error",
+            message=str(exc.detail),
+            status_code=exc.status_code,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            status_code=exc.status_code,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        conn.commit()
+        raise
+    except Exception as exc:
+        _log_sync_error(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            error_type=exc.__class__.__name__,
+            message=str(exc),
+            status_code=500,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            status_code=500,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        conn.commit()
+        raise
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
