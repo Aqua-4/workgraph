@@ -304,10 +304,10 @@ Ensures synced records contain valid timezone metadata and timestamps.
 
 ### Verification Checklist
 
-- [ ] doctor command runs successfully
-- [ ] invalid timestamps are flagged
-- [ ] UUID issues are surfaced
-- [ ] rollup mismatches are detected
+- [x] doctor command runs successfully
+- [x] invalid timestamps are flagged
+- [x] UUID issues are surfaced
+- [x] rollup mismatches are detected
 
 ---
 
@@ -445,16 +445,16 @@ Determine whether the stabilization work is complete enough to begin v2.
 
 #### Sync
 
-- [ ] multi-device sync validated
-- [ ] replay validation implemented
-- [ ] sync verification implemented
-- [ ] failure logs implemented
+- [x] multi-device sync validated
+- [x] replay validation implemented
+- [x] sync verification implemented
+- [x] failure logs implemented
 
 #### Database
 
-- [ ] integrity checks pass
-- [ ] rollup validation passes
-- [ ] UUID validation passes
+- [x] integrity checks pass
+- [x] rollup validation passes
+- [x] UUID validation passes
 
 #### Dashboard
 
@@ -555,11 +555,11 @@ Use this checklist as the execution backlog for the roadmap.
 
 - [x] implement `workgraph sync validate`
 - [x] implement `workgraph sync verify`
-- [ ] implement `workgraph doctor`
-- [ ] implement UUID validation checks
-- [ ] implement rollup validation checks
-- [ ] implement timezone validation checks
-- [ ] ensure each command returns clear pass/fail output
+- [x] implement `workgraph doctor`
+- [x] implement UUID validation checks
+- [x] implement rollup validation checks
+- [x] implement timezone validation checks
+- [x] ensure each command returns clear pass/fail output
 
 ### F. Backup and Recovery
 

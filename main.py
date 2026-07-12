@@ -122,6 +122,17 @@ def main() -> None:
         default=str(default_goals_path()),
         help="Path to goals yaml file.",
     )
+
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Run database integrity checks and report common data issues.",
+    )
+    doctor_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
+    )
+
     sync_parser = subparsers.add_parser("sync", help="Synchronize local data with central sync service.")
     sync_parser.add_argument(
         "--config",
@@ -347,6 +358,8 @@ def main() -> None:
         run_weekly_report_command(args)
     elif args.command == "goals" and args.goals_command == "analyze":
         run_goals_analyze_command(args)
+    elif args.command == "doctor":
+        run_doctor_command(args)
     elif args.command == "sync" and args.sync_command == "once":
         run_sync_once_command(args)
     elif args.command == "sync" and args.sync_command == "daemon":
@@ -425,6 +438,383 @@ def run_goals_analyze_command(args: argparse.Namespace) -> None:
         days=args.days,
     )
     print(report)
+
+
+def run_doctor_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    db_path = Path(settings.database_path)
+    if not db_path.exists():
+        print("Doctor: FAIL")
+        print(f"Database not found: {db_path}")
+        return
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    issues: list[str] = []
+    try:
+        integrity_issue = _run_sqlite_integrity_check(conn)
+        if integrity_issue is not None:
+            issues.append(integrity_issue)
+
+        for table_name, indexes in _expected_index_map().items():
+            missing = _missing_indexes(conn, table_name, indexes)
+            for index_name in missing:
+                issues.append(f"missing index: {table_name}.{index_name}")
+
+        invalid_timestamp_issues = _collect_timestamp_issues(conn)
+        issues.extend(invalid_timestamp_issues)
+
+        rollup_issues = _collect_rollup_issues(conn)
+        issues.extend(rollup_issues)
+    finally:
+        conn.close()
+
+    if issues:
+        print("Doctor: FAIL")
+        for issue in issues:
+            print(f"- {issue}")
+        return
+
+    print("Doctor: PASS")
+    print(f"Database: {db_path}")
+    print("Checked: integrity, indexes, timestamps, rollups")
+
+
+def _run_sqlite_integrity_check(conn: sqlite3.Connection) -> str | None:
+    rows = conn.execute("PRAGMA integrity_check").fetchall()
+    if not rows:
+        return "sqlite integrity_check returned no rows"
+
+    first_value = str(rows[0][0] if rows[0] else "")
+    if first_value.lower() != "ok":
+        details = "; ".join(str(row[0]) for row in rows if row and row[0])
+        return f"sqlite integrity_check failed: {details or first_value}"
+    return None
+
+
+def _expected_index_map() -> dict[str, list[str]]:
+    return {
+        "activity_sessions": [
+            "idx_activity_sessions_start_time",
+            "idx_activity_sessions_app_name",
+            "idx_activity_sessions_browser_domain",
+            "idx_activity_sessions_device_updated",
+            "idx_activity_sessions_user_updated",
+        ],
+        "journal_entries": [
+            "idx_journal_entries_start_time",
+            "idx_journal_entries_end_time",
+            "idx_journal_entries_user_updated",
+        ],
+        "daily_reflections": [
+            "idx_daily_reflections_date",
+            "idx_daily_reflections_user_date",
+        ],
+        "work_events": [
+            "idx_work_events_event_time",
+            "idx_work_events_type",
+            "idx_work_events_impact",
+        ],
+        "sync_metrics_daily": [
+            "idx_sync_metrics_daily_user_day",
+        ],
+    }
+
+
+def _missing_indexes(conn: sqlite3.Connection, table_name: str, index_names: list[str]) -> list[str]:
+    if not _table_exists(conn, table_name):
+        return []
+
+    existing_rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?",
+        (table_name,),
+    ).fetchall()
+    existing_names = {str(row[0]) for row in existing_rows}
+    return [index_name for index_name in index_names if index_name not in existing_names]
+
+
+def _collect_timestamp_issues(conn: sqlite3.Connection) -> list[str]:
+    issues: list[str] = []
+    timestamp_checks = [
+        (
+            "activity_sessions",
+            ["start_time", "end_time", "created_at", "updated_at"],
+            False,
+        ),
+        (
+            "journal_entries",
+            ["created_at", "start_time", "end_time", "updated_at"],
+            False,
+        ),
+        (
+            "daily_reflections",
+            ["date", "created_at", "updated_at"],
+            True,
+        ),
+        (
+            "work_events",
+            ["created_at", "event_time"],
+            False,
+        ),
+        (
+            "sync_sessions",
+            ["utc_start", "utc_end", "created_at", "updated_at"],
+            False,
+        ),
+        (
+            "sync_journal_entries",
+            ["created_at", "updated_at"],
+            False,
+        ),
+        (
+            "sync_daily_reflections",
+            ["date", "created_at", "updated_at"],
+            True,
+        ),
+        (
+            "sync_checkpoints",
+            ["updated_at"],
+            False,
+        ),
+        (
+            "sync_request_logs",
+            ["created_at"],
+            False,
+        ),
+        (
+            "sync_error_logs",
+            ["created_at", "updated_at"],
+            False,
+        ),
+        (
+            "sync_metrics_daily",
+            ["day_utc", "updated_at_utc"],
+            True,
+        ),
+    ]
+
+    for table_name, columns, treat_as_date in timestamp_checks:
+        issues.extend(
+            _timestamp_issues_for_table(
+                conn,
+                table_name=table_name,
+                columns=columns,
+                treat_date_columns=treat_as_date,
+            )
+        )
+    return issues
+
+
+def _timestamp_issues_for_table(
+    conn: sqlite3.Connection,
+    *,
+    table_name: str,
+    columns: list[str],
+    treat_date_columns: bool,
+) -> list[str]:
+    if not _table_exists(conn, table_name):
+        return []
+
+    available_columns = _table_columns(conn, table_name)
+    issues: list[str] = []
+    for column in columns:
+        if column not in available_columns:
+            continue
+        invalid_count = _count_invalid_timestamp_values(conn, table_name, column, treat_date_columns)
+        if invalid_count > 0:
+            label = "date" if treat_date_columns and column == "date" else "timestamp"
+            issues.append(f"{table_name}.{column} invalid {label} values: {invalid_count}")
+    return issues
+
+
+def _count_invalid_timestamp_values(
+    conn: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    treat_as_date: bool,
+) -> int:
+    rows = conn.execute(
+        f"SELECT {column_name} FROM {table_name} WHERE {column_name} IS NOT NULL AND TRIM({column_name}) != ''"
+    ).fetchall()
+    invalid = 0
+    for row in rows:
+        value = str(row[0]).strip()
+        if treat_as_date:
+            if _parse_date_str(value) is None:
+                invalid += 1
+        else:
+            if _parse_datetime_str(value) is None:
+                invalid += 1
+    return invalid
+
+
+def _collect_rollup_issues(conn: sqlite3.Connection) -> list[str]:
+    if not _table_exists(conn, "sync_sessions") or not _table_exists(conn, "sync_metrics_daily"):
+        return []
+
+    rows = conn.execute(
+        """
+        SELECT user_id, device_id, substr(utc_start, 1, 10) AS day_utc
+        FROM sync_sessions
+        WHERE deleted_at IS NULL
+          AND utc_start IS NOT NULL
+        GROUP BY user_id, device_id, day_utc
+        ORDER BY user_id, device_id, day_utc
+        """
+    ).fetchall()
+
+    issues: list[str] = []
+    for row in rows:
+        user_id = str(row["user_id"])
+        device_id = str(row["device_id"])
+        day_utc = str(row["day_utc"])
+        if not user_id or not device_id or not day_utc:
+            continue
+        expected = _sync_rollup_expected_values(conn, user_id=user_id, device_id=device_id, day_utc=day_utc)
+        stored = conn.execute(
+            """
+            SELECT active_seconds, focus_seconds, meeting_seconds, context_switches
+            FROM sync_metrics_daily
+            WHERE user_id = ? AND device_id = ? AND day_utc = ?
+            """,
+            (user_id, device_id, day_utc),
+        ).fetchone()
+        if stored is None:
+            issues.append(f"sync rollup missing for {user_id}/{device_id}/{day_utc}")
+            continue
+
+        mismatched_fields: list[str] = []
+        for field in ["active_seconds", "focus_seconds", "meeting_seconds", "context_switches"]:
+            if int(stored[field] or 0) != int(expected[field]):
+                mismatched_fields.append(
+                    f"{field}: stored={int(stored[field] or 0)} expected={int(expected[field])}"
+                )
+        if mismatched_fields:
+            issues.append(
+                f"sync rollup mismatch for {user_id}/{device_id}/{day_utc}: " + "; ".join(mismatched_fields)
+            )
+
+    return issues
+
+
+def _sync_rollup_expected_values(
+    conn: sqlite3.Connection,
+    *,
+    user_id: str,
+    device_id: str,
+    day_utc: str,
+) -> dict[str, int]:
+    row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS row_count,
+            COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS active_seconds,
+            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)), 0) AS focus_seconds,
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER) IS NOT NULL
+                            THEN COALESCE(CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER), 0)
+                        WHEN (
+                            LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%teams%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%zoom%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%webex%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%slack%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%meet.google.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%teams.microsoft.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%zoom.us%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%webex.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%meeting%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%standup%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%huddle%'
+                        ) THEN COALESCE(active_seconds, 0)
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS meeting_seconds,
+            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.context_switches') AS INTEGER), 0)), 0) AS context_switches_payload
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND device_id = ?
+          AND deleted_at IS NULL
+          AND utc_start IS NOT NULL
+          AND substr(utc_start, 1, 10) = ?
+        """,
+        (user_id, device_id, day_utc),
+    ).fetchone()
+
+    if row is None or int(row["row_count"] or 0) == 0:
+        return {
+            "active_seconds": 0,
+            "focus_seconds": 0,
+            "meeting_seconds": 0,
+            "context_switches": 0,
+        }
+
+    derived_switches_row = conn.execute(
+        """
+        WITH ordered AS (
+            SELECT
+                utc_start,
+                COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '') AS app_name,
+                COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '') AS window_title,
+                COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '') AS browser_domain,
+                LAG(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_app_name,
+                LAG(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_window_title,
+                LAG(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_browser_domain
+            FROM sync_sessions
+            WHERE user_id = ?
+              AND device_id = ?
+              AND deleted_at IS NULL
+              AND utc_start IS NOT NULL
+              AND substr(utc_start, 1, 10) = ?
+        )
+        SELECT COUNT(*) AS switch_count
+        FROM ordered
+        WHERE prev_app_name IS NOT NULL
+          AND (
+              COALESCE(app_name, '') != COALESCE(prev_app_name, '')
+              OR COALESCE(window_title, '') != COALESCE(prev_window_title, '')
+              OR COALESCE(browser_domain, '') != COALESCE(prev_browser_domain, '')
+          )
+        """,
+        (user_id, device_id, day_utc),
+    ).fetchone()
+
+    derived_switches = int((derived_switches_row["switch_count"] if derived_switches_row else 0) or 0)
+    payload_switches = int(row["context_switches_payload"] or 0)
+
+    return {
+        "active_seconds": int(row["active_seconds"] or 0),
+        "focus_seconds": int(row["focus_seconds"] or 0),
+        "meeting_seconds": int(row["meeting_seconds"] or 0),
+        "context_switches": max(payload_switches, derived_switches),
+    }
+
+
+def _parse_datetime_str(value: str) -> datetime | None:
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed
+
+
+def _parse_date_str(value: str) -> datetime | None:
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
 
 
 def run_sync_once_command(args: argparse.Namespace) -> None:
