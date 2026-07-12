@@ -10,11 +10,9 @@
 
     <div class="card" style="margin-bottom: 12px;">
         <form method="get" action="/" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-            <label for="source" class="stat-label" style="margin: 0;">Data Source</label>
-            <select id="source" name="source">
-                <option value="local" {% if source != "sync" %}selected{% endif %}>Local</option>
-                <option value="sync" {% if source == "sync" %}selected{% endif %}>Sync</option>
-            </select>
+            <span class="stat-label" style="margin: 0;">Configured Mode</span>
+            <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
+            {% if dashboard_mode == "sync-server" %}
             <input
                 type="text"
                 name="user_id"
@@ -29,7 +27,69 @@
                 placeholder="device_id (optional)"
                 style="min-width: 220px;"
             />
+            {% endif %}
             <button type="submit">Apply</button>
+        </form>
+    </div>
+
+    <div class="card" style="margin-bottom: 12px;">
+        {% if dashboard_mode == "standalone" %}
+        <div class="stat-label" style="margin-bottom: 8px;">Standalone Mode</div>
+        <div style="font-size: 0.95em; color: #4b5563;">
+            Local-only dashboard and collection. No remote sync APIs are required.
+        </div>
+        {% elif dashboard_mode == "sync-client" %}
+        <div class="stat-label" style="margin-bottom: 8px;">Sync Client Mode</div>
+        <div style="font-size: 0.95em; color: #4b5563;">
+            Local dashboard remains primary. Register this device on your sync server to obtain a device token.
+        </div>
+        {% else %}
+        <div class="stat-label" style="margin-bottom: 8px;">Sync Server Mode</div>
+        <div style="font-size: 0.95em; color: #4b5563;">
+            Server-hosted dashboard reads synced multi-device analytics and user-scoped rollups.
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card" style="margin-bottom: 12px;">
+        <h3 style="margin-top: 0;">Device Registration</h3>
+        <div style="font-size: 0.9em; color: #6b7280; margin-bottom: 10px;">
+            {% if dashboard_mode == "standalone" %}
+            Register this device for local identity and auditing.
+            {% elif dashboard_mode == "sync-client" %}
+            Register this client against a sync server and copy the returned token into your config as sync_token.
+            {% else %}
+            Register devices directly on this sync server.
+            {% endif %}
+        </div>
+        <form id="device-register-form" style="display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+            {% if dashboard_mode == "sync-client" %}
+            <input
+                type="text"
+                id="register-sync-base-url"
+                placeholder="sync_base_url (e.g. http://192.168.1.10:8000)"
+                style="grid-column: 1 / -1;"
+            />
+            {% endif %}
+            <input type="text" id="register-user-id" placeholder="user_id" value="{{ selected_user_id or '' }}" required />
+            <input type="text" id="register-user-name" placeholder="user_name" required />
+            <input type="text" id="register-device-id" placeholder="device_id" required />
+            <input type="text" id="register-device-name" placeholder="device_name" required />
+            <input type="text" id="register-device-type" placeholder="device_type (work/personal)" required />
+            <input type="text" id="register-device-hostname" placeholder="hostname (optional)" />
+            <input type="text" id="register-device-category" placeholder="category/platform (optional)" />
+            <div style="grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <button type="submit">
+                    {% if dashboard_mode == "sync-client" %}
+                    Register On Sync Server
+                    {% elif dashboard_mode == "sync-server" %}
+                    Register On This Server
+                    {% else %}
+                    Register Standalone Device
+                    {% endif %}
+                </button>
+                <span id="register-result" style="font-size: 0.9em; color: #374151;"></span>
+            </div>
         </form>
     </div>
 
@@ -276,4 +336,70 @@
         </ul>
     </div>
 </div>
+
+<script>
+(() => {
+    const form = document.getElementById("device-register-form");
+    if (!form) {
+        return;
+    }
+
+    const resultNode = document.getElementById("register-result");
+    const readValue = (id) => {
+        const node = document.getElementById(id);
+        return node ? (node.value || "").trim() : "";
+    };
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (resultNode) {
+            resultNode.textContent = "Registering device...";
+            resultNode.style.color = "#374151";
+        }
+
+        const payload = {
+            mode: "{{ dashboard_mode }}",
+            user: {
+                id: readValue("register-user-id"),
+                name: readValue("register-user-name"),
+            },
+            device: {
+                id: readValue("register-device-id"),
+                name: readValue("register-device-name"),
+                type: readValue("register-device-type"),
+                hostname: readValue("register-device-hostname") || null,
+                category: readValue("register-device-category") || null,
+            },
+            sync_base_url: readValue("register-sync-base-url") || null,
+        };
+
+        try {
+            const response = await fetch("/api/device/register", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                const detail = data && data.detail ? data.detail : "Registration failed";
+                throw new Error(detail);
+            }
+
+            let message = data.message || "Device registered";
+            if (data.device_token) {
+                message += ` device_token=${data.device_token}`;
+            }
+            if (resultNode) {
+                resultNode.textContent = message;
+                resultNode.style.color = "#166534";
+            }
+        } catch (error) {
+            if (resultNode) {
+                resultNode.textContent = error instanceof Error ? error.message : "Registration failed";
+                resultNode.style.color = "#b91c1c";
+            }
+        }
+    });
+})();
+</script>
 {% endblock %}

@@ -5,6 +5,7 @@ session_gap_seconds: 90
 browser_history_lookback_seconds: 600
 log_path: logs/workgraph.log
 identity_path: config/identity.json
+dashboard_mode: standalone
 sync_base_url: http://127.0.0.1:9000
 sync_token: ""
 sync_batch_size: 1000

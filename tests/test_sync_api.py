@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -783,6 +783,137 @@ class SyncApiTests(unittest.TestCase):
         )
         self.assertEqual(rebuild.status_code, 200)
         self.assertGreaterEqual(rebuild.json()["rebuilt_rows"], 1)
+
+    def test_mode_aware_device_register_standalone_and_sync_server(self) -> None:
+        standalone_response = self.client.post(
+            "/api/device/register",
+            json={
+                "mode": "standalone",
+                "user": {"id": "user-standalone", "name": "Standalone User"},
+                "device": {
+                    "id": "device-standalone-1",
+                    "name": "Standalone Laptop",
+                    "type": "personal",
+                    "hostname": "ST-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(standalone_response.status_code, 200)
+        self.assertTrue(standalone_response.json()["registered"])
+        self.assertIsNone(standalone_response.json()["device_token"])
+
+        server_response = self.client.post(
+            "/api/device/register",
+            json={
+                "mode": "sync-server",
+                "user": {"id": "user-sync-server", "name": "Server User"},
+                "device": {
+                    "id": "device-sync-server-1",
+                    "name": "Server Laptop",
+                    "type": "work",
+                    "hostname": "SV-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(server_response.status_code, 200)
+        self.assertTrue(server_response.json()["registered"])
+        self.assertTrue(server_response.json()["device_token"])
+
+    def test_mode_aware_device_register_sync_client_requires_base_url(self) -> None:
+        response = self.client.post(
+            "/api/device/register",
+            json={
+                "mode": "sync-client",
+                "user": {"id": "user-client", "name": "Client User"},
+                "device": {
+                    "id": "device-client-1",
+                    "name": "Client Device",
+                    "type": "work",
+                    "hostname": "CL-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_mode_aware_device_register_sync_client_forwards_registration(self) -> None:
+        mock_response = MagicMock()
+        mock_response.read.return_value = b'{"device_token":"remote-token","server_time":"2026-07-12T00:00:00+00:00"}'
+        context_manager = MagicMock()
+        context_manager.__enter__.return_value = mock_response
+        context_manager.__exit__.return_value = None
+
+        with patch("api.app.urllib_request.urlopen", return_value=context_manager) as mocked_urlopen:
+            response = self.client.post(
+                "/api/device/register",
+                json={
+                    "mode": "sync-client",
+                    "sync_base_url": "http://127.0.0.1:8000",
+                    "user": {"id": "user-client", "name": "Client User"},
+                    "device": {
+                        "id": "device-client-2",
+                        "name": "Client Device 2",
+                        "type": "work",
+                        "hostname": "CL-2",
+                        "category": "linux",
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["device_token"], "remote-token")
+        mocked_urlopen.assert_called_once()
+
+    def test_dashboard_mode_is_enforced_from_settings(self) -> None:
+        bootstrap = self.client.post(
+            "/api/device/register",
+            json={
+                "mode": "standalone",
+                "user": {"id": "user-bootstrap", "name": "Bootstrap User"},
+                "device": {
+                    "id": "device-bootstrap-1",
+                    "name": "Bootstrap Device",
+                    "type": "personal",
+                    "hostname": "BP-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(bootstrap.status_code, 200)
+
+        with patch("api.app._configured_dashboard_mode", return_value="standalone"):
+            local_response = self.client.get("/")
+            self.assertEqual(local_response.status_code, 200)
+            self.assertIn("Configured Mode", local_response.text)
+            self.assertIn("standalone", local_response.text)
+
+            attempted_override = self.client.get("/?mode=sync-server")
+            self.assertEqual(attempted_override.status_code, 200)
+            self.assertIn("standalone", attempted_override.text)
+
+    def test_api_stats_uses_configured_mode_over_query_source(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-mode-sync", "name": "Mode Sync User"},
+                "device": {
+                    "id": "device-mode-sync-1",
+                    "name": "Mode Sync Device",
+                    "type": "work",
+                    "hostname": "MS-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+
+        with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
+            response = self.client.get("/api/stats", params={"source": "local", "user_id": "user-mode-sync", "days": 7})
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertIn("total_seconds", body)
 
 
 if __name__ == "__main__":

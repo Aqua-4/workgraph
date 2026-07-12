@@ -5,6 +5,8 @@ import json
 import logging
 import os
 import time
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -35,6 +37,9 @@ WORK_EVENT_TYPES = [
     "Production Outage",
 ]
 WORK_EVENT_IMPACTS = ["Low", "Medium", "High", "Critical"]
+DASHBOARD_MODES = {"standalone", "sync-client", "sync-server"}
+DEFAULT_SETTINGS_PATH = Path("config/settings.yaml")
+PERSONAL_SETTINGS_PATH = Path("config/my-settings.yaml")
 
 # Setup Jinja2
 template_dir = Path(__file__).parent / "templates"
@@ -795,6 +800,21 @@ class SyncRegisterRequest(BaseModel):
     device: SyncRegisterDevice
 
 
+class DeviceRegisterRequest(BaseModel):
+    mode: str = Field(min_length=1, max_length=32)
+    user: SyncRegisterUser
+    device: SyncRegisterDevice
+    sync_base_url: str | None = None
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in DASHBOARD_MODES:
+            raise ValueError("mode must be one of: standalone, sync-client, sync-server")
+        return normalized
+
+
 class SyncPushRequest(BaseModel):
     device_id: str = Field(min_length=1)
     user_id: str = Field(min_length=1)
@@ -1516,6 +1536,59 @@ def query_sessions(
     return [dict(row) for row in rows]
 
 
+def query_sync_sessions(
+    db_path: Path,
+    *,
+    user_id: str,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    device_id: str | None = None,
+    limit: int = 2000,
+) -> list[dict]:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+
+    query = """
+        SELECT payload_json
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND deleted_at IS NULL
+    """
+    params: list[str | int] = [user_id]
+
+    if start_date:
+        query += " AND utc_start >= ?"
+        params.append(start_date.isoformat(timespec="seconds"))
+
+    if end_date:
+        query += " AND utc_end <= ?"
+        params.append(end_date.isoformat(timespec="seconds"))
+
+    if device_id:
+        query += " AND device_id = ?"
+        params.append(device_id)
+
+    query += " ORDER BY utc_start DESC, uuid DESC LIMIT ?"
+    params.append(limit)
+
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+
+    sessions: list[dict] = []
+    for row in rows:
+        raw_payload = row["payload_json"]
+        if not raw_payload:
+            continue
+        try:
+            payload = json.loads(raw_payload)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            sessions.append(payload)
+    return sessions
+
+
 def query_recent_journal_entries(db_path: Path, limit: int = 50) -> list[dict]:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -1578,6 +1651,161 @@ def _normalize_source(source: str) -> str:
     if normalized not in {"local", "sync"}:
         raise HTTPException(status_code=400, detail="source must be 'local' or 'sync'")
     return normalized
+
+
+def _normalize_dashboard_mode(mode: str | None, source: str | None = None) -> str:
+    if mode:
+        normalized_mode = mode.strip().lower()
+        if normalized_mode not in DASHBOARD_MODES:
+            raise HTTPException(
+                status_code=400,
+                detail="mode must be one of: standalone, sync-client, sync-server",
+            )
+        return normalized_mode
+
+    if source:
+        return "sync-server" if _normalize_source(source) == "sync" else "standalone"
+    return "standalone"
+
+
+def _resolve_settings_path() -> Path:
+    if PERSONAL_SETTINGS_PATH.exists():
+        return PERSONAL_SETTINGS_PATH
+    return DEFAULT_SETTINGS_PATH
+
+
+def _read_simple_yaml(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+
+    parsed: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        parsed[key.strip()] = value.strip().strip("\"'")
+    return parsed
+
+
+def _configured_dashboard_mode() -> str:
+    settings_path = _resolve_settings_path()
+    raw_values = _read_simple_yaml(settings_path)
+    configured_mode = raw_values.get("dashboard_mode", "standalone")
+    return _normalize_dashboard_mode(configured_mode)
+
+
+def _source_for_dashboard_mode(mode: str) -> str:
+    return "sync" if mode == "sync-server" else "local"
+
+
+def _upsert_sync_user_and_device(
+    conn: sqlite3.Connection,
+    payload: SyncRegisterRequest,
+    *,
+    issue_token: bool,
+) -> tuple[str | None, str]:
+    cursor = conn.cursor()
+    now_iso = _now_iso()
+
+    cursor.execute(
+        """
+        INSERT INTO sync_users (id, name, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            updated_at = excluded.updated_at
+        """,
+        (payload.user.id, payload.user.name, now_iso, now_iso),
+    )
+
+    cursor.execute(
+        """
+        INSERT INTO sync_devices (
+            id,
+            user_id,
+            name,
+            type,
+            hostname,
+            category,
+            created_at,
+            updated_at,
+            last_seen_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            user_id = excluded.user_id,
+            name = excluded.name,
+            type = excluded.type,
+            hostname = excluded.hostname,
+            category = excluded.category,
+            updated_at = excluded.updated_at,
+            last_seen_at = excluded.last_seen_at
+        """,
+        (
+            payload.device.id,
+            payload.user.id,
+            payload.device.name,
+            payload.device.type,
+            payload.device.hostname,
+            payload.device.category,
+            now_iso,
+            now_iso,
+            now_iso,
+        ),
+    )
+
+    token: str | None = None
+    if issue_token:
+        token = str(uuid4())
+        cursor.execute(
+            """
+            INSERT INTO sync_tokens (token, device_id, user_id, created_at, revoked_at)
+            VALUES (?, ?, ?, ?, NULL)
+            """,
+            (token, payload.device.id, payload.user.id, now_iso),
+        )
+
+    return token, now_iso
+
+
+def _register_on_sync_server(base_url: str, payload: SyncRegisterRequest) -> dict:
+    normalized_base = base_url.strip().rstrip("/")
+    if not normalized_base:
+        raise HTTPException(status_code=400, detail="sync_base_url is required for sync-client mode")
+
+    request_url = f"{normalized_base}/api/sync/v1/devices/register"
+    request_body = json.dumps(payload.model_dump(mode="python"), separators=(",", ":")).encode("utf-8")
+    request_obj = urllib_request.Request(
+        request_url,
+        data=request_body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib_request.urlopen(request_obj, timeout=10) as response:
+            response_body = response.read().decode("utf-8")
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise HTTPException(
+            status_code=502,
+            detail=f"sync server registration failed ({exc.code}): {detail}",
+        ) from exc
+    except urllib_error.URLError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"sync server registration failed: {exc.reason}",
+        ) from exc
+
+    try:
+        parsed = json.loads(response_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail="sync server returned invalid JSON") from exc
+
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=502, detail="sync server returned unexpected response")
+    return parsed
 
 
 def _resolve_sync_user_id(conn: sqlite3.Connection, user_id: str | None) -> str:
@@ -1808,6 +2036,38 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
+
+    activity_table = cursor.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'activity_sessions'
+        """
+    ).fetchone()
+    if activity_table is None:
+        conn.close()
+        return {
+            "tag_stats": {},
+            "app_stats": {},
+            "repo_stats": {},
+            "total_seconds": 0,
+            "total_hours": 0,
+            "total_idle_seconds": 0,
+            "total_idle_hours": 0,
+            "tagged_active_seconds": 0,
+            "tagged_ratio": 0,
+            "meeting_seconds": 0,
+            "meeting_hours": 0,
+            "meeting_ratio": 0,
+            "total_switches": 0,
+            "switch_rate_per_hour": 0,
+            "deep_work_blocks": 0,
+            "longest_focus_sec": 0,
+            "longest_focus_hours": 0,
+            "avg_focus_sec": 0,
+            "avg_focus_minutes": 0,
+            "daily_trend": [],
+        }
 
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
     start_iso = start_date.isoformat()
@@ -2144,7 +2404,9 @@ async def dashboard(
     if not db_path.exists():
         return "<h1>WorkGraph Dashboard</h1><p>No data collected yet. Run the collector first.</p>"
 
-    normalized_source = _normalize_source(source)
+    dashboard_mode = _configured_dashboard_mode()
+    normalized_source = _source_for_dashboard_mode(dashboard_mode)
+    resolved_user_id = user_id
     if normalized_source == "sync":
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
@@ -2159,14 +2421,15 @@ async def dashboard(
         )
     else:
         stats = get_summary_stats(db_path, days=7)
-    sync_health = get_sync_health(db_path)
+    sync_health = get_sync_health(db_path) if dashboard_mode == "sync-server" else None
 
     template = jinja_env.get_template("dashboard.html")
     return template.render(
         stats=stats,
         sync_health=sync_health,
+        dashboard_mode=dashboard_mode,
         source=normalized_source,
-        selected_user_id=user_id,
+        selected_user_id=resolved_user_id,
         selected_device_id=device_id,
     )
 
@@ -2176,6 +2439,9 @@ async def timeline(
     days: int = Query(7, ge=1, le=30),
     tag: str | None = Query(None),
     app: str | None = Query(None),
+    source: str = Query("local"),
+    user_id: str | None = Query(None),
+    device_id: str | None = Query(None),
 ):
     """Timeline view of activities."""
     db_path = get_db_path()
@@ -2184,7 +2450,22 @@ async def timeline(
         return "<h1>WorkGraph Timeline</h1><p>No data collected yet.</p>"
 
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
-    sessions = query_sessions(db_path, start_date=start_date, limit=2000)
+    normalized_source = _normalize_source(source)
+    if normalized_source == "sync":
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        _ensure_sync_tables(conn)
+        resolved_user_id = _resolve_sync_user_id(conn, user_id)
+        conn.close()
+        sessions = query_sync_sessions(
+            db_path,
+            user_id=resolved_user_id,
+            start_date=start_date,
+            device_id=device_id,
+            limit=2000,
+        )
+    else:
+        sessions = query_sessions(db_path, start_date=start_date, limit=2000)
 
     available_tags = sorted({str(s.get("tag")) for s in sessions if s.get("tag")})
     available_apps = sorted({str(s.get("app_name")) for s in sessions if s.get("app_name")})
@@ -2206,6 +2487,9 @@ async def timeline(
         days=days,
         selected_tag=tag,
         selected_app=app,
+        source=normalized_source,
+        selected_user_id=user_id,
+        selected_device_id=device_id,
         available_tags=available_tags,
         available_apps=available_apps,
         chart_sessions=chart_sessions,
@@ -2272,7 +2556,7 @@ async def api_sessions(
 @app.get("/api/stats")
 async def api_stats(
     days: int = Query(7, ge=1, le=30),
-    source: str = Query("local"),
+    source: str | None = Query(None),
     user_id: str | None = Query(None),
     device_id: str | None = Query(None),
 ):
@@ -2287,7 +2571,10 @@ async def api_stats(
             "total_hours": 0,
         }
 
-    normalized_source = _normalize_source(source)
+    dashboard_mode = _configured_dashboard_mode()
+    if source is not None:
+        dashboard_mode = _normalize_dashboard_mode(None, source)
+    normalized_source = _source_for_dashboard_mode(dashboard_mode)
     if normalized_source == "local":
         return get_summary_stats(db_path, days=days)
 
@@ -2303,6 +2590,55 @@ async def api_stats(
         device_id=device_id,
         days=days,
     )
+
+
+@app.post("/api/device/register")
+async def register_device_for_mode(payload: DeviceRegisterRequest):
+    mode = _normalize_dashboard_mode(payload.mode)
+    register_payload = SyncRegisterRequest(user=payload.user, device=payload.device)
+
+    if mode == "sync-client":
+        server_response = _register_on_sync_server(str(payload.sync_base_url or ""), register_payload)
+        return {
+            "mode": mode,
+            "registered": True,
+            "sync_base_url": str(payload.sync_base_url or "").strip(),
+            "device_token": server_response.get("device_token"),
+            "server_time": server_response.get("server_time"),
+            "message": "Device registered on sync server. Save device_token as sync_token in client config.",
+        }
+
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    started = time.perf_counter()
+
+    issue_token = mode == "sync-server"
+    token, now_iso = _upsert_sync_user_and_device(conn, register_payload, issue_token=issue_token)
+
+    _log_sync_request(
+        conn,
+        endpoint="/api/device/register",
+        status_code=200,
+        latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+        device_id=payload.device.id,
+        user_id=payload.user.id,
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "mode": mode,
+        "registered": True,
+        "device_token": token,
+        "server_time": now_iso,
+        "message": (
+            "Device registered for local standalone tracking."
+            if mode == "standalone"
+            else "Device registered on this sync server."
+        ),
+    }
 
 
 @app.get("/api/sync/health")
@@ -2833,63 +3169,7 @@ async def sync_register_device(payload: SyncRegisterRequest):
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     _ensure_sync_tables(conn)
-    cursor = conn.cursor()
-    now_iso = _now_iso()
-
-    cursor.execute(
-        """
-        INSERT INTO sync_users (id, name, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-            name = excluded.name,
-            updated_at = excluded.updated_at
-        """,
-        (payload.user.id, payload.user.name, now_iso, now_iso),
-    )
-    cursor.execute(
-        """
-        INSERT INTO sync_devices (
-            id,
-            user_id,
-            name,
-            type,
-            hostname,
-            category,
-            created_at,
-            updated_at,
-            last_seen_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-            user_id = excluded.user_id,
-            name = excluded.name,
-            type = excluded.type,
-            hostname = excluded.hostname,
-            category = excluded.category,
-            updated_at = excluded.updated_at,
-            last_seen_at = excluded.last_seen_at
-        """,
-        (
-            payload.device.id,
-            payload.user.id,
-            payload.device.name,
-            payload.device.type,
-            payload.device.hostname,
-            payload.device.category,
-            now_iso,
-            now_iso,
-            now_iso,
-        ),
-    )
-
-    token = str(uuid4())
-    cursor.execute(
-        """
-        INSERT INTO sync_tokens (token, device_id, user_id, created_at, revoked_at)
-        VALUES (?, ?, ?, ?, NULL)
-        """,
-        (token, payload.device.id, payload.user.id, now_iso),
-    )
+    token, now_iso = _upsert_sync_user_and_device(conn, payload, issue_token=True)
     _log_sync_request(
         conn,
         endpoint="/api/sync/v1/devices/register",

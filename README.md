@@ -492,6 +492,22 @@ The collector runs in self-healing mode (auto-restarts on crashes), while the da
 
 Unified mode also auto-starts the sync daemon when `sync_base_url` and `sync_token` are present in the resolved config (prefers `config/my-settings.yaml` when using default config path).
 
+Dashboard mode is enforced from settings (not selectable in UI), so each device role is explicit and stable.
+
+Set `dashboard_mode` in your settings file (`config/my-settings.yaml` recommended):
+
+```yaml
+dashboard_mode: standalone   # local-only dashboard + local registration
+# dashboard_mode: sync-client  # local dashboard + remote server registration
+# dashboard_mode: sync-server  # server-side synced analytics/dashboard
+```
+
+Notes:
+
+* `standalone`: use on personal/local-only tracking devices.
+* `sync-client`: use on contributor devices that push/pull with a sync server.
+* `sync-server`: use on aggregation node serving multi-device sync analytics.
+
 ```bash
 # Disable sync daemon startup in unified mode
 ./run-dashboard.sh --no-sync
