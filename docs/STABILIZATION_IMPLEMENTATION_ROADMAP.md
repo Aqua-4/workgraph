@@ -563,10 +563,10 @@ Use this checklist as the execution backlog for the roadmap.
 
 ### F. Backup and Recovery
 
-- [ ] implement `workgraph backup create`
-- [ ] implement `workgraph backup restore`
-- [ ] implement `workgraph sync snapshot`
-- [ ] verify backup artifacts include database and relevant config files
+- [x] implement `workgraph backup create`
+- [x] implement `workgraph backup restore`
+- [x] implement `workgraph sync snapshot`
+- [x] verify backup artifacts include database and relevant config files
 - [ ] document recovery steps for each workflow
 
 ### G. Dashboard UX and Presentation
@@ -598,6 +598,6 @@ Use this checklist as the execution backlog for the roadmap.
 
 - [ ] add unit tests for new validation logic
 - [ ] add API tests for new sync health and error endpoints
-- [ ] add CLI tests for backup, restore, and validation commands
+- [x] add CLI tests for backup, restore, and validation commands
 - [ ] verify behavior for standalone, sync-client, and sync-server modes
 - [ ] run regression tests after each major milestone

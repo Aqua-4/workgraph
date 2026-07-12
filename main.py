@@ -5,6 +5,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 import sqlite3
+import shutil
+import zipfile
 
 from services.reporting import (
     default_goals_path,
@@ -121,6 +123,40 @@ def main() -> None:
         "--goals",
         default=str(default_goals_path()),
         help="Path to goals yaml file.",
+    )
+
+    backup_parser = subparsers.add_parser(
+        "backup",
+        help="Create or restore a backup of the database and related config files.",
+    )
+    backup_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
+    )
+    backup_subparsers = backup_parser.add_subparsers(dest="backup_command")
+    backup_create_parser = backup_subparsers.add_parser("create", help="Create a backup archive.")
+    backup_create_parser.add_argument(
+        "--output",
+        default=None,
+        help="Output archive path. Defaults to backups/workgraph-backup-<timestamp>.zip",
+    )
+    backup_create_parser.add_argument(
+        "--include-config",
+        action="store_true",
+        default=True,
+        help="Include config artifacts in the archive (default: true).",
+    )
+    backup_restore_parser = backup_subparsers.add_parser("restore", help="Restore a backup archive or database.")
+    backup_restore_parser.add_argument(
+        "backup_path",
+        help="Path to a backup archive (.zip) or database (.db).",
+    )
+    backup_restore_parser.add_argument(
+        "--restore-config",
+        action="store_true",
+        default=True,
+        help="Restore config artifacts from the archive when available (default: true).",
     )
 
     doctor_parser = subparsers.add_parser(
@@ -313,6 +349,26 @@ def main() -> None:
         default=_default_config_path_str(),
         help="Path to a simple YAML settings file.",
     )
+    sync_snapshot_parser = sync_subparsers.add_parser(
+        "snapshot",
+        help="Create a sync recovery snapshot archive.",
+    )
+    sync_snapshot_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
+    )
+    sync_snapshot_parser.add_argument(
+        "--output",
+        default=None,
+        help="Output archive path. Defaults to backups/sync-snapshot-<timestamp>.zip",
+    )
+    sync_snapshot_parser.add_argument(
+        "--include-config",
+        action="store_true",
+        default=True,
+        help="Include config artifacts in the snapshot (default: true).",
+    )
     sync_verify_parser = sync_subparsers.add_parser(
         "verify",
         help="Compare local sync totals against the sync server.",
@@ -358,6 +414,10 @@ def main() -> None:
         run_weekly_report_command(args)
     elif args.command == "goals" and args.goals_command == "analyze":
         run_goals_analyze_command(args)
+    elif args.command == "backup" and args.backup_command == "create":
+        run_backup_create_command(args)
+    elif args.command == "backup" and args.backup_command == "restore":
+        run_backup_restore_command(args)
     elif args.command == "doctor":
         run_doctor_command(args)
     elif args.command == "sync" and args.sync_command == "once":
@@ -368,6 +428,8 @@ def main() -> None:
         run_sync_catchup_command(args)
     elif args.command == "sync" and args.sync_command == "migrate":
         run_sync_migrate_command(args)
+    elif args.command == "sync" and args.sync_command == "snapshot":
+        run_sync_snapshot_command(args)
     elif args.command == "sync" and args.sync_command == "validate":
         run_sync_validate_command(args)
     elif args.command == "sync" and args.sync_command == "verify":
@@ -438,6 +500,195 @@ def run_goals_analyze_command(args: argparse.Namespace) -> None:
         days=args.days,
     )
     print(report)
+
+
+def run_backup_create_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    db_path = Path(settings.database_path)
+    if not db_path.exists():
+        print("Backup create: FAIL")
+        print(f"Database not found: {db_path}")
+        return
+
+    output_path = _backup_archive_path(args.output, prefix="workgraph-backup")
+    archive_path = _create_backup_archive(
+        db_path=db_path,
+        output_path=output_path,
+        include_config=bool(args.include_config),
+        config_path=_resolve_settings_path(args.config),
+        identity_path=Path(settings.identity_path),
+    )
+
+    print("Backup create: PASS")
+    print(f"Archive: {archive_path}")
+    print(f"Database: {db_path}")
+
+
+def run_backup_restore_command(args: argparse.Namespace) -> None:
+    backup_path = Path(args.backup_path)
+    if not backup_path.exists():
+        print("Backup restore: FAIL")
+        print(f"Backup not found: {backup_path}")
+        return
+
+    try:
+        if backup_path.suffix.lower() == ".zip" and bool(args.restore_config):
+            _restore_backup_config_files(backup_path)
+
+        settings = load_settings(args.config)
+        db_path = Path(settings.database_path)
+        restored = _restore_backup_database(
+            backup_path=backup_path,
+            db_path=db_path,
+        )
+    except Exception as exc:
+        print("Backup restore: FAIL")
+        print(str(exc))
+        return
+
+    print("Backup restore: PASS")
+    print(f"Database: {db_path}")
+    print(f"Restored from: {restored}")
+
+
+def run_sync_snapshot_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    db_path = Path(settings.database_path)
+    if not db_path.exists():
+        print("Sync snapshot: FAIL")
+        print(f"Database not found: {db_path}")
+        return
+
+    output_path = _backup_archive_path(args.output, prefix="sync-snapshot")
+    archive_path = _create_backup_archive(
+        db_path=db_path,
+        output_path=output_path,
+        include_config=bool(args.include_config),
+        config_path=_resolve_settings_path(args.config),
+        identity_path=Path(settings.identity_path),
+    )
+
+    print("Sync snapshot: PASS")
+    print(f"Archive: {archive_path}")
+    print(f"Database: {db_path}")
+
+
+def _backup_archive_path(output: str | None, *, prefix: str) -> Path:
+    if output:
+        return Path(output)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return Path("backups") / f"{prefix}-{stamp}.zip"
+
+
+def _create_backup_archive(
+    *,
+    db_path: Path,
+    output_path: Path,
+    include_config: bool,
+    config_path: Path,
+    identity_path: Path,
+) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with ActivityRepository(db_path, identity_path=identity_path) as repository:
+        db_backup_path = repository.backup_database(output_path.parent)
+
+    archive_members: list[tuple[Path, str]] = [(db_backup_path, "activity.db")]
+    if include_config:
+        archive_members.extend(_backup_config_members(config_path=config_path, identity_path=identity_path))
+
+    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for source_path, archive_name in archive_members:
+            if source_path.exists():
+                archive.write(source_path, arcname=archive_name)
+
+    try:
+        db_backup_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+    return output_path
+
+
+def _backup_config_members(*, config_path: Path, identity_path: Path) -> list[tuple[Path, str]]:
+    members: list[tuple[Path, str]] = []
+    for source_path in [
+        config_path,
+        Path("config/my-settings.yaml"),
+        Path("config/tags.yaml"),
+        Path("config/goals.yaml"),
+        Path("config/my-goals.yaml"),
+        identity_path,
+        Path("config/my-identity.json"),
+    ]:
+        if source_path.exists():
+            members.append((source_path, _archive_member_name(source_path)))
+    return members
+
+
+def _archive_member_name(source_path: Path) -> str:
+    resolved = source_path.resolve()
+    cwd = Path.cwd().resolve()
+    try:
+        return resolved.relative_to(cwd).as_posix()
+    except ValueError:
+        return resolved.as_posix().lstrip("/")
+
+
+def _restore_backup_artifact(*, backup_path: Path, db_path: Path, restore_config: bool) -> Path:
+    if backup_path.suffix.lower() == ".zip":
+        if restore_config:
+            _restore_backup_config_files(backup_path)
+        return _restore_backup_database(backup_path=backup_path, db_path=db_path)
+
+    if backup_path.suffix.lower() == ".db":
+        shutil.copy2(backup_path, db_path)
+        return backup_path
+
+    raise ValueError("Backup must be a .zip archive or .db file")
+
+
+def _restore_backup_config_files(backup_path: Path) -> None:
+    with zipfile.ZipFile(backup_path, mode="r") as archive:
+        for member in archive.namelist():
+            if member == "activity.db":
+                continue
+            target_path = Path(member)
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(member) as source, target_path.open("wb") as destination:
+                shutil.copyfileobj(source, destination)
+
+
+def _restore_backup_database(*, backup_path: Path, db_path: Path) -> Path:
+    if backup_path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(backup_path, mode="r") as archive:
+            names = set(archive.namelist())
+            if "activity.db" not in names:
+                raise ValueError("Backup archive does not contain activity.db")
+
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            _remove_sqlite_sidecar_files(db_path)
+            if db_path.exists():
+                db_path.unlink()
+            db_path.write_bytes(archive.read("activity.db"))
+        return backup_path
+
+    if backup_path.suffix.lower() == ".db":
+        _remove_sqlite_sidecar_files(db_path)
+        if db_path.exists():
+            db_path.unlink()
+        shutil.copy2(backup_path, db_path)
+        return backup_path
+
+    raise ValueError("Backup must be a .zip archive or .db file")
+
+
+def _remove_sqlite_sidecar_files(db_path: Path) -> None:
+    for suffix in ["-wal", "-shm", "-journal"]:
+        sidecar = Path(f"{db_path}{suffix}")
+        try:
+            sidecar.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def run_doctor_command(args: argparse.Namespace) -> None:
