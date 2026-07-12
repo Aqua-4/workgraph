@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Server Timeline - WorkGraph{% endblock %}
+
+{% block nav_timeline %}active{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+
+    .chart-caption {
+        color: #6b7280;
+        font-size: 0.85rem;
+    }
+
+    .timeline-hint {
+        font-size: 0.85rem;
+        color: #6b7280;
+    }
+
+    .pie-wrap {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .pie-canvas {
+        width: 160px;
+        height: 160px;
+        border-radius: 50%;
+        border: 1px solid #e5e7eb;
+        flex: 0 0 160px;
+    }
+
+    .pie-legend {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 6px;
+        min-width: 220px;
+        flex: 1 1 220px;
+    }
+
+    .pie-legend li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.85rem;
+        color: #374151;
+    }
+
+    .legend-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        flex: 0 0 10px;
+    }
+
+    .legend-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 180px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <h2 class="m-0">Sync Server Timeline</h2>
+        <span class="badge text-bg-secondary">{{ filtered_count }} sessions</span>
+    </div>
+
+    <div class="card mb-3">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <span class="stat-label" style="margin: 0;">Configured Mode</span>
+            <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
+            <span class="badge text-bg-light border">Users: {{ server_users|length }}</span>
+            <span class="badge text-bg-light border">Devices: {{ server_devices|length }}</span>
+            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-12 col-md-2">
+                <label for="days" class="form-label">Past Days</label>
+                <select name="days" id="days" class="form-select">
+                    <option value="1" {% if days == 1 %}selected{% endif %}>1 day</option>
+                    <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
+                    <option value="14" {% if days == 14 %}selected{% endif %}>14 days</option>
+                    <option value="30" {% if days == 30 %}selected{% endif %}>30 days</option>
+                </select>
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label for="user_id" class="form-label">User</label>
+                <select name="user_id" id="user_id" class="form-select">
+                    <option value="">All users</option>
+                    {% for user in server_users %}
+                    <option value="{{ user.id }}" {% if selected_user_id == user.id %}selected{% endif %}>{{ user.name or user.id }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-3">
+                <label for="device_id" class="form-label">Device</label>
+                <select name="device_id" id="device_id" class="form-select">
+                    <option value="">All devices</option>
+                    {% for device in server_devices %}
+                    <option value="{{ device.id }}" {% if selected_device_id == device.id %}selected{% endif %}>{{ device.name or device.id }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-2">
+                <label for="tag" class="form-label">Tag</label>
+                <select name="tag" id="tag" class="form-select">
+                    <option value="">All tags</option>
+                    {% for item in available_tags %}
+                    <option value="{{ item }}" {% if selected_tag == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 col-md-2">
+                <label for="app" class="form-label">App</label>
+                <select name="app" id="app" class="form-select">
+                    <option value="">All apps</option>
+                    {% for item in available_apps %}
+                    <option value="{{ item }}" {% if selected_app == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-12 d-flex gap-2 flex-wrap">
+                <button type="submit" class="btn btn-primary">Apply Filters</button>
+                <a href="/timeline?days={{ days }}" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="chart-grid">
+        <div class="card mb-0">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <h3 class="m-0">Device Activity</h3>
+                <span class="chart-caption">Top devices by active hours</span>
+            </div>
+            {% if device_activity %}
+            <div class="pie-wrap">
+                <canvas id="devicePie" class="pie-canvas" width="160" height="160" aria-label="Device activity pie chart"></canvas>
+                <ul id="devicePieLegend" class="pie-legend"></ul>
+            </div>
+            <script id="devicePieData" type="application/json">{{ device_activity|tojson }}</script>
+            {% else %}
+            <p class="text-muted mb-0">No device activity found for this filter range.</p>
+            {% endif %}
+        </div>
+
+        <div class="card mb-0">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                <h3 class="m-0">Top Applications</h3>
+                <span class="chart-caption">Ranked by active hours</span>
+            </div>
+            {% if app_activity %}
+            <div class="pie-wrap">
+                <canvas id="appPie" class="pie-canvas" width="160" height="160" aria-label="Application activity pie chart"></canvas>
+                <ul id="appPieLegend" class="pie-legend"></ul>
+            </div>
+            <script id="appPieData" type="application/json">{{ app_activity|tojson }}</script>
+            {% else %}
+            <p class="text-muted mb-0">No app activity found for this filter range.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+            <h3 class="m-0">Activity Timeline</h3>
+            <span class="timeline-hint">Showing latest {{ sessions|length }} of {{ filtered_count }} matching sessions.</span>
+        </div>
+
+        {% if sessions %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>User</th>
+                        <th>Device</th>
+                        <th>App</th>
+                        <th>Duration</th>
+                        <th>Tag</th>
+                        <th>Domain / Window</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in sessions %}
+                    {% set start_value = session.start_time or session.utc_start %}
+                    {% set end_value = session.end_time or session.utc_end %}
+                    <tr>
+                        <td class="time-small">{{ start_value|human_datetime }}</td>
+                        <td class="time-small">{{ end_value|human_datetime }}</td>
+                        <td class="time-small">{{ session.user_id or selected_user_id or '-' }}</td>
+                        {% set device_id_value = session.device_id or selected_device_id %}
+                        <td class="time-small">{{ device_name_map.get(device_id_value, device_id_value) if device_id_value else '-' }}</td>
+                        <td><span class="app-badge">{{ session.app_name or 'Unknown' }}</span></td>
+                        <td class="duration">
+                            {% set mins = ((session.duration_sec or 0) / 60)|int %}
+                            {% if mins < 60 %}
+                                {{ mins }}m
+                            {% else %}
+                                {{ "%.1f"|format(mins / 60) }}h
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if session.tag %}
+                            <span class="tag-badge">{{ session.tag }}</span>
+                            {% else %}
+                            <span style="color: #9ca3af; font-size: 0.85em;">untagged</span>
+                            {% endif %}
+                        </td>
+                        <td class="time-small">
+                            {% if session.browser_domain %}
+                            <strong>{{ session.browser_domain }}</strong>
+                            {% elif session.window_title %}
+                            {{ session.window_title[:64] }}{% if session.window_title|length > 64 %}...{% endif %}
+                            {% else %}
+                            <em style="color: #ccc;">-</em>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No sync sessions found for this filter range.</p>
+        {% endif %}
+    </div>
+</div>
+<script>
+(() => {
+    const palette = [
+        "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545",
+        "#20c997", "#0dcaf0", "#ffc107", "#6610f2", "#d63384"
+    ];
+
+    const renderPie = (canvasId, legendId, dataId, labelKey, detailFn) => {
+        const canvas = document.getElementById(canvasId);
+        const legend = document.getElementById(legendId);
+        const dataNode = document.getElementById(dataId);
+        if (!canvas || !legend || !dataNode) {
+            return;
+        }
+
+        let items = [];
+        try {
+            items = JSON.parse(dataNode.textContent || "[]");
+        } catch (_error) {
+            return;
+        }
+        if (!Array.isArray(items) || items.length === 0) {
+            return;
+        }
+
+        const total = items.reduce((acc, item) => acc + Number(item.total_seconds || 0), 0);
+        if (!total) {
+            return;
+        }
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+            return;
+        }
+
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const radius = Math.min(cx, cy) - 2;
+        let startAngle = -Math.PI / 2;
+
+        legend.innerHTML = "";
+
+        items.forEach((item, index) => {
+            const value = Number(item.total_seconds || 0);
+            const angle = (value / total) * Math.PI * 2;
+            const color = palette[index % palette.length];
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, startAngle, startAngle + angle);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            const pct = ((value / total) * 100).toFixed(1);
+            const hours = (value / 3600).toFixed(1);
+            const label = String(item[labelKey] || "Unknown");
+
+            const li = document.createElement("li");
+
+            const nameWrap = document.createElement("span");
+            nameWrap.className = "legend-name";
+
+            const dot = document.createElement("span");
+            dot.className = "legend-dot";
+            dot.style.background = color;
+
+            const text = document.createElement("span");
+            text.className = "legend-text";
+            text.title = label;
+            text.textContent = label;
+
+            nameWrap.appendChild(dot);
+            nameWrap.appendChild(text);
+
+            const stats = document.createElement("span");
+            const detail = String(detailFn(item) || "").trim();
+            stats.textContent = detail ? `${hours}h (${pct}%) ${detail}` : `${hours}h (${pct}%)`;
+
+            li.appendChild(nameWrap);
+            li.appendChild(stats);
+            legend.appendChild(li);
+
+            startAngle += angle;
+        });
+    };
+
+    renderPie("devicePie", "devicePieLegend", "devicePieData", "device_name", (item) => `${item.session_count || 0} sessions`);
+    renderPie("appPie", "appPieLegend", "appPieData", "app_name", () => "");
+})();
+</script>
+{% endblock %}

@@ -4,6 +4,66 @@
 
 {% block nav_dashboard %}active{% endblock %}
 
+{% block extra_styles %}
+<style>
+    .pie-wrap {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .pie-canvas {
+        width: 170px;
+        height: 170px;
+        border-radius: 50%;
+        border: 1px solid #e5e7eb;
+        flex: 0 0 170px;
+    }
+
+    .pie-legend {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 6px;
+        min-width: 240px;
+        flex: 1 1 240px;
+    }
+
+    .pie-legend li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.85rem;
+        color: #374151;
+    }
+
+    .legend-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        flex: 0 0 10px;
+    }
+
+    .legend-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 210px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div>
     <h2>This Week Overview</h2>
@@ -216,24 +276,11 @@
     <h2>Time by Goal (Tagged)</h2>
     <div class="card">
         {% if stats.tag_stats %}
-        <div class="bar-chart">
-            {% set max_seconds = stats.tag_stats.values()|max %}
-            {% for tag, seconds in stats.tag_stats.items()|sort(attribute='1', reverse=True) %}
-            <div class="bar-item">
-                <div class="bar-label">
-                    <span class="tag-badge">{{ tag }}</span>
-                </div>
-                <div class="bar-container">
-                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
-                        {% if (seconds / max_seconds * 100) > 15 %}
-                        {{ "%.1f"|format(seconds / 3600) }}h
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
-            </div>
-            {% endfor %}
+        <div class="pie-wrap">
+            <canvas id="tagPie" class="pie-canvas" width="170" height="170" aria-label="Tag activity pie chart"></canvas>
+            <ul id="tagPieLegend" class="pie-legend"></ul>
         </div>
+        <script id="tagPieData" type="application/json">{{ stats.tag_stats|tojson }}</script>
         {% else %}
         <p style="color: #999; padding: 20px; text-align: center;">No tagged activities yet. Configure tags in config/tags.yaml</p>
         {% endif %}
@@ -242,22 +289,11 @@
     <h2>Time by Application</h2>
     <div class="card">
         {% if stats.app_stats %}
-        <div class="bar-chart">
-            {% set max_seconds = stats.app_stats.values()|max %}
-            {% for app, seconds in stats.app_stats.items()|sort(attribute='1', reverse=True) %}
-            <div class="bar-item">
-                <div class="bar-label">{{ app }}</div>
-                <div class="bar-container">
-                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
-                        {% if (seconds / max_seconds * 100) > 15 %}
-                        {{ "%.1f"|format(seconds / 3600) }}h
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
-            </div>
-            {% endfor %}
+        <div class="pie-wrap">
+            <canvas id="appPie" class="pie-canvas" width="170" height="170" aria-label="Application activity pie chart"></canvas>
+            <ul id="appPieLegend" class="pie-legend"></ul>
         </div>
+        <script id="appPieData" type="application/json">{{ stats.app_stats|tojson }}</script>
         {% else %}
         <p style="color: #999; padding: 20px; text-align: center;">No activity data yet. Run the collector.</p>
         {% endif %}
@@ -266,22 +302,11 @@
     <h2>Repository Focus</h2>
     <div class="card">
         {% if stats.repo_stats %}
-        <div class="bar-chart">
-            {% set max_seconds = stats.repo_stats.values()|max %}
-            {% for repo, seconds in stats.repo_stats.items()|sort(attribute='1', reverse=True) %}
-            <div class="bar-item">
-                <div class="bar-label">{{ repo }}</div>
-                <div class="bar-container">
-                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
-                        {% if (seconds / max_seconds * 100) > 15 %}
-                        {{ "%.1f"|format(seconds / 3600) }}h
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
-            </div>
-            {% endfor %}
+        <div class="pie-wrap">
+            <canvas id="repoPie" class="pie-canvas" width="170" height="170" aria-label="Repository activity pie chart"></canvas>
+            <ul id="repoPieLegend" class="pie-legend"></ul>
         </div>
+        <script id="repoPieData" type="application/json">{{ stats.repo_stats|tojson }}</script>
         {% else %}
         <p style="color: #999; padding: 20px; text-align: center;">No repository activity detected in this window.</p>
         {% endif %}
@@ -325,6 +350,102 @@
         </ul>
     </div>
 </div>
+
+<script>
+(() => {
+    const palette = [
+        "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545",
+        "#20c997", "#0dcaf0", "#ffc107", "#6610f2", "#d63384"
+    ];
+
+    const renderPieMap = (canvasId, legendId, dataId) => {
+        const canvas = document.getElementById(canvasId);
+        const legend = document.getElementById(legendId);
+        const dataNode = document.getElementById(dataId);
+        if (!canvas || !legend || !dataNode) {
+            return;
+        }
+
+        let mapData = {};
+        try {
+            mapData = JSON.parse(dataNode.textContent || "{}");
+        } catch (_error) {
+            return;
+        }
+
+        const entries = Object.entries(mapData)
+            .map(([name, totalSeconds]) => [String(name), Number(totalSeconds || 0)])
+            .filter((item) => Number.isFinite(item[1]) && item[1] > 0)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+        if (!entries.length) {
+            return;
+        }
+
+        const total = entries.reduce((acc, item) => acc + item[1], 0);
+        if (!total) {
+            return;
+        }
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+            return;
+        }
+
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const radius = Math.min(cx, cy) - 2;
+        let startAngle = -Math.PI / 2;
+        legend.innerHTML = "";
+
+        entries.forEach(([label, value], index) => {
+            const angle = (value / total) * Math.PI * 2;
+            const color = palette[index % palette.length];
+
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, startAngle, startAngle + angle);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            const li = document.createElement("li");
+
+            const nameWrap = document.createElement("span");
+            nameWrap.className = "legend-name";
+
+            const dot = document.createElement("span");
+            dot.className = "legend-dot";
+            dot.style.background = color;
+
+            const text = document.createElement("span");
+            text.className = "legend-text";
+            text.title = label;
+            text.textContent = label;
+
+            nameWrap.appendChild(dot);
+            nameWrap.appendChild(text);
+
+            const stats = document.createElement("span");
+            const pct = ((value / total) * 100).toFixed(1);
+            const hours = (value / 3600).toFixed(1);
+            stats.textContent = `${hours}h (${pct}%)`;
+
+            li.appendChild(nameWrap);
+            li.appendChild(stats);
+            legend.appendChild(li);
+
+            startAngle += angle;
+        });
+    };
+
+    renderPieMap("tagPie", "tagPieLegend", "tagPieData");
+    renderPieMap("appPie", "appPieLegend", "appPieData");
+    renderPieMap("repoPie", "repoPieLegend", "repoPieData");
+})();
+
+</script>
 
 <script>
 (() => {

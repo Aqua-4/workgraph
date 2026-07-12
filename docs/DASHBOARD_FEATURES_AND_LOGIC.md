@@ -37,6 +37,7 @@ Registration behavior:
 Sync health behavior:
 
 - Sync Health block on the main dashboard is hidden.
+- Goal/app/repository breakdowns are rendered as compact pie charts with legends.
 
 ### 2) sync-client
 
@@ -56,6 +57,7 @@ Registration and status behavior:
 Sync health behavior:
 
 - Sync Health block on the main dashboard is hidden.
+- Goal/app/repository breakdowns are rendered as compact pie charts with legends.
 
 ### 3) sync-server
 
@@ -72,6 +74,17 @@ Scope behavior:
 
 - `user_id` and `device_id` can be passed as filters in the top form.
 - If `user_id` is omitted and users exist, the latest-updated user is selected by default.
+
+Timeline behavior:
+
+- Timeline stays available in sync-server mode and uses a dedicated template: `api/templates/sync_server_timeline.html`.
+- Data defaults to sync-backed sessions for the selected user/device scope.
+- Server timeline includes explicit user and device filter controls and device-aware session columns.
+- Server timeline includes chart sections for device activity and top application activity.
+
+Journal behavior:
+
+- Journal UI and journal-related APIs are disabled in sync-server mode.
 
 ## Sync Server Dashboard Sections
 
@@ -140,11 +153,24 @@ Sync-server dashboard (`api/templates/sync_server_dashboard.html`):
 
 - Always includes Sync Health, because this template is used only in `sync-server` mode.
 
+Global navigation (`api/templates/base.html`):
+
+- Journal nav link is hidden in `sync-server` mode.
+
+Journal and related APIs (`api/app.py`):
+
+- Return 404 in `sync-server` mode:
+   - `/journal`
+   - `/api/journal*`
+   - `/api/reflections*`
+   - `/api/work-events*`
+
 ## Files to Review Together
 
 - `api/app.py` (mode routing and data shaping)
 - `api/templates/dashboard.html` (standalone + sync-client view)
 - `api/templates/sync_server_dashboard.html` (sync-server view)
+- `api/templates/sync_server_timeline.html` (sync-server timeline view)
 - `tests/test_sync_api.py` (mode-aware dashboard assertions)
 - `tests/test_api_journal.py` (standalone dashboard assertions)
 

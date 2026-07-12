@@ -1798,6 +1798,11 @@ def _source_for_dashboard_mode(mode: str) -> str:
     return "sync" if mode == "sync-server" else "local"
 
 
+def _ensure_journal_features_enabled() -> None:
+    if _configured_dashboard_mode() == "sync-server":
+        raise HTTPException(status_code=404, detail="Journal features are unavailable in sync-server mode")
+
+
 def _upsert_sync_user_and_device(
     conn: sqlite3.Connection,
     payload: SyncRegisterRequest,
@@ -2154,14 +2159,25 @@ def get_sync_server_overview(
         selected_user_id = str(users[0]["id"])
 
     devices_query = """
-        SELECT id, user_id, name, type, hostname, category, last_seen_at, created_at, updated_at
-        FROM sync_devices
+        SELECT
+            d.id,
+            d.user_id,
+            u.name AS user_name,
+            d.name,
+            d.type,
+            d.hostname,
+            d.category,
+            d.last_seen_at,
+            d.created_at,
+            d.updated_at
+        FROM sync_devices d
+        LEFT JOIN sync_users u ON u.id = d.user_id
     """
     devices_params: list[str] = []
     if selected_user_id:
         devices_query += " WHERE user_id = ?"
         devices_params.append(selected_user_id)
-    devices_query += " ORDER BY COALESCE(last_seen_at, updated_at) DESC, id ASC"
+    devices_query += " ORDER BY COALESCE(d.last_seen_at, d.updated_at) DESC, d.id ASC"
     devices = conn.execute(devices_query, devices_params).fetchall()
 
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -2697,6 +2713,107 @@ async def timeline(
         return "<h1>WorkGraph Timeline</h1><p>No data collected yet.</p>"
 
     dashboard_mode = _configured_dashboard_mode()
+
+    if dashboard_mode == "sync-server":
+        overview = get_sync_server_overview(
+            db_path,
+            user_id=user_id,
+            device_id=device_id,
+            days=days,
+        )
+        resolved_user_id = str(overview.get("selected_user_id") or "").strip() or None
+        resolved_device_id = str(overview.get("selected_device_id") or "").strip() or None
+
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
+        if resolved_user_id:
+            sessions = query_sync_sessions(
+                db_path,
+                user_id=resolved_user_id,
+                start_date=start_date,
+                device_id=resolved_device_id,
+                limit=2000,
+            )
+        else:
+            sessions = []
+
+        available_tags = sorted({str(s.get("tag")) for s in sessions if s.get("tag")})
+        available_apps = sorted({str(s.get("app_name")) for s in sessions if s.get("app_name")})
+
+        if tag:
+            sessions = [s for s in sessions if s.get("tag") == tag]
+        if app:
+            sessions = [s for s in sessions if s.get("app_name") == app]
+
+        server_devices = overview.get("devices", [])
+        device_name_map = {
+            str(item.get("id")): str(item.get("name") or item.get("id") or "unknown-device")
+            for item in server_devices
+            if item.get("id")
+        }
+
+        device_totals: dict[str, dict[str, int]] = {}
+        app_totals: dict[str, int] = {}
+        for session in sessions:
+            raw_duration = session.get("duration_sec")
+            try:
+                duration_sec = int(raw_duration or 0)
+            except (TypeError, ValueError):
+                duration_sec = 0
+
+            device_key = str(session.get("device_id") or "unknown-device")
+            if device_key not in device_totals:
+                device_totals[device_key] = {"total_seconds": 0, "session_count": 0}
+            device_totals[device_key]["total_seconds"] += duration_sec
+            device_totals[device_key]["session_count"] += 1
+
+            app_key = str(session.get("app_name") or "Unknown")
+            app_totals[app_key] = app_totals.get(app_key, 0) + duration_sec
+
+        device_activity = [
+            {
+                "device_id": device_id,
+                "device_name": device_name_map.get(device_id, device_id),
+                "total_seconds": values["total_seconds"],
+                "session_count": values["session_count"],
+            }
+            for device_id, values in device_totals.items()
+        ]
+        device_activity.sort(key=lambda item: (int(item["total_seconds"]), int(item["session_count"])), reverse=True)
+
+        app_activity = [
+            {"app_name": app_name, "total_seconds": total_seconds}
+            for app_name, total_seconds in app_totals.items()
+        ]
+        app_activity.sort(key=lambda item: int(item["total_seconds"]), reverse=True)
+
+        chart_sessions = sorted(
+            sessions,
+            key=lambda s: str(s.get("start_time") or s.get("utc_start") or ""),
+        )[:300]
+        table_sessions = sessions[:200]
+        sync_health = get_sync_health(db_path)
+
+        template = jinja_env.get_template("sync_server_timeline.html")
+        return template.render(
+            sessions=table_sessions,
+            filtered_count=len(sessions),
+            days=days,
+            selected_tag=tag,
+            selected_app=app,
+            selected_user_id=resolved_user_id,
+            selected_device_id=resolved_device_id,
+            available_tags=available_tags,
+            available_apps=available_apps,
+            chart_sessions=chart_sessions,
+            sync_health=sync_health,
+            dashboard_mode=dashboard_mode,
+            server_users=overview.get("users", []),
+            server_devices=server_devices,
+            device_name_map=device_name_map,
+            device_activity=device_activity[:10],
+            app_activity=app_activity[:10],
+        )
+
     default_source = _source_for_dashboard_mode(dashboard_mode)
     normalized_source = _normalize_source(source or default_source)
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -2743,12 +2860,14 @@ async def timeline(
         available_apps=available_apps,
         chart_sessions=chart_sessions,
         sync_health=sync_health,
+        dashboard_mode=dashboard_mode,
     )
 
 
 @app.get("/journal", response_class=HTMLResponse)
 async def journal_page(saved: str | None = Query(None)):
     """Journal view for adding entries and reflections."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
 
     if not db_path.exists():
@@ -2779,6 +2898,7 @@ async def journal_page(saved: str | None = Query(None)):
         sync_health=sync_health,
         message=message,
         error=None,
+        dashboard_mode=_configured_dashboard_mode(),
     )
 
 
@@ -3027,6 +3147,7 @@ async def api_sync_rollups_rebuild(
 @app.post("/api/journal")
 async def create_journal_entry(payload: JournalCreate):
     """Create a journal entry with optional historical timestamps."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3074,6 +3195,7 @@ async def list_journal_entries(
     limit: int = Query(100, ge=1, le=500),
 ):
     """List journal entries with optional range filtering."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3102,16 +3224,19 @@ async def list_journal_entries(
 @app.get("/api/journal/tags")
 async def list_journal_tags():
     """List configured tags available for journal tagging."""
+    _ensure_journal_features_enabled()
     return {"tags": get_available_tags()}
 
 
 @app.get("/api/work-events/types")
 async def list_work_event_types():
+    _ensure_journal_features_enabled()
     return {"types": WORK_EVENT_TYPES, "impacts": WORK_EVENT_IMPACTS}
 
 
 @app.post("/api/work-events")
 async def create_work_event(payload: WorkEventCreate):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3160,6 +3285,7 @@ async def list_work_events(
     project: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
 ):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3196,6 +3322,7 @@ async def list_work_events(
 
 @app.get("/api/work-events/{event_id}")
 async def get_work_event(event_id: int):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3215,6 +3342,7 @@ async def get_work_event(event_id: int):
 
 @app.put("/api/work-events/{event_id}")
 async def update_work_event(event_id: int, payload: WorkEventCreate):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3257,6 +3385,7 @@ async def update_work_event(event_id: int, payload: WorkEventCreate):
 
 @app.get("/api/work-events/{event_id}/correlated-sessions")
 async def correlated_work_event_sessions(event_id: int, limit: int = Query(500, ge=1, le=1000)):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3301,6 +3430,7 @@ async def correlated_work_event_sessions(event_id: int, limit: int = Query(500, 
 @app.get("/api/journal/{journal_id}")
 async def get_journal_entry(journal_id: int):
     """Get one journal entry by id."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3323,6 +3453,7 @@ async def get_journal_entry(journal_id: int):
 @app.put("/api/journal/{journal_id}")
 async def update_journal_entry(journal_id: int, payload: JournalCreate):
     """Update an existing journal entry."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3367,6 +3498,7 @@ async def update_journal_entry(journal_id: int, payload: JournalCreate):
 @app.get("/api/journal/{journal_id}/correlated-sessions")
 async def correlated_sessions(journal_id: int, limit: int = Query(500, ge=1, le=1000)):
     """Fetch sessions overlapping a journal entry time range and a simple summary."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3410,6 +3542,7 @@ async def correlated_sessions(journal_id: int, limit: int = Query(500, ge=1, le=
 @app.put("/api/reflections/{date}")
 async def upsert_reflection(date: str, payload: ReflectionUpsert):
     """Create or update a reflection record for a date."""
+    _ensure_journal_features_enabled()
     try:
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError as exc:
@@ -3461,6 +3594,7 @@ async def upsert_reflection(date: str, payload: ReflectionUpsert):
 
 @app.get("/api/reflections/{date}")
 async def get_reflection(date: str):
+    _ensure_journal_features_enabled()
     try:
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError as exc:
@@ -3485,6 +3619,7 @@ async def get_reflection(date: str):
 
 @app.get("/api/reflections/{date}/correlated-sessions")
 async def correlated_reflection_sessions(date: str, limit: int = Query(500, ge=1, le=1000)):
+    _ensure_journal_features_enabled()
     try:
         day_start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except ValueError as exc:
@@ -3534,6 +3669,7 @@ async def list_reflections(
     limit: int = Query(100, ge=1, le=500),
 ):
     """List reflections in date range."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row

@@ -936,6 +936,44 @@ class SyncApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Sync Server Dashboard", response.text)
+        self.assertNotIn(">Journal<", response.text)
+
+    def test_sync_server_mode_disables_journal_routes(self) -> None:
+        with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
+            journal_page = self.client.get("/journal")
+            self.assertEqual(journal_page.status_code, 404)
+
+            journal_api = self.client.get("/api/journal")
+            self.assertEqual(journal_api.status_code, 404)
+
+            reflections_api = self.client.get("/api/reflections")
+            self.assertEqual(reflections_api.status_code, 404)
+
+            work_events_api = self.client.get("/api/work-events")
+            self.assertEqual(work_events_api.status_code, 404)
+
+    def test_sync_server_mode_keeps_timeline_available(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-server-timeline", "name": "Server Timeline User"},
+                "device": {
+                    "id": "device-server-timeline-1",
+                    "name": "Server Timeline Device",
+                    "type": "work",
+                    "hostname": "ST-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+
+        with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
+            timeline_response = self.client.get("/timeline")
+
+        self.assertEqual(timeline_response.status_code, 200)
+        self.assertIn("Activity Timeline", timeline_response.text)
+        self.assertNotIn(">Journal<", timeline_response.text)
 
     def test_dashboard_sync_client_shows_status_when_registered(self) -> None:
         bootstrap = self.client.post(

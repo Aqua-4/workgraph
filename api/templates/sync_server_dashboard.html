@@ -109,16 +109,16 @@
         <table>
             <thead>
                 <tr>
-                    <th>User ID</th>
                     <th>Name</th>
+                    <th>User ID</th>
                     <th>Updated</th>
                 </tr>
             </thead>
             <tbody>
                 {% for user in overview.users %}
                 <tr>
-                    <td>{{ user.id }}</td>
-                    <td>{{ user.name }}</td>
+                    <td>{{ user.name or user.id }}</td>
+                    <td><span style="color: #6b7280; font-size: 0.85em;">{{ user.id }}</span></td>
                     <td>{{ user.updated_at|human_datetime }}</td>
                 </tr>
                 {% endfor %}
@@ -135,8 +135,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>Device ID</th>
-                    <th>Name</th>
+                    <th>Device</th>
                     <th>User</th>
                     <th>Type</th>
                     <th>Last Seen</th>
@@ -145,9 +144,14 @@
             <tbody>
                 {% for device in overview.devices %}
                 <tr>
-                    <td>{{ device.id }}</td>
-                    <td>{{ device.name }}</td>
-                    <td>{{ device.user_id }}</td>
+                    <td>
+                        <div>{{ device.name or device.id }}</div>
+                        <div style="color: #6b7280; font-size: 0.85em;">{{ device.id }}</div>
+                    </td>
+                    <td>
+                        <div>{{ device.user_name or device.user_id }}</div>
+                        <div style="color: #6b7280; font-size: 0.85em;">{{ device.user_id }}</div>
+                    </td>
                     <td>{{ device.type }}</td>
                     <td>{{ device.last_seen_at|human_datetime }}</td>
                 </tr>

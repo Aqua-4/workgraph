@@ -309,7 +309,9 @@
             <nav>
                 <a href="/" class="{% block nav_dashboard %}{% endblock %}">Dashboard</a>
                 <a href="/timeline" class="{% block nav_timeline %}{% endblock %}">Timeline</a>
+                {% if dashboard_mode != "sync-server" %}
                 <a href="/journal" class="{% block nav_journal %}{% endblock %}">Journal</a>
+                {% endif %}
             </nav>
         </div>
     </header>
