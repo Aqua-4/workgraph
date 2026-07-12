@@ -634,6 +634,156 @@ class SyncApiTests(unittest.TestCase):
         self.assertEqual(body["total_seconds"], 3600)
         self.assertIn("Code", body["app_stats"])
 
+    def test_same_uuid_allowed_for_different_users(self) -> None:
+        reg_a = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-dup-a", "name": "User A"},
+                "device": {
+                    "id": "device-dup-a",
+                    "name": "Laptop A",
+                    "type": "work",
+                    "hostname": "A",
+                    "category": "linux",
+                },
+            },
+        )
+        reg_b = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-dup-b", "name": "User B"},
+                "device": {
+                    "id": "device-dup-b",
+                    "name": "Laptop B",
+                    "type": "work",
+                    "hostname": "B",
+                    "category": "windows",
+                },
+            },
+        )
+        self.assertEqual(reg_a.status_code, 200)
+        self.assertEqual(reg_b.status_code, 200)
+
+        token_a = reg_a.json()["device_token"]
+        token_b = reg_b.json()["device_token"]
+
+        shared_uuid = "sess-shared-uuid"
+        push_a = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-dup-a",
+                "user_id": "user-dup-a",
+                "client_cursor": None,
+                "batch_id": "batch-dup-a",
+                "changes": {
+                    "sessions": [
+                        {
+                            "uuid": shared_uuid,
+                            "created_at": "2026-07-11T10:00:00+00:00",
+                            "updated_at": "2026-07-11T10:00:00+00:00",
+                            "start_time": "2026-07-11T10:00:00+00:00",
+                            "end_time": "2026-07-11T10:30:00+00:00",
+                            "duration_sec": 1800,
+                        }
+                    ],
+                    "journal_entries": [],
+                    "daily_reflections": [],
+                },
+            },
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        push_b = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-dup-b",
+                "user_id": "user-dup-b",
+                "client_cursor": None,
+                "batch_id": "batch-dup-b",
+                "changes": {
+                    "sessions": [
+                        {
+                            "uuid": shared_uuid,
+                            "created_at": "2026-07-11T11:00:00+00:00",
+                            "updated_at": "2026-07-11T11:00:00+00:00",
+                            "start_time": "2026-07-11T11:00:00+00:00",
+                            "end_time": "2026-07-11T11:20:00+00:00",
+                            "duration_sec": 1200,
+                        }
+                    ],
+                    "journal_entries": [],
+                    "daily_reflections": [],
+                },
+            },
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        self.assertEqual(push_a.status_code, 200)
+        self.assertEqual(push_b.status_code, 200)
+
+        pull_a = self.client.post(
+            "/api/sync/v1/pull",
+            json={"device_id": "device-dup-a", "user_id": "user-dup-a", "cursor": None, "limit": 100},
+            headers={"Authorization": f"Bearer {token_a}"},
+        )
+        pull_b = self.client.post(
+            "/api/sync/v1/pull",
+            json={"device_id": "device-dup-b", "user_id": "user-dup-b", "cursor": None, "limit": 100},
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        self.assertEqual(pull_a.status_code, 200)
+        self.assertEqual(pull_b.status_code, 200)
+        self.assertEqual(len(pull_a.json()["changes"]["sessions"]), 1)
+        self.assertEqual(len(pull_b.json()["changes"]["sessions"]), 1)
+
+    def test_sync_rollup_rebuild_endpoint(self) -> None:
+        reg = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-rebuild", "name": "Rebuilder"},
+                "device": {
+                    "id": "device-rebuild-1",
+                    "name": "Rebuild Device",
+                    "type": "work",
+                    "hostname": "RB-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(reg.status_code, 200)
+        token = reg.json()["device_token"]
+
+        push = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-rebuild-1",
+                "user_id": "user-rebuild",
+                "client_cursor": None,
+                "batch_id": "batch-rebuild-1",
+                "changes": {
+                    "sessions": [
+                        {
+                            "uuid": "sess-rebuild-1",
+                            "created_at": "2026-07-10T10:00:00+00:00",
+                            "updated_at": "2026-07-10T10:00:00+00:00",
+                            "start_time": "2026-07-10T10:00:00+00:00",
+                            "end_time": "2026-07-10T10:30:00+00:00",
+                            "duration_sec": 1800,
+                        }
+                    ],
+                    "journal_entries": [],
+                    "daily_reflections": [],
+                },
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(push.status_code, 200)
+
+        rebuild = self.client.post(
+            "/api/sync/rollups/rebuild",
+            params={"user_id": "user-rebuild"},
+        )
+        self.assertEqual(rebuild.status_code, 200)
+        self.assertGreaterEqual(rebuild.json()["rebuilt_rows"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

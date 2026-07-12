@@ -8,6 +8,31 @@
 <div>
     <h2>This Week Overview</h2>
 
+    <div class="card" style="margin-bottom: 12px;">
+        <form method="get" action="/" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <label for="source" class="stat-label" style="margin: 0;">Data Source</label>
+            <select id="source" name="source">
+                <option value="local" {% if source != "sync" %}selected{% endif %}>Local</option>
+                <option value="sync" {% if source == "sync" %}selected{% endif %}>Sync</option>
+            </select>
+            <input
+                type="text"
+                name="user_id"
+                value="{{ selected_user_id or '' }}"
+                placeholder="sync user_id (optional)"
+                style="min-width: 220px;"
+            />
+            <input
+                type="text"
+                name="device_id"
+                value="{{ selected_device_id or '' }}"
+                placeholder="device_id (optional)"
+                style="min-width: 220px;"
+            />
+            <button type="submit">Apply</button>
+        </form>
+    </div>
+
     {% if sync_health %}
     <h2>Sync Health</h2>
     <div class="card">

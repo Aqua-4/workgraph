@@ -312,7 +312,10 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError:
             pass
 
+    _migrate_sync_tables_to_user_scoped_keys(conn)
+
     _backfill_sync_session_columns(conn)
+    _ensure_sync_unique_indexes(conn)
     conn.commit()
 
 
@@ -330,6 +333,205 @@ def _to_utc_iso(value: datetime | str | None) -> str | None:
         dt = dt.replace(tzinfo=local_tz)
 
     return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
+def _table_has_uuid_primary_key(conn: sqlite3.Connection, table_name: str) -> bool:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    for row in rows:
+        if row["name"] == "uuid" and int(row["pk"] or 0) > 0:
+            return True
+    return False
+
+
+def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
+    if _table_has_uuid_primary_key(conn, "sync_sessions"):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS sync_sessions_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+                utc_start TEXT,
+                utc_end TEXT,
+                timezone_name TEXT,
+                active_seconds INTEGER,
+                application_name TEXT,
+                tag TEXT,
+                repo_name TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                deleted_at TEXT,
+                payload_json TEXT NOT NULL,
+                UNIQUE(user_id, uuid)
+            );
+
+            INSERT INTO sync_sessions_v2 (
+                uuid,
+                user_id,
+                device_id,
+                utc_start,
+                utc_end,
+                timezone_name,
+                active_seconds,
+                application_name,
+                tag,
+                repo_name,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            )
+            SELECT
+                uuid,
+                user_id,
+                device_id,
+                utc_start,
+                utc_end,
+                timezone_name,
+                active_seconds,
+                application_name,
+                tag,
+                repo_name,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            FROM sync_sessions;
+
+            DROP TABLE sync_sessions;
+            ALTER TABLE sync_sessions_v2 RENAME TO sync_sessions;
+            """
+        )
+
+    if _table_has_uuid_primary_key(conn, "sync_journal_entries"):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS sync_journal_entries_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                deleted_at TEXT,
+                payload_json TEXT NOT NULL,
+                UNIQUE(user_id, uuid)
+            );
+
+            INSERT INTO sync_journal_entries_v2 (
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            )
+            SELECT
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            FROM sync_journal_entries;
+
+            DROP TABLE sync_journal_entries;
+            ALTER TABLE sync_journal_entries_v2 RENAME TO sync_journal_entries;
+            """
+        )
+
+    if _table_has_uuid_primary_key(conn, "sync_daily_reflections"):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS sync_daily_reflections_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+                date TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                deleted_at TEXT,
+                payload_json TEXT NOT NULL,
+                UNIQUE(user_id, uuid)
+            );
+
+            INSERT INTO sync_daily_reflections_v2 (
+                uuid,
+                user_id,
+                device_id,
+                date,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            )
+            SELECT
+                uuid,
+                user_id,
+                device_id,
+                date,
+                created_at,
+                updated_at,
+                deleted_at,
+                payload_json
+            FROM sync_daily_reflections;
+
+            DROP TABLE sync_daily_reflections;
+            ALTER TABLE sync_daily_reflections_v2 RENAME TO sync_daily_reflections;
+            """
+        )
+
+
+def _ensure_sync_unique_indexes(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_sessions_user_uuid
+            ON sync_sessions (user_id, uuid);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_journal_user_uuid
+            ON sync_journal_entries (user_id, uuid);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_reflections_user_uuid
+            ON sync_daily_reflections (user_id, uuid);
+        """
+    )
+
+
+def _rebuild_sync_rollups(
+    conn: sqlite3.Connection,
+    *,
+    user_id: str,
+    device_id: str | None = None,
+    start_day: str | None = None,
+) -> int:
+    query = """
+        SELECT DISTINCT device_id, substr(utc_start, 1, 10) AS day_utc
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND deleted_at IS NULL
+          AND utc_start IS NOT NULL
+    """
+    params: list[str] = [user_id]
+    if device_id:
+        query += " AND device_id = ?"
+        params.append(device_id)
+    if start_day:
+        query += " AND substr(utc_start, 1, 10) >= ?"
+        params.append(start_day)
+
+    rows = conn.execute(query, params).fetchall()
+    for row in rows:
+        _recompute_sync_daily_rollup(
+            conn,
+            user_id=user_id,
+            device_id=str(row["device_id"]),
+            day_utc=str(row["day_utc"]),
+        )
+    return len(rows)
 
 
 def _parse_datetime_safe(raw_value: str | None) -> datetime | None:
@@ -447,7 +649,7 @@ def _recompute_sync_daily_rollup(
 def _backfill_sync_session_columns(conn: sqlite3.Connection) -> None:
     rows = conn.execute(
         """
-        SELECT uuid, payload_json
+        SELECT user_id, uuid, payload_json
         FROM sync_sessions
         WHERE utc_start IS NULL OR active_seconds IS NULL OR application_name IS NULL OR repo_name IS NULL
         LIMIT 5000
@@ -474,7 +676,7 @@ def _backfill_sync_session_columns(conn: sqlite3.Connection) -> None:
                 application_name = COALESCE(application_name, ?),
                 tag = COALESCE(tag, ?),
                 repo_name = COALESCE(repo_name, ?)
-            WHERE uuid = ?
+            WHERE user_id = ? AND uuid = ?
             """,
             (
                 fields["utc_start"],
@@ -484,6 +686,7 @@ def _backfill_sync_session_columns(conn: sqlite3.Connection) -> None:
                 fields["application_name"],
                 fields["tag"],
                 fields["repo_name"],
+                row["user_id"],
                 row["uuid"],
             ),
         )
@@ -763,15 +966,12 @@ def _upsert_sync_payload_row(
 
     cursor = conn.cursor()
     cursor.execute(
-        f"SELECT * FROM {table_name} WHERE uuid = ?",
-        (row_uuid,),
+        f"SELECT * FROM {table_name} WHERE user_id = ? AND uuid = ?",
+        (user_id, row_uuid),
     )
     existing = cursor.fetchone()
 
     if existing is not None:
-        if str(existing["user_id"]) != user_id:
-            return str(existing["updated_at"]), str(existing["uuid"])
-
         if not _is_incoming_newer(
             incoming_updated_at=updated_at,
             incoming_uuid=row_uuid,
@@ -791,7 +991,7 @@ def _upsert_sync_payload_row(
                     deleted_at = ?,
                     payload_json = ?,
                     date = COALESCE(?, date)
-                WHERE uuid = ?
+                WHERE user_id = ? AND uuid = ?
                 """,
                 (
                     user_id,
@@ -801,6 +1001,7 @@ def _upsert_sync_payload_row(
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
                     date_value,
+                    user_id,
                     row_uuid,
                 ),
             )
@@ -821,7 +1022,7 @@ def _upsert_sync_payload_row(
                     application_name = ?,
                     tag = ?,
                     repo_name = ?
-                WHERE uuid = ?
+                WHERE user_id = ? AND uuid = ?
                 """,
                 (
                     user_id,
@@ -837,6 +1038,7 @@ def _upsert_sync_payload_row(
                     extracted_fields.get("application_name"),
                     extracted_fields.get("tag"),
                     extracted_fields.get("repo_name"),
+                    user_id,
                     row_uuid,
                 ),
             )
@@ -850,7 +1052,7 @@ def _upsert_sync_payload_row(
                     updated_at = ?,
                     deleted_at = ?,
                     payload_json = ?
-                WHERE uuid = ?
+                WHERE user_id = ? AND uuid = ?
                 """,
                 (
                     user_id,
@@ -859,6 +1061,7 @@ def _upsert_sync_payload_row(
                     updated_at,
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
+                    user_id,
                     row_uuid,
                 ),
             )
@@ -2181,6 +2384,34 @@ async def api_sync_stats(
         device_id=device_id,
         days=days,
     )
+
+
+@app.post("/api/sync/rollups/rebuild")
+async def api_sync_rollups_rebuild(
+    user_id: str = Query(..., min_length=1),
+    device_id: str | None = Query(None),
+    start_day: str | None = Query(None),
+):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+
+    rebuilt_rows = _rebuild_sync_rollups(
+        conn,
+        user_id=user_id,
+        device_id=device_id,
+        start_day=start_day,
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "user_id": user_id,
+        "device_id": device_id,
+        "start_day": start_day,
+        "rebuilt_rows": rebuilt_rows,
+    }
 
 
 @app.post("/api/journal")
