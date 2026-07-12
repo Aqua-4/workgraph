@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import datetime
 from pathlib import Path
 import sqlite3
@@ -292,6 +293,52 @@ def main() -> None:
         default=_default_config_path_str(),
         help="Path to a simple YAML settings file.",
     )
+    sync_validate_parser = sync_subparsers.add_parser(
+        "validate",
+        help="Validate sync data integrity in the local database.",
+    )
+    sync_validate_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
+    )
+    sync_verify_parser = sync_subparsers.add_parser(
+        "verify",
+        help="Compare local sync totals against the sync server.",
+    )
+    sync_verify_parser.add_argument(
+        "--config",
+        default=_default_config_path_str(),
+        help="Path to a simple YAML settings file.",
+    )
+    sync_verify_parser.add_argument(
+        "--base-url",
+        default=None,
+        help="Sync service base URL (fallback: sync_base_url in config).",
+    )
+    sync_verify_parser.add_argument(
+        "--token",
+        default=None,
+        help="Device token for sync API (fallback: sync_token in config).",
+    )
+    sync_verify_parser.add_argument(
+        "--pull-limit",
+        type=int,
+        default=None,
+        help="Pull page size for verify (fallback: sync_pull_limit in config or default 1000).",
+    )
+    sync_verify_parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=100,
+        help="Maximum pull pages used during verify (default: 100).",
+    )
+    sync_verify_parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=None,
+        help="HTTP timeout for verify calls (fallback: sync_timeout_seconds in config or default 10).",
+    )
     args = parser.parse_args()
 
     if args.command == "export":
@@ -308,6 +355,10 @@ def main() -> None:
         run_sync_catchup_command(args)
     elif args.command == "sync" and args.sync_command == "migrate":
         run_sync_migrate_command(args)
+    elif args.command == "sync" and args.sync_command == "validate":
+        run_sync_validate_command(args)
+    elif args.command == "sync" and args.sync_command == "verify":
+        run_sync_verify_command(args)
     elif args.retag_existing:
         retag_existing_sessions(args.config)
     elif args.web:
@@ -565,6 +616,373 @@ def run_sync_migrate_command(args: argparse.Namespace) -> None:
     print(f"Sessions with missing sync metadata: {before['activity_sessions']} -> {after['activity_sessions']}")
     print(f"Journal entries with missing sync metadata: {before['journal_entries']} -> {after['journal_entries']}")
     print(f"Reflections with missing sync metadata: {before['daily_reflections']} -> {after['daily_reflections']}")
+
+
+def run_sync_validate_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    db_path = Path(settings.database_path)
+    if not db_path.exists():
+        print("Sync validation: FAIL")
+        print(f"Database not found: {db_path}")
+        return
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    issues: list[str] = []
+    try:
+        session_missing = _count_missing_session_fields(conn)
+        if session_missing > 0:
+            issues.append(f"activity_sessions rows missing required fields: {session_missing}")
+
+        for table_name in [
+            "activity_sessions",
+            "journal_entries",
+            "daily_reflections",
+            "sync_sessions",
+            "sync_journal_entries",
+            "sync_daily_reflections",
+        ]:
+            empty_uuid_count, duplicate_uuid_count = _count_uuid_issues(conn, table_name)
+            if empty_uuid_count > 0:
+                issues.append(f"{table_name} empty UUID rows: {empty_uuid_count}")
+            if duplicate_uuid_count > 0:
+                issues.append(f"{table_name} duplicate UUID groups: {duplicate_uuid_count}")
+
+        for table_name in ["sync_sessions", "sync_journal_entries", "sync_daily_reflections"]:
+            corrupt_payload_count = _count_corrupt_payload_rows(conn, table_name)
+            if corrupt_payload_count > 0:
+                issues.append(f"{table_name} corrupt payload rows: {corrupt_payload_count}")
+
+        broken_git_refs = _count_broken_git_activity_refs(conn)
+        if broken_git_refs > 0:
+            issues.append(f"git_activity rows with missing session reference: {broken_git_refs}")
+
+        broken_sync_state_refs = _count_broken_sync_state_refs(conn)
+        if broken_sync_state_refs > 0:
+            issues.append(f"sync_state rows with missing device/user reference: {broken_sync_state_refs}")
+    finally:
+        conn.close()
+
+    if issues:
+        print("Sync validation: FAIL")
+        for item in issues:
+            print(f"- {item}")
+        return
+
+    print("Sync validation: PASS")
+    print(f"Database: {db_path}")
+    print("Checked: missing sessions, corrupt payloads, duplicate UUIDs, broken references")
+
+
+def run_sync_verify_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    db_path = Path(settings.database_path)
+    if not db_path.exists():
+        print("Sync verify: FAIL")
+        print(f"Database not found: {db_path}")
+        return
+
+    resolved_config_path = _resolve_settings_path(args.config)
+    raw_values = _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+
+    base_url = args.base_url or raw_values.get("sync_base_url")
+    token = args.token or raw_values.get("sync_token")
+    if not base_url:
+        print("Sync verify: FAIL")
+        print("sync_base_url missing. Pass --base-url or set sync_base_url in config.")
+        return
+    if not token:
+        print("Sync verify: FAIL")
+        print("sync_token missing. Pass --token or set sync_token in config.")
+        return
+
+    pull_limit = int(args.pull_limit or raw_values.get("sync_pull_limit", 1000))
+    max_pages = max(1, int(args.max_pages))
+    timeout_seconds = float(args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0))
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        sync_state = _read_sync_state(conn)
+        if sync_state is None:
+            print("Sync verify: FAIL")
+            print("sync_state missing. Run sync migrate/once first.")
+            return
+        local_totals = _local_sync_totals(conn)
+    finally:
+        conn.close()
+
+    client = HttpSyncClient(base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds)
+    try:
+        server_totals, truncated = _pull_server_totals(
+            client=client,
+            device_id=sync_state["device_id"],
+            user_id=sync_state["user_id"],
+            pull_limit=pull_limit,
+            max_pages=max_pages,
+        )
+    except RuntimeError as exc:
+        print("Sync verify: FAIL")
+        print(str(exc))
+        return
+
+    mismatches: list[str] = []
+    for field in ["sessions", "journal_entries", "daily_reflections", "active_seconds"]:
+        local_value = int(local_totals[field])
+        server_value = int(server_totals[field])
+        if local_value != server_value:
+            mismatches.append(
+                f"{field}: local={local_value} server={server_value} delta={local_value - server_value}"
+            )
+
+    if truncated:
+        mismatches.append(
+            f"server pagination truncated at {max_pages} pages; rerun with larger --max-pages"
+        )
+
+    if mismatches:
+        print("Sync verify: FAIL")
+        for item in mismatches:
+            print(f"- {item}")
+        return
+
+    print("Sync verify: PASS")
+    print(f"user_id: {sync_state['user_id']}")
+    print(f"device_id: {sync_state['device_id']}")
+    print(
+        "Totals match: "
+        f"sessions={local_totals['sessions']}, "
+        f"journal_entries={local_totals['journal_entries']}, "
+        f"daily_reflections={local_totals['daily_reflections']}, "
+        f"active_seconds={local_totals['active_seconds']}"
+    )
+
+
+def _read_sync_state(conn: sqlite3.Connection) -> dict[str, str] | None:
+    if not _table_exists(conn, "sync_state"):
+        return None
+    row = conn.execute(
+        """
+        SELECT device_id, user_id
+        FROM sync_state
+        WHERE id = 1
+        """
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "device_id": str(row["device_id"] or ""),
+        "user_id": str(row["user_id"] or ""),
+    }
+
+
+def _local_sync_totals(conn: sqlite3.Connection) -> dict[str, int]:
+    sessions = _count_active_rows(conn, "activity_sessions")
+    journals = _count_active_rows(conn, "journal_entries")
+    reflections = _count_active_rows(conn, "daily_reflections")
+    active_seconds = _sum_active_seconds(conn)
+    return {
+        "sessions": sessions,
+        "journal_entries": journals,
+        "daily_reflections": reflections,
+        "active_seconds": active_seconds,
+    }
+
+
+def _count_active_rows(conn: sqlite3.Connection, table_name: str) -> int:
+    if not _table_exists(conn, table_name):
+        return 0
+
+    columns = _table_columns(conn, table_name)
+    deleted_clause = ""
+    if "deleted_at" in columns:
+        deleted_clause = " WHERE deleted_at IS NULL"
+
+    row = conn.execute(f"SELECT COUNT(*) AS total_rows FROM {table_name}{deleted_clause}").fetchone()
+    return int(row["total_rows"] if row is not None else 0)
+
+
+def _sum_active_seconds(conn: sqlite3.Connection) -> int:
+    if not _table_exists(conn, "activity_sessions"):
+        return 0
+    columns = _table_columns(conn, "activity_sessions")
+    deleted_clause = ""
+    if "deleted_at" in columns:
+        deleted_clause = " AND deleted_at IS NULL"
+    row = conn.execute(
+        f"""
+        SELECT COALESCE(SUM(duration_sec), 0) AS total_seconds
+        FROM activity_sessions
+        WHERE COALESCE(is_idle, 0) = 0{deleted_clause}
+        """
+    ).fetchone()
+    return int(row["total_seconds"] if row is not None else 0)
+
+
+def _pull_server_totals(
+    *,
+    client: HttpSyncClient,
+    device_id: str,
+    user_id: str,
+    pull_limit: int,
+    max_pages: int,
+) -> tuple[dict[str, int], bool]:
+    cursor: str | None = None
+    totals = {
+        "sessions": 0,
+        "journal_entries": 0,
+        "daily_reflections": 0,
+        "active_seconds": 0,
+    }
+    truncated = False
+
+    for page_index in range(max_pages):
+        response = client.pull(
+            {
+                "device_id": device_id,
+                "user_id": user_id,
+                "cursor": cursor,
+                "limit": pull_limit,
+            }
+        )
+
+        changes = response.get("changes") or {}
+        sessions = changes.get("sessions") or []
+        journals = changes.get("journal_entries") or []
+        reflections = changes.get("daily_reflections") or []
+
+        totals["sessions"] += len(sessions)
+        totals["journal_entries"] += len(journals)
+        totals["daily_reflections"] += len(reflections)
+        totals["active_seconds"] += sum(int(item.get("duration_sec") or 0) for item in sessions)
+
+        cursor = response.get("next_cursor") or cursor
+        has_more = bool(response.get("has_more"))
+        if not has_more:
+            break
+        if page_index == max_pages - 1:
+            truncated = True
+
+    return totals, truncated
+
+
+def _count_missing_session_fields(conn: sqlite3.Connection) -> int:
+    if not _table_exists(conn, "activity_sessions"):
+        return 0
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS missing_count
+        FROM activity_sessions
+        WHERE start_time IS NULL
+           OR end_time IS NULL
+           OR duration_sec IS NULL
+           OR app_name IS NULL
+           OR TRIM(app_name) = ''
+        """
+    ).fetchone()
+    return int(row["missing_count"] if row is not None else 0)
+
+
+def _count_uuid_issues(conn: sqlite3.Connection, table_name: str) -> tuple[int, int]:
+    if not _table_exists(conn, table_name):
+        return 0, 0
+    columns = _table_columns(conn, table_name)
+    if "uuid" not in columns:
+        return 0, 0
+
+    empty_row = conn.execute(
+        f"""
+        SELECT COUNT(*) AS empty_count
+        FROM {table_name}
+        WHERE uuid IS NULL OR TRIM(uuid) = ''
+        """
+    ).fetchone()
+    empty_count = int(empty_row["empty_count"] if empty_row is not None else 0)
+
+    if table_name.startswith("sync_") and "user_id" in columns:
+        duplicate_row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS duplicate_groups
+            FROM (
+                SELECT user_id, uuid
+                FROM {table_name}
+                WHERE uuid IS NOT NULL AND TRIM(uuid) != ''
+                GROUP BY user_id, uuid
+                HAVING COUNT(*) > 1
+            )
+            """
+        ).fetchone()
+    else:
+        duplicate_row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS duplicate_groups
+            FROM (
+                SELECT uuid
+                FROM {table_name}
+                WHERE uuid IS NOT NULL AND TRIM(uuid) != ''
+                GROUP BY uuid
+                HAVING COUNT(*) > 1
+            )
+            """
+        ).fetchone()
+    duplicate_groups = int(duplicate_row["duplicate_groups"] if duplicate_row is not None else 0)
+    return empty_count, duplicate_groups
+
+
+def _count_corrupt_payload_rows(conn: sqlite3.Connection, table_name: str) -> int:
+    if not _table_exists(conn, table_name):
+        return 0
+    columns = _table_columns(conn, table_name)
+    if "payload_json" not in columns:
+        return 0
+
+    rows = conn.execute(f"SELECT payload_json FROM {table_name}").fetchall()
+    corrupt_count = 0
+    for row in rows:
+        payload_text = row["payload_json"]
+        if payload_text is None or not str(payload_text).strip():
+            corrupt_count += 1
+            continue
+        try:
+            parsed = json.loads(str(payload_text))
+        except json.JSONDecodeError:
+            corrupt_count += 1
+            continue
+        if not isinstance(parsed, dict):
+            corrupt_count += 1
+    return corrupt_count
+
+
+def _count_broken_git_activity_refs(conn: sqlite3.Connection) -> int:
+    if not _table_exists(conn, "git_activity") or not _table_exists(conn, "activity_sessions"):
+        return 0
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS broken_count
+        FROM git_activity g
+        LEFT JOIN activity_sessions s ON s.id = g.session_id
+        WHERE s.id IS NULL
+        """
+    ).fetchone()
+    return int(row["broken_count"] if row is not None else 0)
+
+
+def _count_broken_sync_state_refs(conn: sqlite3.Connection) -> int:
+    if not _table_exists(conn, "sync_state"):
+        return 0
+    if not _table_exists(conn, "devices") or not _table_exists(conn, "users"):
+        return 0
+
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS broken_count
+        FROM sync_state ss
+        LEFT JOIN devices d ON d.id = ss.device_id
+        LEFT JOIN users u ON u.id = ss.user_id
+        WHERE d.id IS NULL OR u.id IS NULL
+        """
+    ).fetchone()
+    return int(row["broken_count"] if row is not None else 0)
 
 
 def retag_existing_sessions(config_path: str) -> None:
