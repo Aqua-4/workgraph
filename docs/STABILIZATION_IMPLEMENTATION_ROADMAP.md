@@ -428,10 +428,10 @@ Ensure implementation is understandable and supportable.
 
 ### Verification Checklist
 
-- [ ] architecture diagrams exist
-- [ ] sync lifecycle diagram exists
-- [ ] troubleshooting guide covers key issues
-- [ ] deployment/upgrade docs are present
+- [x] architecture diagrams exist
+- [x] sync lifecycle diagram exists
+- [x] troubleshooting guide covers key issues
+- [x] deployment/upgrade docs are present
 
 ---
 
@@ -458,22 +458,22 @@ Determine whether the stabilization work is complete enough to begin v2.
 
 #### Dashboard
 
-- [ ] device health page or view exists
-- [ ] goal drift widget is visible
-- [ ] sync status widget exists
+- [x] device health page or view exists
+- [x] goal drift widget is visible
+- [x] sync status widget exists
 - [ ] timeline polish is complete
 
 #### Operations
 
-- [ ] backup implemented
-- [ ] restore implemented
-- [ ] troubleshooting guide written
+- [x] backup implemented
+- [x] restore implemented
+- [x] troubleshooting guide written
 
 #### Documentation
 
-- [ ] architecture diagrams present
-- [ ] deployment guide present
-- [ ] upgrade guide present
+- [x] architecture diagrams present
+- [x] deployment guide present
+- [x] upgrade guide present
 - [ ] screenshots or UI notes available for major modes
 
 ### Exit Criteria
@@ -587,12 +587,12 @@ Use this checklist as the execution backlog for the roadmap.
 
 ### I. Documentation and Operations
 
-- [ ] create standalone architecture diagram
-- [ ] create sync-client architecture diagram
-- [ ] create sync-server architecture diagram
-- [ ] create sync lifecycle diagram
-- [ ] create troubleshooting guide for sync and data issues
-- [ ] create deployment and upgrade documentation
+- [x] create standalone architecture diagram
+- [x] create sync-client architecture diagram
+- [x] create sync-server architecture diagram
+- [x] create sync lifecycle diagram
+- [x] create troubleshooting guide for sync and data issues
+- [x] create deployment and upgrade documentation
 
 ### J. Testing and Verification
 
