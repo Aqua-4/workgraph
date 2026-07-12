@@ -156,27 +156,41 @@
             <span class="timeline-hint">Showing latest {{ sessions|length }} of {{ filtered_count }} matching sessions.</span>
         </div>
 
+        {% if page_context %}
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <span class="badge text-bg-light border">Mode: {{ page_context.mode }}</span>
+            <span class="badge text-bg-light border">Source: {{ page_context.source }}</span>
+            <span class="badge text-bg-light border">User: {{ page_context.user }}</span>
+            <span class="badge text-bg-light border">Device: {{ page_context.device }}</span>
+        </div>
+        {% endif %}
+
         {% if sessions %}
         <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
                 <thead>
                     <tr>
-                        <th>Time</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>User</th>
+                        <th>Device</th>
                         <th>App</th>
                         <th>Duration</th>
-                        <th>Window / Domain</th>
                         <th>Tag</th>
+                        <th>Window / Domain</th>
                         <th>Repo</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for session in sessions %}
+                    {% set start_value = session.start_time or session.utc_start %}
+                    {% set end_value = session.end_time or session.utc_end %}
                     <tr>
-                        <td class="time-small">
-                            {{ session.start_time|human_datetime }}<br>
-                            <span style="color: #999;">→ {{ session.end_time|human_datetime }}</span>
-                        </td>
+                        <td class="time-small">{{ start_value|human_datetime }}</td>
+                        <td class="time-small">{{ end_value|human_datetime }}</td>
+                        <td class="time-small">{{ session.user_id or selected_user_id or '-' }}</td>
+                        <td class="time-small">{{ session.device_id or selected_device_id or '-' }}</td>
                         <td><span class="app-badge">{{ session.app_name }}</span></td>
                         <td class="duration">
                             {% set mins = (session.duration_sec / 60)|int %}
@@ -186,20 +200,20 @@
                                 {{ "%.1f"|format(mins / 60) }}h
                             {% endif %}
                         </td>
-                        <td class="time-small">
+                        <td>
+                            {% if session.tag %}
+                                <span class="tag-badge">{{ session.tag }}</span>
+                            {% else %}
+                                <span style="color: #9ca3af; font-size: 0.85em;">untagged</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             {% if session.browser_domain %}
                                 <strong>{{ session.browser_domain }}</strong>
                             {% elif session.window_title %}
                                 {{ session.window_title[:50] }}{% if session.window_title|length > 50 %}...{% endif %}
                             {% else %}
                                 <em style="color: #ccc;">—</em>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if session.tag %}
-                                <span class="tag-badge">{{ session.tag }}</span>
-                            {% else %}
-                                <span style="color: #9ca3af; font-size: 0.85em;">untagged</span>
                             {% endif %}
                         </td>
                         <td class="time-small">

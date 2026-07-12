@@ -334,9 +334,9 @@ Implement:
 
 ### Verification Checklist
 
-- [ ] backup command creates an archive or backup artifact
-- [ ] restore command can recover from backup
-- [ ] server snapshot workflow creates a recoverable backup set
+- [x] backup command creates an archive or backup artifact
+- [x] restore command can recover from backup
+- [x] server snapshot workflow creates a recoverable backup set
 
 ---
 
@@ -376,6 +376,7 @@ Make the dashboard explain system state clearly.
 - [x] sync-client dashboard shows local sync health and pending state
 - [x] sync-server dashboard shows device health, queue state, and failures
 - [x] goal drift appears visually
+- [x] timeline columns show relevant local and server context
 
 ---
 
@@ -432,6 +433,7 @@ Ensure implementation is understandable and supportable.
 - [x] sync lifecycle diagram exists
 - [x] troubleshooting guide covers key issues
 - [x] deployment/upgrade docs are present
+- [x] screenshots or UI notes available for major modes
 
 ---
 
@@ -461,7 +463,7 @@ Determine whether the stabilization work is complete enough to begin v2.
 - [x] device health page or view exists
 - [x] goal drift widget is visible
 - [x] sync status widget exists
-- [ ] timeline polish is complete
+- [x] timeline polish is complete
 
 #### Operations
 
@@ -474,7 +476,7 @@ Determine whether the stabilization work is complete enough to begin v2.
 - [x] architecture diagrams present
 - [x] deployment guide present
 - [x] upgrade guide present
-- [ ] screenshots or UI notes available for major modes
+- [x] screenshots or UI notes available for major modes
 
 ### Exit Criteria
 
@@ -526,10 +528,10 @@ Use this checklist as the execution backlog for the roadmap.
 
 ### A. Architecture and Separation
 
-- [ ] define the shared core schema for sessions, journals, reflections, and activity events
-- [ ] define client-only sync state tables or metadata for pending queue tracking
-- [ ] define server-only operational tables for users, devices, tokens, errors, and summaries
-- [ ] document which components are shared vs mode-specific
+- [x] define the shared core schema for sessions, journals, reflections, and activity events
+- [x] define client-only sync state tables or metadata for pending queue tracking
+- [x] define server-only operational tables for users, devices, tokens, errors, and summaries
+- [x] document which components are shared vs mode-specific
 
 ### B. Sync Visibility and Health
 
@@ -567,7 +569,7 @@ Use this checklist as the execution backlog for the roadmap.
 - [x] implement `workgraph backup restore`
 - [x] implement `workgraph sync snapshot`
 - [x] verify backup artifacts include database and relevant config files
-- [ ] document recovery steps for each workflow
+- [x] document recovery steps for each workflow
 
 ### G. Dashboard UX and Presentation
 
@@ -575,7 +577,7 @@ Use this checklist as the execution backlog for the roadmap.
 - [x] add a device health widget to the server dashboard
 - [x] add a goal drift widget to the dashboard
 - [x] add a sync status widget to the client dashboard
-- [ ] improve timeline columns for local and server views
+- [x] improve timeline columns for local and server views
 - [x] standardize dashboard card layout for value, subtext, and trend
 
 ### H. Reporting
@@ -596,8 +598,8 @@ Use this checklist as the execution backlog for the roadmap.
 
 ### J. Testing and Verification
 
-- [ ] add unit tests for new validation logic
-- [ ] add API tests for new sync health and error endpoints
+- [x] add unit tests for new validation logic
+- [x] add API tests for new sync health and error endpoints
 - [x] add CLI tests for backup, restore, and validation commands
-- [ ] verify behavior for standalone, sync-client, and sync-server modes
-- [ ] run regression tests after each major milestone
+- [x] verify behavior for standalone, sync-client, and sync-server modes
+- [x] run regression tests after each major milestone

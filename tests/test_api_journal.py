@@ -513,6 +513,63 @@ class JournalApiTests(unittest.TestCase):
         self.assertNotIn("Sync Health", response.text)
         self.assertNotIn("No devices registered yet.", response.text)
 
+    def test_timeline_shows_user_and_device_context_in_standalone_mode(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository._connection.execute(
+                """
+                INSERT INTO activity_sessions (
+                    uuid,
+                    user_id,
+                    device_id,
+                    start_time,
+                    end_time,
+                    duration_sec,
+                    app_name,
+                    process_name,
+                    window_title,
+                    browser_domain,
+                    is_idle,
+                    idle_seconds,
+                    git_repo,
+                    git_branch,
+                    context_switches,
+                    tag,
+                    platform,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "timeline-user-device-1",
+                    "user-standalone",
+                    "device-standalone",
+                    datetime(2026, 7, 10, 14, 0, tzinfo=timezone.utc).isoformat(),
+                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
+                    1800,
+                    "Code",
+                    "Code",
+                    "main.py",
+                    None,
+                    0,
+                    0,
+                    "workgraph",
+                    "main",
+                    1,
+                    "Client Delivery",
+                    "linux",
+                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
+                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
+                ),
+            )
+            repository._connection.commit()
+
+        response = self.client.get("/timeline")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("User", response.text)
+        self.assertIn("Device", response.text)
+        self.assertIn("user-standalone", response.text)
+        self.assertIn("device-standalone", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()
