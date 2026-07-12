@@ -142,6 +142,53 @@
     </div>
     {% endif %}
 
+    {% if dashboard_mode == "sync-client" and client_sync_debug %}
+    <div class="card" style="margin-bottom: 12px; border: 1px dashed #d1d5db;">
+        <h3 style="margin-top: 0;">Sync Client Debug</h3>
+        <div class="stats-grid" style="margin-bottom: 8px;">
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Synced Sessions</div>
+                <div class="stat-value">{{ client_sync_debug.session_count }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Distinct Synced Days</div>
+                <div class="stat-value">{{ client_sync_debug.distinct_days }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Earliest Synced</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.earliest_synced_at|human_datetime }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Latest Synced</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.latest_synced_at|human_datetime }}</div>
+            </div>
+        </div>
+
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Pending Sessions</div>
+                <div class="stat-value">{{ client_sync_debug.pending_sessions }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Pending Journal</div>
+                <div class="stat-value">{{ client_sync_debug.pending_journal_entries }}</div>
+            </div>
+            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Pending Reflections</div>
+                <div class="stat-value">{{ client_sync_debug.pending_reflections }}</div>
+            </div>
+        </div>
+
+        {% if client_sync_debug.days %}
+        <div style="margin-top: 12px; font-size: 0.85em; color: #6b7280;">
+            {% for day_row in client_sync_debug.days %}
+            <div>{{ day_row.day_utc }}: {{ day_row.sessions }} sessions</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {% if dashboard_mode == "sync-server" and sync_health %}
     <h2>Sync Health</h2>
     <div class="card">

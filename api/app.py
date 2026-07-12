@@ -624,8 +624,30 @@ def _recompute_sync_daily_rollup(
             COUNT(*) AS row_count,
             COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS active_seconds,
             COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)), 0) AS focus_seconds,
-            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER), 0)), 0) AS meeting_seconds,
-            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.context_switches') AS INTEGER), 0)), 0) AS context_switches
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER) IS NOT NULL
+                            THEN COALESCE(CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER), 0)
+                        WHEN (
+                            LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%teams%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%zoom%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%webex%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%slack%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%meet.google.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%teams.microsoft.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%zoom.us%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%webex.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%meeting%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%standup%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%huddle%'
+                        ) THEN COALESCE(active_seconds, 0)
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS meeting_seconds,
+            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.context_switches') AS INTEGER), 0)), 0) AS context_switches_payload
         FROM sync_sessions
         WHERE user_id = ?
           AND device_id = ?
@@ -642,6 +664,43 @@ def _recompute_sync_daily_rollup(
             (user_id, device_id, day_utc),
         )
         return
+
+    derived_switches_row = conn.execute(
+        """
+        WITH ordered AS (
+            SELECT
+                utc_start,
+                COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '') AS app_name,
+                COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '') AS window_title,
+                COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '') AS browser_domain,
+                LAG(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_app_name,
+                LAG(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_window_title,
+                LAG(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_browser_domain
+            FROM sync_sessions
+            WHERE user_id = ?
+              AND device_id = ?
+              AND deleted_at IS NULL
+              AND utc_start IS NOT NULL
+              AND substr(utc_start, 1, 10) = ?
+        )
+        SELECT COUNT(*) AS switch_count
+        FROM ordered
+        WHERE prev_app_name IS NOT NULL
+          AND (
+              COALESCE(app_name, '') != COALESCE(prev_app_name, '')
+              OR COALESCE(window_title, '') != COALESCE(prev_window_title, '')
+              OR COALESCE(browser_domain, '') != COALESCE(prev_browser_domain, '')
+          )
+        """,
+        (user_id, device_id, day_utc),
+    ).fetchone()
+
+    derived_switches = int((derived_switches_row["switch_count"] if derived_switches_row else 0) or 0)
+    payload_switches = int(row["context_switches_payload"] or 0)
+    context_switches = max(payload_switches, derived_switches)
 
     conn.execute(
         """
@@ -670,7 +729,7 @@ def _recompute_sync_daily_rollup(
             int(row["active_seconds"]),
             int(row["focus_seconds"]),
             int(row["meeting_seconds"]),
-            int(row["context_switches"]),
+            context_switches,
             _now_iso(),
         ),
     )
@@ -1794,6 +1853,152 @@ def _configured_sync_client_status(db_path: Path) -> dict[str, object]:
         conn.close()
 
 
+def _sqlite_table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _sqlite_table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {str(row[1]) for row in rows}
+
+
+def _count_pending_local_rows(
+    conn: sqlite3.Connection,
+    *,
+    table_name: str,
+    updated_at_cursor: str | None,
+    uuid_cursor: str | None,
+) -> int:
+    if not _sqlite_table_exists(conn, table_name):
+        return 0
+
+    columns = _sqlite_table_columns(conn, table_name)
+    if "updated_at" not in columns or "uuid" not in columns:
+        return 0
+
+    query = f"SELECT COUNT(*) AS pending_count FROM {table_name} WHERE 1=1"
+    params: list[str] = []
+    if updated_at_cursor is not None:
+        query += """
+          AND (
+                updated_at > ?
+                OR (updated_at = ? AND uuid > ?)
+              )
+        """
+        params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+
+    row = conn.execute(query, params).fetchone()
+    return int(row["pending_count"] if row is not None else 0)
+
+
+def get_sync_client_debug(
+    db_path: Path,
+    *,
+    user_id: str | None,
+    device_id: str | None,
+) -> dict[str, object]:
+    debug: dict[str, object] = {
+        "session_count": 0,
+        "distinct_days": 0,
+        "earliest_synced_at": None,
+        "latest_synced_at": None,
+        "days": [],
+        "pending_sessions": 0,
+        "pending_journal_entries": 0,
+        "pending_reflections": 0,
+    }
+
+    if not db_path.exists():
+        return debug
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    try:
+        where_clauses = ["deleted_at IS NULL"]
+        params: list[str] = []
+        if user_id:
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
+        if device_id:
+            where_clauses.append("device_id = ?")
+            params.append(device_id)
+
+        where_sql = " AND ".join(where_clauses)
+
+        coverage_row = conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS session_count,
+                COUNT(DISTINCT substr(utc_start, 1, 10)) AS distinct_days,
+                MIN(utc_start) AS earliest_synced_at,
+                MAX(utc_start) AS latest_synced_at
+            FROM sync_sessions
+            WHERE {where_sql}
+            """,
+            params,
+        ).fetchone()
+
+        if coverage_row is not None:
+            debug["session_count"] = int(coverage_row["session_count"] or 0)
+            debug["distinct_days"] = int(coverage_row["distinct_days"] or 0)
+            debug["earliest_synced_at"] = coverage_row["earliest_synced_at"]
+            debug["latest_synced_at"] = coverage_row["latest_synced_at"]
+
+        day_rows = conn.execute(
+            f"""
+            SELECT substr(utc_start, 1, 10) AS day_utc, COUNT(*) AS sessions
+            FROM sync_sessions
+            WHERE {where_sql}
+              AND utc_start IS NOT NULL
+            GROUP BY day_utc
+            ORDER BY day_utc DESC
+            LIMIT 10
+            """,
+            params,
+        ).fetchall()
+        debug["days"] = [
+            {
+                "day_utc": str(row["day_utc"]),
+                "sessions": int(row["sessions"] or 0),
+            }
+            for row in day_rows
+        ]
+
+        if _sqlite_table_exists(conn, "sync_state"):
+            state_row = conn.execute(
+                "SELECT last_push_cursor FROM sync_state WHERE id = 1"
+            ).fetchone()
+            if state_row is not None:
+                updated_at_cursor, uuid_cursor = _parse_cursor(state_row["last_push_cursor"])
+                debug["pending_sessions"] = _count_pending_local_rows(
+                    conn,
+                    table_name="activity_sessions",
+                    updated_at_cursor=updated_at_cursor,
+                    uuid_cursor=uuid_cursor,
+                )
+                debug["pending_journal_entries"] = _count_pending_local_rows(
+                    conn,
+                    table_name="journal_entries",
+                    updated_at_cursor=updated_at_cursor,
+                    uuid_cursor=uuid_cursor,
+                )
+                debug["pending_reflections"] = _count_pending_local_rows(
+                    conn,
+                    table_name="daily_reflections",
+                    updated_at_cursor=updated_at_cursor,
+                    uuid_cursor=uuid_cursor,
+                )
+    finally:
+        conn.close()
+
+    return debug
+
+
 def _source_for_dashboard_mode(mode: str) -> str:
     return "sync" if mode == "sync-server" else "local"
 
@@ -1936,6 +2141,13 @@ def get_sync_summary_stats(
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
     start_iso = start_date.isoformat(timespec="seconds")
     start_day = start_date.strftime("%Y-%m-%d")
+
+    _rebuild_sync_rollups(
+        conn,
+        user_id=user_id,
+        device_id=device_id,
+        start_day=start_day,
+    )
 
     device_filter_rollup = ""
     device_filter_sessions = ""
@@ -2183,6 +2395,14 @@ def get_sync_server_overview(
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
     start_iso = start_date.isoformat(timespec="seconds")
     start_day = start_date.strftime("%Y-%m-%d")
+
+    if selected_user_id:
+        _rebuild_sync_rollups(
+            conn,
+            user_id=selected_user_id,
+            device_id=device_id,
+            start_day=start_day,
+        )
 
     global_query = """
         SELECT
@@ -2664,10 +2884,16 @@ async def dashboard(
     normalized_source = _source_for_dashboard_mode(dashboard_mode)
     resolved_user_id = user_id
     client_sync_status: dict[str, object] | None = None
+    client_sync_debug: dict[str, object] | None = None
     if dashboard_mode == "sync-client":
         client_sync_status = _configured_sync_client_status(db_path)
         if resolved_user_id is None and client_sync_status.get("user_id"):
             resolved_user_id = str(client_sync_status["user_id"])
+        client_sync_debug = get_sync_client_debug(
+            db_path,
+            user_id=resolved_user_id,
+            device_id=str(client_sync_status.get("device_id") or "").strip() or None,
+        )
 
     if normalized_source == "sync":
         conn = sqlite3.connect(db_path)
@@ -2690,6 +2916,7 @@ async def dashboard(
         stats=stats,
         sync_health=sync_health,
         client_sync=client_sync_status,
+        client_sync_debug=client_sync_debug,
         dashboard_mode=dashboard_mode,
         source=normalized_source,
         selected_user_id=resolved_user_id,

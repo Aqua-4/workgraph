@@ -154,6 +154,56 @@ def main() -> None:
         default=None,
         help="HTTP timeout for sync requests (fallback: sync_timeout_seconds in config or default 10).",
     )
+    sync_catchup_parser = sync_subparsers.add_parser(
+        "catchup",
+        help="Run repeated sync cycles until local pending changes are drained.",
+    )
+    sync_catchup_parser.add_argument(
+        "--base-url",
+        default=None,
+        help="Sync service base URL (fallback: sync_base_url in config).",
+    )
+    sync_catchup_parser.add_argument(
+        "--token",
+        default=None,
+        help="Device token for sync API (fallback: sync_token in config).",
+    )
+    sync_catchup_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=None,
+        help="Push batch size (fallback: sync_batch_size in config or default 1000).",
+    )
+    sync_catchup_parser.add_argument(
+        "--pull-limit",
+        type=int,
+        default=None,
+        help="Pull page size (fallback: sync_pull_limit in config or default 1000).",
+    )
+    sync_catchup_parser.add_argument(
+        "--max-pull-pages",
+        type=int,
+        default=None,
+        help="Max pull pages per cycle (fallback: sync_max_pull_pages in config or default 20).",
+    )
+    sync_catchup_parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=None,
+        help="HTTP timeout for sync requests (fallback: sync_timeout_seconds in config or default 10).",
+    )
+    sync_catchup_parser.add_argument(
+        "--max-cycles",
+        type=int,
+        default=50,
+        help="Maximum sync cycles to run before stopping (default: 50).",
+    )
+    sync_catchup_parser.add_argument(
+        "--settle-cycles",
+        type=int,
+        default=2,
+        help="Stop after this many consecutive no-progress cycles (default: 2).",
+    )
     sync_daemon_parser = sync_subparsers.add_parser(
         "daemon", help="Run continuous sync loop with retry/backoff."
     )
@@ -225,6 +275,8 @@ def main() -> None:
         run_sync_once_command(args)
     elif args.command == "sync" and args.sync_command == "daemon":
         run_sync_daemon_command(args)
+    elif args.command == "sync" and args.sync_command == "catchup":
+        run_sync_catchup_command(args)
     elif args.command == "sync" and args.sync_command == "migrate":
         run_sync_migrate_command(args)
     elif args.retag_existing:
@@ -367,6 +419,106 @@ def run_sync_daemon_command(args: argparse.Namespace) -> None:
         worker = SyncWorker(repository, client, worker_settings)
         daemon = SyncDaemon(worker, daemon_settings)
         daemon.run_forever()
+
+
+def run_sync_catchup_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    resolved_config_path = _resolve_settings_path(args.config)
+    raw_values = _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+
+    base_url = args.base_url or raw_values.get("sync_base_url")
+    token = args.token or raw_values.get("sync_token")
+    if not base_url:
+        print("sync_base_url missing. Pass --base-url or set sync_base_url in config.")
+        return
+    if not token:
+        print("sync_token missing. Pass --token or set sync_token in config.")
+        return
+
+    batch_size = int(args.batch_size or raw_values.get("sync_batch_size", 1000))
+    pull_limit = int(args.pull_limit or raw_values.get("sync_pull_limit", 1000))
+    max_pull_pages = int(args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20))
+    timeout_seconds = float(args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0))
+    max_cycles = max(1, int(args.max_cycles))
+    settle_cycles = max(1, int(args.settle_cycles))
+
+    worker_settings = SyncWorkerSettings(
+        batch_size=batch_size,
+        pull_limit=pull_limit,
+        max_pull_pages=max_pull_pages,
+    )
+    client = HttpSyncClient(base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds)
+
+    totals = {
+        "push_sessions": 0,
+        "push_journal_entries": 0,
+        "push_daily_reflections": 0,
+        "pull_sessions": 0,
+        "pull_journal_entries": 0,
+        "pull_daily_reflections": 0,
+        "pull_tombstones": 0,
+    }
+
+    no_progress_cycles = 0
+    cycles_run = 0
+
+    with ActivityRepository(settings.database_path, identity_path=settings.identity_path) as repository:
+        worker = SyncWorker(repository, client, worker_settings)
+
+        for cycle in range(1, max_cycles + 1):
+            summary = worker.run_once()
+            cycles_run = cycle
+
+            push = summary.get("push", {})
+            pull = summary.get("pull", {})
+
+            push_sessions = int(push.get("sessions", 0) or 0)
+            push_journals = int(push.get("journal_entries", 0) or 0)
+            push_reflections = int(push.get("daily_reflections", 0) or 0)
+
+            pull_sessions = int(pull.get("sessions", 0) or 0)
+            pull_journals = int(pull.get("journal_entries", 0) or 0)
+            pull_reflections = int(pull.get("daily_reflections", 0) or 0)
+            pull_tombstones = int(pull.get("tombstones", 0) or 0)
+
+            totals["push_sessions"] += push_sessions
+            totals["push_journal_entries"] += push_journals
+            totals["push_daily_reflections"] += push_reflections
+            totals["pull_sessions"] += pull_sessions
+            totals["pull_journal_entries"] += pull_journals
+            totals["pull_daily_reflections"] += pull_reflections
+            totals["pull_tombstones"] += pull_tombstones
+
+            cycle_progress = (
+                push_sessions
+                + push_journals
+                + push_reflections
+                + pull_sessions
+                + pull_journals
+                + pull_reflections
+                + pull_tombstones
+            )
+
+            print(
+                f"cycle {cycle}: "
+                f"push(s={push_sessions},j={push_journals},r={push_reflections}) "
+                f"pull(s={pull_sessions},j={pull_journals},r={pull_reflections},t={pull_tombstones})"
+            )
+
+            if cycle_progress == 0:
+                no_progress_cycles += 1
+                if no_progress_cycles >= settle_cycles:
+                    break
+            else:
+                no_progress_cycles = 0
+
+    print("Sync catchup complete")
+    print(f"Cycles run: {cycles_run}")
+    print(
+        "Totals: "
+        f"push(s={totals['push_sessions']},j={totals['push_journal_entries']},r={totals['push_daily_reflections']}), "
+        f"pull(s={totals['pull_sessions']},j={totals['pull_journal_entries']},r={totals['pull_daily_reflections']},t={totals['pull_tombstones']})"
+    )
 
 
 def run_sync_migrate_command(args: argparse.Namespace) -> None:

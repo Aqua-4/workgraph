@@ -59,6 +59,15 @@ Sync health behavior:
 - Sync Health block on the main dashboard is hidden.
 - Goal/app/repository breakdowns are rendered as compact pie charts with legends.
 
+Client debug behavior:
+
+- Sync client dashboard shows a debug card with:
+   - synced session count
+   - distinct synced days
+   - earliest/latest synced timestamps
+   - pending local sessions/journal/reflections (based on sync cursor)
+   - recent synced day-level counts
+
 ### 3) sync-server
 
 Template:
@@ -181,3 +190,15 @@ Journal and related APIs (`api/app.py`):
 3. Confirm sync-client registration/status transition behaves correctly after first registration.
 4. Confirm no standalone-only data appears in sync-client mode.
 5. Confirm Sync Health is only visible where intended.
+
+## Sync Catchup Command
+
+Use this command on sync clients to flush remaining local historical data:
+
+`uv run python main.py sync catchup --config config/my-settings.yaml`
+
+Useful options:
+
+- `--max-cycles` to cap sync rounds (default 50)
+- `--settle-cycles` to stop after consecutive no-progress cycles (default 2)
+- `--batch-size`, `--pull-limit`, `--max-pull-pages` for throughput tuning
