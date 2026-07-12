@@ -243,18 +243,6 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_updated
             ON sync_sessions (user_id, updated_at, uuid);
 
-        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_utc_start
-            ON sync_sessions (user_id, utc_start);
-
-        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_device_utc_start
-            ON sync_sessions (user_id, device_id, utc_start);
-
-        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_tag_utc_start
-            ON sync_sessions (user_id, tag, utc_start);
-
-        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_app_utc_start
-            ON sync_sessions (user_id, application_name, utc_start);
-
         CREATE INDEX IF NOT EXISTS idx_sync_journal_user_updated
             ON sync_journal_entries (user_id, updated_at, uuid);
 
@@ -315,6 +303,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
     _migrate_sync_tables_to_user_scoped_keys(conn)
 
     _backfill_sync_session_columns(conn)
+    _ensure_sync_runtime_indexes(conn)
     _ensure_sync_unique_indexes(conn)
     conn.commit()
 
@@ -497,6 +486,42 @@ def _ensure_sync_unique_indexes(conn: sqlite3.Connection) -> None:
 
         CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_reflections_user_uuid
             ON sync_daily_reflections (user_id, uuid);
+        """
+    )
+
+
+def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_updated
+            ON sync_sessions (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_utc_start
+            ON sync_sessions (user_id, utc_start);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_device_utc_start
+            ON sync_sessions (user_id, device_id, utc_start);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_tag_utc_start
+            ON sync_sessions (user_id, tag, utc_start);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_app_utc_start
+            ON sync_sessions (user_id, application_name, utc_start);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_journal_user_updated
+            ON sync_journal_entries (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_updated
+            ON sync_daily_reflections (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_request_logs_endpoint_created
+            ON sync_request_logs (endpoint, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_request_logs_device_created
+            ON sync_request_logs (device_id, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_metrics_daily_user_day
+            ON sync_metrics_daily (user_id, day_utc);
         """
     )
 
