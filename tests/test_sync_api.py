@@ -566,6 +566,74 @@ class SyncApiTests(unittest.TestCase):
         self.assertEqual(len(devices), 1)
         self.assertEqual(devices[0]["device_id"], "device-a1")
 
+    def test_sync_stats_endpoint_and_api_stats_source_sync(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-sync", "name": "Sync User"},
+                "device": {
+                    "id": "device-sync-1",
+                    "name": "Sync Laptop",
+                    "type": "work",
+                    "hostname": "SYNC-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+        token = register_response.json()["device_token"]
+
+        push_response = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-sync-1",
+                "user_id": "user-sync",
+                "client_cursor": None,
+                "batch_id": "batch-sync-stats-1",
+                "changes": {
+                    "sessions": [
+                        {
+                            "uuid": "sess-sync-1",
+                            "created_at": "2026-07-11T10:00:00+00:00",
+                            "updated_at": "2026-07-11T10:00:00+00:00",
+                            "start_time": "2026-07-11T10:00:00+00:00",
+                            "end_time": "2026-07-11T11:00:00+00:00",
+                            "duration_sec": 3600,
+                            "app_name": "Code",
+                            "tag": "Build",
+                            "git_repo": "workgraph",
+                            "focus_seconds": 1200,
+                            "meeting_seconds": 300,
+                            "context_switches": 5,
+                        }
+                    ],
+                    "journal_entries": [],
+                    "daily_reflections": [],
+                },
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(push_response.status_code, 200)
+
+        stats_response = self.client.get(
+            "/api/sync/stats",
+            params={"user_id": "user-sync", "days": 3650},
+        )
+        self.assertEqual(stats_response.status_code, 200)
+        stats = stats_response.json()
+        self.assertEqual(stats["total_seconds"], 3600)
+        self.assertEqual(stats["meeting_seconds"], 300)
+        self.assertIn("Build", stats["tag_stats"])
+
+        api_stats_sync = self.client.get(
+            "/api/stats",
+            params={"source": "sync", "user_id": "user-sync", "days": 30},
+        )
+        self.assertEqual(api_stats_sync.status_code, 200)
+        body = api_stats_sync.json()
+        self.assertEqual(body["total_seconds"], 3600)
+        self.assertIn("Code", body["app_stats"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1345,6 +1345,236 @@ def query_recent_work_events(db_path: Path, limit: int = 30) -> list[dict]:
     return rows
 
 
+def _normalize_source(source: str) -> str:
+    normalized = source.strip().lower()
+    if normalized not in {"local", "sync"}:
+        raise HTTPException(status_code=400, detail="source must be 'local' or 'sync'")
+    return normalized
+
+
+def _resolve_sync_user_id(conn: sqlite3.Connection, user_id: str | None) -> str:
+    if user_id:
+        return user_id
+    row = conn.execute("SELECT id FROM sync_users ORDER BY updated_at DESC, id ASC LIMIT 1").fetchone()
+    if row is None:
+        raise HTTPException(status_code=400, detail="No sync users found. Register a device first.")
+    return str(row["id"])
+
+
+def get_sync_summary_stats(
+    db_path: Path,
+    *,
+    user_id: str,
+    days: int = 7,
+    device_id: str | None = None,
+) -> dict:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    cursor = conn.cursor()
+
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_iso = start_date.isoformat(timespec="seconds")
+    start_day = start_date.strftime("%Y-%m-%d")
+
+    device_filter_rollup = ""
+    device_filter_sessions = ""
+    params_rollup: list[str] = [user_id, start_day]
+    params_sessions: list[str] = [user_id, start_iso]
+    if device_id:
+        device_filter_rollup = " AND device_id = ?"
+        device_filter_sessions = " AND device_id = ?"
+        params_rollup.append(device_id)
+        params_sessions.append(device_id)
+
+    cursor.execute(
+        f"""
+        SELECT
+            COALESCE(SUM(active_seconds), 0) AS total_seconds,
+            COALESCE(SUM(focus_seconds), 0) AS focus_seconds,
+            COALESCE(SUM(meeting_seconds), 0) AS meeting_seconds,
+            COALESCE(SUM(context_switches), 0) AS total_switches
+        FROM sync_metrics_daily
+        WHERE user_id = ?
+          AND day_utc >= ?
+          {device_filter_rollup}
+        """,
+        params_rollup,
+    )
+    rollup = cursor.fetchone()
+    total_seconds = int((rollup["total_seconds"] if rollup else 0) or 0)
+    focus_seconds = int((rollup["focus_seconds"] if rollup else 0) or 0)
+    meeting_seconds = int((rollup["meeting_seconds"] if rollup else 0) or 0)
+    total_switches = int((rollup["total_switches"] if rollup else 0) or 0)
+
+    cursor.execute(
+        f"""
+        SELECT COALESCE(tag, 'Untagged') AS tag_name, COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS total_seconds
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND utc_start >= ?
+          AND deleted_at IS NULL
+          {device_filter_sessions}
+        GROUP BY tag_name
+        ORDER BY total_seconds DESC
+        """,
+        params_sessions,
+    )
+    tag_stats = {str(row["tag_name"]): int(row["total_seconds"] or 0) for row in cursor.fetchall()}
+
+    cursor.execute(
+        f"""
+        SELECT COALESCE(application_name, 'Unknown') AS app_name, COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS total_seconds
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND utc_start >= ?
+          AND deleted_at IS NULL
+          {device_filter_sessions}
+        GROUP BY app_name
+        ORDER BY total_seconds DESC
+        LIMIT 10
+        """,
+        params_sessions,
+    )
+    app_stats = {str(row["app_name"]): int(row["total_seconds"] or 0) for row in cursor.fetchall()}
+
+    cursor.execute(
+        f"""
+        SELECT repo_name, COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS total_seconds
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND utc_start >= ?
+          AND deleted_at IS NULL
+          AND repo_name IS NOT NULL
+          {device_filter_sessions}
+        GROUP BY repo_name
+        ORDER BY total_seconds DESC
+        LIMIT 5
+        """,
+        params_sessions,
+    )
+    repo_stats = {str(row["repo_name"]): int(row["total_seconds"] or 0) for row in cursor.fetchall()}
+
+    cursor.execute(
+        f"""
+        SELECT COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS tagged_active_seconds
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND utc_start >= ?
+          AND deleted_at IS NULL
+          AND tag IS NOT NULL
+          {device_filter_sessions}
+        """,
+        params_sessions,
+    )
+    tagged_row = cursor.fetchone()
+    tagged_active_seconds = int((tagged_row["tagged_active_seconds"] if tagged_row else 0) or 0)
+
+    cursor.execute(
+        f"""
+        SELECT day_utc, active_seconds, meeting_seconds, context_switches
+        FROM sync_metrics_daily
+        WHERE user_id = ?
+          AND day_utc >= ?
+          {device_filter_rollup}
+        ORDER BY day_utc DESC
+        LIMIT 7
+        """,
+        params_rollup,
+    )
+    daily_trend = []
+    for row in cursor.fetchall():
+        day_value = str(row["day_utc"])
+        day_active = int(row["active_seconds"] or 0)
+        day_meeting = int(row["meeting_seconds"] or 0)
+        day_switches = int(row["context_switches"] or 0)
+        daily_trend.append(
+            {
+                "day": day_value,
+                "day_label": datetime.strptime(day_value, "%Y-%m-%d").strftime("%a"),
+                "active_hours": round(day_active / 3600, 2),
+                "meeting_hours": round(day_meeting / 3600, 2),
+                "switches_per_hour": round(day_switches / max(day_active / 3600, 0.001), 2),
+            }
+        )
+
+    # Deep-work metrics still need ordered session rows.
+    cursor.execute(
+        f"""
+        SELECT utc_start, utc_end, COALESCE(active_seconds, 0) AS active_seconds
+        FROM sync_sessions
+        WHERE user_id = ?
+          AND utc_start >= ?
+          AND deleted_at IS NULL
+          {device_filter_sessions}
+          AND utc_start IS NOT NULL
+        ORDER BY utc_start ASC, uuid ASC
+        """,
+        params_sessions,
+    )
+    focus_blocks: list[int] = []
+    current_block_end: datetime | None = None
+    current_block_seconds = 0
+    for row in cursor.fetchall():
+        start_time = _parse_iso_datetime(str(row["utc_start"]))
+        end_raw = row["utc_end"] if row["utc_end"] else row["utc_start"]
+        end_time = _parse_iso_datetime(str(end_raw))
+        duration_sec = int(row["active_seconds"] or 0)
+
+        if current_block_end is None:
+            current_block_end = end_time
+            current_block_seconds = duration_sec
+            continue
+
+        gap_seconds = (start_time - current_block_end).total_seconds()
+        if gap_seconds > 90:
+            focus_blocks.append(current_block_seconds)
+            current_block_seconds = duration_sec
+        else:
+            current_block_seconds += duration_sec
+
+        if end_time > current_block_end:
+            current_block_end = end_time
+
+    if current_block_end is not None:
+        focus_blocks.append(current_block_seconds)
+
+    deep_focus_blocks = [block for block in focus_blocks if block >= 1800]
+    deep_work_blocks = len(deep_focus_blocks)
+    longest_focus_sec = max(focus_blocks) if focus_blocks else 0
+    avg_focus_sec = (sum(deep_focus_blocks) / len(deep_focus_blocks)) if deep_focus_blocks else 0
+
+    conn.close()
+
+    active_hours = total_seconds / 3600 if total_seconds else 0
+    tagged_ratio = (tagged_active_seconds / total_seconds) if total_seconds else 0
+    meeting_ratio = (meeting_seconds / total_seconds) if total_seconds else 0
+    switch_rate_per_hour = total_switches / active_hours if active_hours else 0
+
+    return {
+        "tag_stats": tag_stats,
+        "app_stats": app_stats,
+        "repo_stats": repo_stats,
+        "total_seconds": total_seconds,
+        "total_hours": round(total_seconds / 3600, 1),
+        "total_idle_seconds": 0,
+        "total_idle_hours": 0.0,
+        "tagged_active_seconds": tagged_active_seconds,
+        "tagged_ratio": round(tagged_ratio, 3),
+        "meeting_seconds": meeting_seconds,
+        "meeting_hours": round(meeting_seconds / 3600, 1),
+        "meeting_ratio": round(meeting_ratio, 3),
+        "total_switches": int(total_switches),
+        "switch_rate_per_hour": round(switch_rate_per_hour, 2),
+        "deep_work_blocks": int(deep_work_blocks),
+        "longest_focus_sec": int(longest_focus_sec),
+        "longest_focus_hours": round((longest_focus_sec or 0) / 3600, 2),
+        "avg_focus_sec": int(avg_focus_sec or 0),
+        "avg_focus_minutes": round((avg_focus_sec or 0) / 60, 1),
+        "daily_trend": daily_trend,
+    }
+
+
 def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     """Get summary statistics for the past N days."""
     conn = sqlite3.connect(db_path)
@@ -1675,18 +1905,42 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
 
 
 @app.get("/", response_class=HTMLResponse)
-async def dashboard():
+async def dashboard(
+    source: str = Query("local"),
+    user_id: str | None = Query(None),
+    device_id: str | None = Query(None),
+):
     """Dashboard homepage."""
     db_path = get_db_path()
 
     if not db_path.exists():
         return "<h1>WorkGraph Dashboard</h1><p>No data collected yet. Run the collector first.</p>"
 
-    stats = get_summary_stats(db_path, days=7)
+    normalized_source = _normalize_source(source)
+    if normalized_source == "sync":
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        _ensure_sync_tables(conn)
+        resolved_user_id = _resolve_sync_user_id(conn, user_id)
+        conn.close()
+        stats = get_sync_summary_stats(
+            db_path,
+            user_id=resolved_user_id,
+            device_id=device_id,
+            days=7,
+        )
+    else:
+        stats = get_summary_stats(db_path, days=7)
     sync_health = get_sync_health(db_path)
 
     template = jinja_env.get_template("dashboard.html")
-    return template.render(stats=stats, sync_health=sync_health)
+    return template.render(
+        stats=stats,
+        sync_health=sync_health,
+        source=normalized_source,
+        selected_user_id=user_id,
+        selected_device_id=device_id,
+    )
 
 
 @app.get("/timeline", response_class=HTMLResponse)
@@ -1788,7 +2042,12 @@ async def api_sessions(
 
 
 @app.get("/api/stats")
-async def api_stats(days: int = Query(7, ge=1, le=30)):
+async def api_stats(
+    days: int = Query(7, ge=1, le=30),
+    source: str = Query("local"),
+    user_id: str | None = Query(None),
+    device_id: str | None = Query(None),
+):
     """API endpoint for summary statistics."""
     db_path = get_db_path()
 
@@ -1800,7 +2059,22 @@ async def api_stats(days: int = Query(7, ge=1, le=30)):
             "total_hours": 0,
         }
 
-    return get_summary_stats(db_path, days=days)
+    normalized_source = _normalize_source(source)
+    if normalized_source == "local":
+        return get_summary_stats(db_path, days=days)
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    resolved_user_id = _resolve_sync_user_id(conn, user_id)
+    conn.close()
+
+    return get_sync_summary_stats(
+        db_path,
+        user_id=resolved_user_id,
+        device_id=device_id,
+        days=days,
+    )
 
 
 @app.get("/api/sync/health")
@@ -1884,6 +2158,29 @@ async def api_sync_devices(user_id: str = Query(..., min_length=1)):
             for row in rows
         ]
     }
+
+
+@app.get("/api/sync/stats")
+async def api_sync_stats(
+    user_id: str = Query(..., min_length=1),
+    days: int = Query(7, ge=1, le=3650),
+    device_id: str | None = Query(None),
+):
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {
+            "tag_stats": {},
+            "app_stats": {},
+            "total_seconds": 0,
+            "total_hours": 0,
+        }
+
+    return get_sync_summary_stats(
+        db_path,
+        user_id=user_id,
+        device_id=device_id,
+        days=days,
+    )
 
 
 @app.post("/api/journal")
