@@ -151,6 +151,59 @@ For sync launch validation and pre-flight checks, see [docs/sync/SYNC_HARDENING_
 
 ---
 
+## AI Assistance (GitHub Copilot)
+
+The `prompts/` folder contains ready-made instruction and prompt files that give
+GitHub Copilot context about the activity database so you can ask natural-language
+questions about your data directly from VS Code.
+
+| File | Purpose |
+|------|---------|
+| `prompts/copilot-instructions.md` | Full workspace context — DB schema, column descriptions, common query patterns, and coding conventions |
+| `prompts/query-activity.prompt.md` | Write or explain SQLite queries against `activity.db` |
+| `prompts/productivity-analysis.prompt.md` | Analyse focus time, deep-work blocks, peak hours, and distraction patterns |
+| `prompts/journal-insights.prompt.md` | Summarise or search journal entries and daily reflections |
+
+### Setup
+
+**1. Enable workspace instructions** — add the following to `.vscode/settings.json`:
+
+```json
+{
+  "github.copilot.chat.codeGeneration.instructions": [
+    { "file": "prompts/copilot-instructions.md" }
+  ]
+}
+```
+
+This loads the DB schema and project context into every Copilot Chat conversation
+automatically — no manual copy-pasting required.
+
+**2. Use the prompt files** — open Copilot Chat and type `/` to see the available
+slash commands:
+
+- `/query-activity` — e.g. *"total coding time per day this week"*
+- `/productivity-analysis` — e.g. *"what are my most focused hours of the day?"*
+- `/journal-insights` — e.g. *"summarise my wins from this week"*
+
+Each prompt will ask for your specific question before generating a response with
+both a plain-English analysis and the underlying SQL.
+
+### Example questions you can ask
+
+```
+How much time did I spend coding vs browsing today?
+What were my top three apps this week?
+Which git repos am I neglecting?
+When during the day do I do my best deep work?
+What patterns appear in my journal entries about feeling blocked?
+```
+
+> **Privacy note:** all queries run against your local `activity.db` file.
+> No data leaves your machine unless you explicitly share it.
+
+---
+
 ## Launch Test Quickstart (Sync)
 
 Before enabling sync for daily use, run:
