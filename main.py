@@ -13,6 +13,9 @@ from services.reporting import (
     export_activity_sessions,
     goal_drift_markdown,
     generate_weekly_report_markdown,
+    generate_monthly_report_markdown,
+    generate_sync_report_markdown,
+    generate_goals_report_markdown,
     write_weekly_report,
 )
 from services.sync_daemon import SyncDaemon, SyncDaemonSettings
@@ -103,6 +106,49 @@ def main() -> None:
         help="Optional output markdown file. Prints report to stdout when omitted.",
     )
     weekly_parser.add_argument(
+        "--goals",
+        default=str(default_goals_path()),
+        help="Path to goals yaml used for drift analysis.",
+    )
+
+    monthly_parser = report_subparsers.add_parser("monthly", help="Generate monthly report.")
+    monthly_parser.add_argument(
+        "--days",
+        type=int,
+        default=30,
+        help="Rolling window in days (default: 30).",
+    )
+    monthly_parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional output markdown file. Prints report to stdout when omitted.",
+    )
+    monthly_parser.add_argument(
+        "--goals",
+        default=str(default_goals_path()),
+        help="Path to goals yaml used for drift analysis.",
+    )
+
+    sync_report_parser = report_subparsers.add_parser("sync", help="Generate sync status report.")
+    sync_report_parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional output markdown file. Prints report to stdout when omitted.",
+    )
+
+    goals_report_parser = report_subparsers.add_parser("goals", help="Generate goal allocation report.")
+    goals_report_parser.add_argument(
+        "--days",
+        type=int,
+        default=7,
+        help="Rolling window in days (default: 7).",
+    )
+    goals_report_parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional output markdown file. Prints report to stdout when omitted.",
+    )
+    goals_report_parser.add_argument(
         "--goals",
         default=str(default_goals_path()),
         help="Path to goals yaml used for drift analysis.",
@@ -412,6 +458,12 @@ def main() -> None:
         run_export_command(args)
     elif args.command == "report" and args.report_command == "weekly":
         run_weekly_report_command(args)
+    elif args.command == "report" and args.report_command == "monthly":
+        run_monthly_report_command(args)
+    elif args.command == "report" and args.report_command == "sync":
+        run_sync_report_command(args)
+    elif args.command == "report" and args.report_command == "goals":
+        run_goals_report_command(args)
     elif args.command == "goals" and args.goals_command == "analyze":
         run_goals_analyze_command(args)
     elif args.command == "backup" and args.backup_command == "create":
@@ -479,6 +531,77 @@ def run_weekly_report_command(args: argparse.Namespace) -> None:
         return
 
     report = generate_weekly_report_markdown(
+        db_path=settings.database_path,
+        days=args.days,
+        goals_path=goals_arg,
+    )
+    print(report)
+
+
+def run_monthly_report_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    goals_path = Path(args.goals)
+    goals_arg = str(goals_path) if goals_path.exists() else None
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            generate_monthly_report_markdown(
+                db_path=settings.database_path,
+                days=args.days,
+                goals_path=goals_arg,
+            ),
+            encoding="utf-8",
+        )
+        print(f"Monthly report generated: {output_path}")
+        return
+
+    report = generate_monthly_report_markdown(
+        db_path=settings.database_path,
+        days=args.days,
+        goals_path=goals_arg,
+    )
+    print(report)
+
+
+def run_sync_report_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            generate_sync_report_markdown(db_path=settings.database_path),
+            encoding="utf-8",
+        )
+        print(f"Sync report generated: {output_path}")
+        return
+
+    report = generate_sync_report_markdown(db_path=settings.database_path)
+    print(report)
+
+
+def run_goals_report_command(args: argparse.Namespace) -> None:
+    settings = load_settings(args.config)
+    goals_path = Path(args.goals)
+    goals_arg = str(goals_path) if goals_path.exists() else None
+
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            generate_goals_report_markdown(
+                db_path=settings.database_path,
+                days=args.days,
+                goals_path=goals_arg,
+            ),
+            encoding="utf-8",
+        )
+        print(f"Goals report generated: {output_path}")
+        return
+
+    report = generate_goals_report_markdown(
         db_path=settings.database_path,
         days=args.days,
         goals_path=goals_arg,

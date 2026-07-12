@@ -9,6 +9,8 @@ from pathlib import Path
 
 import yaml
 
+from api.app import get_sync_health
+
 
 MEETING_SQL_PREDICATE = """
 (
@@ -78,6 +80,39 @@ def generate_weekly_report_markdown(
     goals_path: str | Path | None = None,
     now: datetime | None = None,
 ) -> str:
+    return _generate_activity_report_markdown(
+        db_path=db_path,
+        title="Week Summary",
+        days=days,
+        goals_path=goals_path,
+        now=now,
+    )
+
+
+def generate_monthly_report_markdown(
+    *,
+    db_path: str | Path,
+    days: int = 30,
+    goals_path: str | Path | None = None,
+    now: datetime | None = None,
+) -> str:
+    return _generate_activity_report_markdown(
+        db_path=db_path,
+        title="Month Summary",
+        days=days,
+        goals_path=goals_path,
+        now=now,
+    )
+
+
+def _generate_activity_report_markdown(
+    *,
+    db_path: str | Path,
+    title: str,
+    days: int,
+    goals_path: str | Path | None = None,
+    now: datetime | None = None,
+) -> str:
     now_utc = now or datetime.now(UTC)
     since = now_utc - timedelta(days=days)
 
@@ -138,7 +173,7 @@ def generate_weekly_report_markdown(
         )
 
     lines: list[str] = []
-    lines.append("# Week Summary")
+    lines.append(f"# {title}")
     lines.append("")
     lines.append(f"Range: {since.date().isoformat()} to {now_utc.date().isoformat()}")
     lines.append(f"Focus Time: {_format_hours(active_seconds)}")
@@ -168,6 +203,73 @@ def generate_weekly_report_markdown(
             now=now_utc,
         )
         lines.extend(_goal_drift_section(goal_drifts))
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def generate_goals_report_markdown(
+    *,
+    db_path: str | Path,
+    days: int = 7,
+    goals_path: str | Path | None = None,
+    now: datetime | None = None,
+) -> str:
+    goals_target = Path(goals_path) if goals_path is not None else default_goals_path()
+    if not goals_target.exists():
+        return "# Goals Report\n\nNo goals configured.\n"
+
+    drifts = analyze_goal_allocation(
+        db_path=db_path,
+        goals_path=goals_target,
+        days=days,
+        now=now,
+    )
+    lines = ["# Goals Report", ""]
+    lines.append(f"Range: last {days} days")
+    lines.append(f"Goals File: {goals_target}")
+    lines.extend(_goal_drift_section(drifts))
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def generate_sync_report_markdown(
+    *,
+    db_path: str | Path,
+) -> str:
+    health = get_sync_health(Path(db_path))
+    lines = ["# Sync Status Report", ""]
+    if not health.get("enabled"):
+        lines.append("No sync tokens or devices are configured yet.")
+        return "\n".join(lines).rstrip() + "\n"
+
+    lines.append(f"Registered Devices: {int(health.get('registered_devices') or 0)}")
+    lines.append(f"Synced Devices: {int(health.get('synced_devices') or 0)}")
+    lines.append(f"Active Tokens: {int(health.get('active_tokens') or 0)}")
+    lines.append(f"Last Sync: {health.get('last_sync_at') or '-'}")
+    lines.append(f"Pending Pull Rows: {int(health.get('pending_pull_rows') or 0)}")
+    lines.append(f"Open Sync Failures: {int(health.get('sync_failures') or 0)}")
+    lines.append("")
+    lines.append("Device Health")
+    if health.get("device_statuses"):
+        lines.append("| Device | Status | Last Sync | Pending Pull |")
+        lines.append("|---|---|---|---:|")
+        for item in health["device_statuses"]:
+            lines.append(
+                f"| {item.get('device_name') or item.get('device_id') or '-'} | {item.get('status') or '-'} | {item.get('last_sync_at') or '-'} | {int(item.get('pending_pull_rows') or 0)} |"
+            )
+    else:
+        lines.append("No device health records available yet.")
+
+    lines.append("")
+    lines.append("Recent Sync Errors")
+    if health.get("recent_errors"):
+        lines.append("| Time | Endpoint | Status | Error | Device |")
+        lines.append("|---|---|---:|---|---|")
+        for item in health["recent_errors"]:
+            lines.append(
+                f"| {item.get('created_at') or '-'} | {item.get('endpoint') or '-'} | {item.get('status_code') or '-'} | {item.get('error_type') or '-'}: {item.get('message') or ''} | {item.get('device_id') or '-'} |"
+            )
+    else:
+        lines.append("No sync failures recorded.")
 
     return "\n".join(lines).rstrip() + "\n"
 
@@ -252,15 +354,12 @@ def goal_drift_markdown(
     days: int = 7,
     now: datetime | None = None,
 ) -> str:
-    drifts = analyze_goal_allocation(
+    return generate_goals_report_markdown(
         db_path=db_path,
-        goals_path=goals_path,
         days=days,
+        goals_path=goals_path,
         now=now,
     )
-    lines = ["# Goal Allocation Report", ""]
-    lines.extend(_goal_drift_section(drifts))
-    return "\n".join(lines).rstrip() + "\n"
 
 
 def _goal_drift_section(drifts: list[GoalDrift]) -> list[str]:

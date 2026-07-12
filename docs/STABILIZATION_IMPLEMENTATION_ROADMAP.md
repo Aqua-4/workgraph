@@ -401,9 +401,9 @@ Implement:
 
 ### Verification Checklist
 
-- [ ] monthly report generates successfully
-- [ ] sync report includes devices, last sync, pending state, and failures
-- [ ] goals report surfaces drift summary clearly
+- [x] monthly report generates successfully
+- [x] sync report includes devices, last sync, pending state, and failures
+- [x] goals report surfaces drift summary clearly
 
 ---
 
@@ -580,10 +580,10 @@ Use this checklist as the execution backlog for the roadmap.
 
 ### H. Reporting
 
-- [ ] implement `workgraph report monthly`
-- [ ] implement `workgraph report sync`
-- [ ] implement `workgraph report goals`
-- [ ] ensure reports are deterministic and easy to verify
+- [x] implement `workgraph report monthly`
+- [x] implement `workgraph report sync`
+- [x] implement `workgraph report goals`
+- [x] ensure reports are deterministic and easy to verify
 
 ### I. Documentation and Operations
 
