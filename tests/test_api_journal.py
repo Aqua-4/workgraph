@@ -394,6 +394,9 @@ class JournalApiTests(unittest.TestCase):
         stats = get_summary_stats(self.db_path, days=7)
         self.assertEqual(stats["total_switches"], 2)
         self.assertAlmostEqual(stats["switch_rate_per_hour"], 1.33, places=2)
+        self.assertIsNotNone(stats["goal_drift"])
+        self.assertGreater(stats["goal_drift"]["goal_drift_score_pct_points"], 0)
+        self.assertGreater(stats["goal_drift"]["unmapped_pct"], 0)
 
     def test_summary_stats_merges_short_active_sessions_into_focus_blocks(self) -> None:
         with ActivityRepository(self.db_path) as repository:

@@ -371,11 +371,11 @@ Make the dashboard explain system state clearly.
 
 ### Verification Checklist
 
-- [ ] header shows mode/user/device/time range
-- [ ] standalone dashboard remains focused on local collection and journaling
-- [ ] sync-client dashboard shows local sync health and pending state
-- [ ] sync-server dashboard shows device health, queue state, and failures
-- [ ] goal drift appears visually
+- [x] header shows mode/user/device/time range
+- [x] standalone dashboard remains focused on local collection and journaling
+- [x] sync-client dashboard shows local sync health and pending state
+- [x] sync-server dashboard shows device health, queue state, and failures
+- [x] goal drift appears visually
 
 ---
 
@@ -571,12 +571,12 @@ Use this checklist as the execution backlog for the roadmap.
 
 ### G. Dashboard UX and Presentation
 
-- [ ] add a consistent header with mode, user, device, and time range
-- [ ] add a device health widget to the server dashboard
-- [ ] add a goal drift widget to the dashboard
-- [ ] add a sync status widget to the client dashboard
+- [x] add a consistent header with mode, user, device, and time range
+- [x] add a device health widget to the server dashboard
+- [x] add a goal drift widget to the dashboard
+- [x] add a sync status widget to the client dashboard
 - [ ] improve timeline columns for local and server views
-- [ ] standardize dashboard card layout for value, subtext, and trend
+- [x] standardize dashboard card layout for value, subtext, and trend
 
 ### H. Reporting
 

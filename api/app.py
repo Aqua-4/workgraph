@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field, field_validator
 import sqlite3
+import yaml
 
 from services.activity_tagger import ActivityTagger
 
@@ -1983,6 +1984,104 @@ def _resolve_settings_path() -> Path:
     return DEFAULT_SETTINGS_PATH
 
 
+def _resolve_goals_path() -> Path:
+    personal_path = Path("config/my-goals.yaml")
+    default_path = Path("config/goals.yaml")
+    if personal_path.exists():
+        return personal_path
+    return default_path
+
+
+def _load_goal_targets(path: Path | None = None) -> dict[str, float]:
+    goals_path = path or _resolve_goals_path()
+    if not goals_path.exists():
+        return {}
+
+    raw = yaml.safe_load(goals_path.read_text(encoding="utf-8")) or {}
+    goals_node = raw.get("goals", raw)
+    if not isinstance(goals_node, dict):
+        return {}
+
+    parsed: dict[str, float] = {}
+    for name, value in goals_node.items():
+        try:
+            parsed[str(name)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return parsed
+
+
+def _build_goal_drift_summary(
+    tag_stats: dict[str, object],
+    total_seconds: int,
+) -> dict[str, object] | None:
+    goals = _load_goal_targets()
+    if not goals or total_seconds <= 0:
+        return None
+
+    actual_by_goal: dict[str, float] = {}
+    configured_seconds = 0
+    for goal_name in goals:
+        seconds = int(tag_stats.get(goal_name, 0) or 0)
+        actual_by_goal[goal_name] = (seconds / total_seconds) * 100.0
+        configured_seconds += seconds
+
+    unmapped_seconds = max(total_seconds - configured_seconds, 0)
+    actual_by_goal["Unmapped"] = (unmapped_seconds / total_seconds) * 100.0
+
+    planned_distribution = dict(goals)
+    planned_distribution["Unmapped"] = 0.0
+
+    drift_items: list[dict[str, object]] = []
+    for goal_name, planned_pct in planned_distribution.items():
+        actual_pct = actual_by_goal.get(goal_name, 0.0)
+        delta_pct_points = actual_pct - planned_pct
+        drift_items.append(
+            {
+                "goal": goal_name,
+                "planned_pct": round(float(planned_pct), 2),
+                "actual_pct": round(actual_pct, 2),
+                "delta_pct_points": round(delta_pct_points, 2),
+                "relative_gap_pct": round(((planned_pct - actual_pct) / planned_pct) * 100.0, 2)
+                if planned_pct > 0
+                else 0.0,
+            }
+        )
+
+    drift_items.sort(key=lambda item: abs(float(item["delta_pct_points"])), reverse=True)
+    score = sum(abs(float(item["delta_pct_points"])) for item in drift_items) / 2.0
+
+    largest_gap = drift_items[0] if drift_items else None
+    return {
+        "goals_path": str(_resolve_goals_path()),
+        "goal_targets": planned_distribution,
+        "goal_drift_items": drift_items,
+        "goal_drift_score_pct_points": round(score, 2),
+        "goal_coverage_pct": round(sum(actual_by_goal.get(goal_name, 0.0) for goal_name in goals), 2),
+        "unmapped_pct": round(actual_by_goal.get("Unmapped", 0.0), 2),
+        "largest_gap": largest_gap,
+    }
+
+
+def _build_dashboard_header_context(
+    *,
+    dashboard_mode: str,
+    source: str,
+    days: int,
+    selected_user_id: str | None = None,
+    selected_device_id: str | None = None,
+    selected_user_name: str | None = None,
+    selected_device_name: str | None = None,
+) -> dict[str, object]:
+    return {
+        "mode": dashboard_mode,
+        "source": source,
+        "time_range": f"Last {days} day{'s' if days != 1 else ''}",
+        "user": selected_user_name or selected_user_id or "All users",
+        "device": selected_device_name or selected_device_id or "All devices",
+    }
+
+
 def _read_simple_yaml(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
@@ -2522,6 +2621,7 @@ def get_sync_summary_stats(
     tagged_ratio = (tagged_active_seconds / total_seconds) if total_seconds else 0
     meeting_ratio = (meeting_seconds / total_seconds) if total_seconds else 0
     switch_rate_per_hour = total_switches / active_hours if active_hours else 0
+    goal_drift = _build_goal_drift_summary(tag_stats, total_seconds)
 
     return {
         "tag_stats": tag_stats,
@@ -2544,6 +2644,7 @@ def get_sync_summary_stats(
         "avg_focus_sec": int(avg_focus_sec or 0),
         "avg_focus_minutes": round((avg_focus_sec or 0) / 60, 1),
         "daily_trend": daily_trend,
+        "goal_drift": goal_drift,
     }
 
 
@@ -3028,6 +3129,7 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     tagged_ratio = (tagged_active_seconds / total_seconds) if total_seconds else 0
     meeting_ratio = (meeting_seconds / total_seconds) if total_seconds else 0
     switch_rate_per_hour = total_switches / active_hours if active_hours else 0
+    goal_drift = _build_goal_drift_summary(tag_stats, total_seconds)
 
     return {
         "tag_stats": tag_stats,
@@ -3050,6 +3152,7 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
         "avg_focus_sec": int(avg_focus_sec or 0),
         "avg_focus_minutes": round((avg_focus_sec or 0) / 60, 1),
         "daily_trend": daily_trend,
+        "goal_drift": goal_drift,
     }
 
 
@@ -3074,11 +3177,28 @@ async def dashboard(
             days=7,
         )
         sync_health = get_sync_health(db_path)
+        selected_user = next(
+            (item for item in overview.get("users", []) if str(item.get("id")) == str(overview.get("selected_user_id") or "")),
+            None,
+        )
+        selected_device = next(
+            (item for item in overview.get("devices", []) if str(item.get("id")) == str(overview.get("selected_device_id") or "")),
+            None,
+        )
         template = jinja_env.get_template("sync_server_dashboard.html")
         return template.render(
             dashboard_mode=dashboard_mode,
             overview=overview,
             sync_health=sync_health,
+            page_context=_build_dashboard_header_context(
+                dashboard_mode=dashboard_mode,
+                source="sync",
+                days=7,
+                selected_user_id=str(overview.get("selected_user_id") or "") or None,
+                selected_device_id=str(overview.get("selected_device_id") or "") or None,
+                selected_user_name=str(selected_user.get("name") or selected_user.get("id") or "") if selected_user else None,
+                selected_device_name=str(selected_device.get("name") or selected_device.get("id") or "") if selected_device else None,
+            ),
         )
 
     normalized_source = _source_for_dashboard_mode(dashboard_mode)
@@ -3121,6 +3241,15 @@ async def dashboard(
         source=normalized_source,
         selected_user_id=resolved_user_id,
         selected_device_id=device_id,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source=normalized_source,
+            days=7,
+            selected_user_id=resolved_user_id,
+            selected_device_id=device_id,
+            selected_user_name=str(client_sync_status.get("user_id") or "") if client_sync_status else resolved_user_id,
+            selected_device_name=str(client_sync_status.get("device_id") or "") if client_sync_status else device_id,
+        ),
     )
 
 
@@ -3239,6 +3368,18 @@ async def timeline(
             device_name_map=device_name_map,
             device_activity=device_activity[:10],
             app_activity=app_activity[:10],
+            page_context=_build_dashboard_header_context(
+                dashboard_mode=dashboard_mode,
+                source="sync",
+                days=days,
+                selected_user_id=resolved_user_id,
+                selected_device_id=resolved_device_id,
+                selected_user_name=next(
+                    (str(item.get("name") or item.get("id") or "") for item in overview.get("users", []) if str(item.get("id")) == str(resolved_user_id or "")),
+                    None,
+                ),
+                selected_device_name=device_name_map.get(resolved_device_id) if resolved_device_id else None,
+            ),
         )
 
     default_source = _source_for_dashboard_mode(dashboard_mode)
@@ -3288,6 +3429,15 @@ async def timeline(
         chart_sessions=chart_sessions,
         sync_health=sync_health,
         dashboard_mode=dashboard_mode,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source=normalized_source,
+            days=days,
+            selected_user_id=user_id,
+            selected_device_id=device_id,
+            selected_user_name=user_id,
+            selected_device_name=device_id,
+        ),
     )
 
 

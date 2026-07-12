@@ -320,6 +320,63 @@
         </div>
     </div>
 
+    {% if stats.goal_drift %}
+    <h2>Goal Drift</h2>
+    <div class="card">
+        <div class="stats-grid" style="margin-bottom: 0;">
+            <div class="metric-card">
+                <div class="metric-card__label">Drift Score</div>
+                <div class="metric-card__value">{{ "%.1f"|format(stats.goal_drift.goal_drift_score_pct_points) }}%</div>
+                <div class="metric-card__subtext">Total allocation mismatch across configured goals.</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card__label">Goal Coverage</div>
+                <div class="metric-card__value">{{ "%.1f"|format(stats.goal_drift.goal_coverage_pct) }}%</div>
+                <div class="metric-card__subtext">Tagged time aligned to configured goal categories.</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card__label">Unmapped Time</div>
+                <div class="metric-card__value">{{ "%.1f"|format(stats.goal_drift.unmapped_pct) }}%</div>
+                <div class="metric-card__subtext">Time that has no matching goal tag and drifts outside the plan.</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card__label">Largest Gap</div>
+                <div class="metric-card__value" style="font-size: 1.5rem;">{{ stats.goal_drift.largest_gap.goal }}</div>
+                <div class="metric-card__subtext">
+                    {% if stats.goal_drift.largest_gap %}
+                    planned {{ "%.1f"|format(stats.goal_drift.largest_gap.planned_pct) }}%, actual {{ "%.1f"|format(stats.goal_drift.largest_gap.actual_pct) }}%
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if stats.goal_drift.goal_drift_items %}
+        <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Goal</th>
+                        <th>Planned</th>
+                        <th>Actual</th>
+                        <th>Delta</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in stats.goal_drift.goal_drift_items %}
+                    <tr>
+                        <td>{{ item.goal }}</td>
+                        <td>{{ "%.1f"|format(item.planned_pct) }}%</td>
+                        <td>{{ "%.1f"|format(item.actual_pct) }}%</td>
+                        <td>{{ "+" if item.delta_pct_points > 0 else "" }}{{ "%.1f"|format(item.delta_pct_points) }} pts</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <h2>Time by Goal (Tagged)</h2>
     <div class="card">
         {% if stats.tag_stats %}

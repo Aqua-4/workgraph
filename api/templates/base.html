@@ -107,6 +107,78 @@
             margin: 10px 0;
         }
 
+        .metric-card,
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .metric-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid #e5eef9;
+            border-radius: 14px;
+            padding: 18px 20px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .metric-card__label {
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+        }
+
+        .metric-card__value {
+            font-size: clamp(1.7rem, 2vw, 2.3rem);
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1;
+        }
+
+        .metric-card__subtext {
+            color: #64748b;
+            font-size: 0.92rem;
+            line-height: 1.45;
+        }
+
+        .metric-card__trend {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #0f766e;
+        }
+
+        .page-context {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 18px;
+            padding: 16px 18px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+            border: 1px solid #dbeafe;
+        }
+
+        .page-context__item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .page-context__label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .page-context__value {
+            color: #0f172a;
+            font-weight: 600;
+        }
+
         .stat-label {
             font-size: 0.9em;
             color: #666;
@@ -313,6 +385,30 @@
                 <a href="/journal" class="{% block nav_journal %}{% endblock %}">Journal</a>
                 {% endif %}
             </nav>
+            {% if page_context %}
+            <div class="page-context">
+                <div class="page-context__item">
+                    <span class="page-context__label">Mode</span>
+                    <span class="page-context__value">{{ page_context.mode }}</span>
+                </div>
+                <div class="page-context__item">
+                    <span class="page-context__label">Source</span>
+                    <span class="page-context__value">{{ page_context.source }}</span>
+                </div>
+                <div class="page-context__item">
+                    <span class="page-context__label">User</span>
+                    <span class="page-context__value">{{ page_context.user }}</span>
+                </div>
+                <div class="page-context__item">
+                    <span class="page-context__label">Device</span>
+                    <span class="page-context__value">{{ page_context.device }}</span>
+                </div>
+                <div class="page-context__item">
+                    <span class="page-context__label">Time Range</span>
+                    <span class="page-context__value">{{ page_context.time_range }}</span>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </header>
 
