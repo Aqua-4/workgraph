@@ -34,6 +34,21 @@
         {% endif %}
     </div>
 
+    {% if dashboard_mode == "sync-client" and client_sync and client_sync.registered %}
+    <div class="card" style="margin-bottom: 12px;">
+        <h3 style="margin-top: 0;">Sync Client Status</h3>
+        <div class="stat-label" style="margin-bottom: 8px; color: #166534;">Device already registered</div>
+        <div style="font-size: 0.9em; color: #4b5563; line-height: 1.6;">
+            <div><strong>Last Synced:</strong> {{ client_sync.last_synced_at|human_datetime }}</div>
+            {% if client_sync.user_id %}
+            <div><strong>User ID:</strong> {{ client_sync.user_id }}</div>
+            {% endif %}
+            {% if client_sync.device_id %}
+            <div><strong>Device ID:</strong> {{ client_sync.device_id }}</div>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
     <div class="card" style="margin-bottom: 12px;">
         <h3 style="margin-top: 0;">Device Registration</h3>
         <div style="font-size: 0.9em; color: #6b7280; margin-bottom: 10px;">
@@ -50,6 +65,7 @@
             <input
                 type="text"
                 id="register-sync-base-url"
+                value="{{ client_sync.sync_base_url if client_sync else '' }}"
                 placeholder="sync_base_url (e.g. http://192.168.1.10:8000)"
                 style="grid-column: 1 / -1;"
             />
@@ -75,6 +91,7 @@
             </div>
         </form>
     </div>
+    {% endif %}
 
     {% if sync_health %}
     <h2>Sync Health</h2>

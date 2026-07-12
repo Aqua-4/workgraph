@@ -1695,6 +1695,55 @@ def _configured_dashboard_mode() -> str:
     return _normalize_dashboard_mode(configured_mode)
 
 
+def _configured_sync_client_status(db_path: Path) -> dict[str, object]:
+    settings_path = _resolve_settings_path()
+    raw_values = _read_simple_yaml(settings_path)
+    sync_token = str(raw_values.get("sync_token", "") or "").strip()
+    sync_base_url = str(raw_values.get("sync_base_url", "") or "").strip()
+
+    status: dict[str, object] = {
+        "registered": bool(sync_token),
+        "sync_base_url": sync_base_url,
+        "last_synced_at": None,
+        "device_id": None,
+        "user_id": None,
+    }
+
+    if not db_path.exists():
+        return status
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        sync_state_table = conn.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'sync_state'
+            """
+        ).fetchone()
+        if sync_state_table is None:
+            return status
+
+        state = conn.execute(
+            """
+            SELECT device_id, user_id, last_push_cursor, last_pull_cursor, updated_at
+            FROM sync_state
+            WHERE id = 1
+            """
+        ).fetchone()
+        if state is None:
+            return status
+
+        status["device_id"] = state["device_id"]
+        status["user_id"] = state["user_id"]
+        if state["last_push_cursor"] or state["last_pull_cursor"]:
+            status["last_synced_at"] = state["updated_at"]
+        return status
+    finally:
+        conn.close()
+
+
 def _source_for_dashboard_mode(mode: str) -> str:
     return "sync" if mode == "sync-server" else "local"
 
@@ -2548,6 +2597,12 @@ async def dashboard(
 
     normalized_source = _source_for_dashboard_mode(dashboard_mode)
     resolved_user_id = user_id
+    client_sync_status: dict[str, object] | None = None
+    if dashboard_mode == "sync-client":
+        client_sync_status = _configured_sync_client_status(db_path)
+        if resolved_user_id is None and client_sync_status.get("user_id"):
+            resolved_user_id = str(client_sync_status["user_id"])
+
     if normalized_source == "sync":
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
@@ -2568,6 +2623,7 @@ async def dashboard(
     return template.render(
         stats=stats,
         sync_health=sync_health,
+        client_sync=client_sync_status,
         dashboard_mode=dashboard_mode,
         source=normalized_source,
         selected_user_id=resolved_user_id,

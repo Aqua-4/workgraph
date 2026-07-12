@@ -937,6 +937,40 @@ class SyncApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Sync Server Dashboard", response.text)
 
+    def test_dashboard_sync_client_shows_status_when_registered(self) -> None:
+        bootstrap = self.client.post(
+            "/api/device/register",
+            json={
+                "mode": "standalone",
+                "user": {"id": "user-bootstrap", "name": "Bootstrap User"},
+                "device": {
+                    "id": "device-bootstrap-1",
+                    "name": "Bootstrap Device",
+                    "type": "personal",
+                    "hostname": "BP-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(bootstrap.status_code, 200)
+
+        with patch(
+            "api.app._configured_sync_client_status",
+            return_value={
+                "registered": True,
+                "sync_base_url": "http://127.0.0.1:8000",
+                "last_synced_at": "2026-07-12T12:34:56+00:00",
+                "device_id": "device-client-1",
+                "user_id": "user-client-1",
+            },
+        ), patch("api.app._configured_dashboard_mode", return_value="sync-client"):
+            response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Sync Client Status", response.text)
+        self.assertIn("Last Synced:", response.text)
+        self.assertNotIn("Register On Sync Server", response.text)
+
 
 if __name__ == "__main__":
     unittest.main()
