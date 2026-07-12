@@ -856,6 +856,49 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _query_overlapping_activity_sessions(
+    conn: sqlite3.Connection,
+    *,
+    start_time: str,
+    end_time: str,
+    limit: int,
+) -> list[dict]:
+    # Fresh databases may not have collector sessions yet.
+    try:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM activity_sessions
+            WHERE start_time < ?
+              AND end_time > ?
+            ORDER BY start_time ASC
+            LIMIT ?
+            """,
+            (end_time, start_time, limit),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+
+    return [dict(row) for row in rows]
+
+
+def _build_correlation_summary(sessions: list[dict]) -> dict:
+    active_sessions = [s for s in sessions if not bool(s.get("is_idle"))]
+    total_active_seconds = sum(int(s.get("duration_sec") or 0) for s in active_sessions)
+    total_switches = sum(int(s.get("context_switches") or 0) for s in active_sessions)
+    apps = sorted({str(s.get("app_name")) for s in active_sessions if s.get("app_name")})
+    repos = sorted({str(s.get("git_repo")) for s in active_sessions if s.get("git_repo")})
+    return {
+        "session_count": len(sessions),
+        "active_session_count": len(active_sessions),
+        "total_active_seconds": total_active_seconds,
+        "total_active_hours": round(total_active_seconds / 3600, 2),
+        "total_context_switches": total_switches,
+        "apps": apps,
+        "repos": repos,
+    }
+
+
 def _log_sync_request(
     conn: sqlite3.Connection,
     *,
@@ -3142,6 +3185,110 @@ async def list_work_events(
     return {"events": rows, "count": len(rows)}
 
 
+@app.get("/api/work-events/{event_id}")
+async def get_work_event(event_id: int):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+
+    row = conn.execute(
+        "SELECT * FROM work_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    conn.close()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Work event not found")
+
+    return {"event": _serialize_work_event_row(row)}
+
+
+@app.put("/api/work-events/{event_id}")
+async def update_work_event(event_id: int, payload: WorkEventCreate):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM work_events WHERE id = ?", (event_id,))
+    if cursor.fetchone() is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Work event not found")
+
+    event_time_iso = _to_utc_iso(payload.event_time)
+    cursor.execute(
+        """
+        UPDATE work_events
+        SET event_time = ?,
+            event_type = ?,
+            title = ?,
+            impact = ?,
+            project = ?,
+            notes = ?,
+            metadata = ?
+        WHERE id = ?
+        """,
+        (
+            event_time_iso,
+            payload.event_type,
+            payload.title,
+            payload.impact,
+            payload.project,
+            payload.notes,
+            json.dumps(payload.metadata) if payload.metadata is not None else None,
+            event_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": event_id, "updated": True}
+
+
+@app.get("/api/work-events/{event_id}/correlated-sessions")
+async def correlated_work_event_sessions(event_id: int, limit: int = Query(500, ge=1, le=1000)):
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+
+    event_row = conn.execute(
+        "SELECT * FROM work_events WHERE id = ?",
+        (event_id,),
+    ).fetchone()
+    if event_row is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Work event not found")
+
+    event = _serialize_work_event_row(event_row)
+    point_time = event.get("event_time") or event.get("created_at")
+    if not point_time:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Work event has no timestamp")
+
+    point_dt = datetime.fromisoformat(str(point_time).replace("Z", "+00:00"))
+    end_dt = point_dt + timedelta(seconds=1)
+    start_time = point_dt.isoformat(timespec="seconds")
+    end_time = end_dt.isoformat(timespec="seconds")
+
+    sessions = _query_overlapping_activity_sessions(
+        conn,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+    )
+    summary = _build_correlation_summary(sessions)
+    conn.close()
+
+    return {
+        "event_id": event_id,
+        "range": {"start_time": start_time, "end_time": start_time},
+        "summary": summary,
+        "sessions": sessions,
+    }
+
+
 @app.get("/api/journal/{journal_id}")
 async def get_journal_entry(journal_id: int):
     """Get one journal entry by id."""
@@ -3234,43 +3381,19 @@ async def correlated_sessions(journal_id: int, limit: int = Query(500, ge=1, le=
     if not end_time:
         end_time = start_time
 
-    # Fresh databases may have journals before any collector sessions.
-    # Return an empty correlation instead of surfacing SQL errors.
-    try:
-        cursor.execute(
-            """
-            SELECT *
-            FROM activity_sessions
-            WHERE start_time < ?
-              AND end_time > ?
-            ORDER BY start_time ASC
-            LIMIT ?
-            """,
-            (end_time, start_time, limit),
-        )
-        sessions = [dict(row) for row in cursor.fetchall()]
-    except sqlite3.OperationalError:
-        sessions = []
-
-    active_sessions = [s for s in sessions if not bool(s.get("is_idle"))]
-    total_active_seconds = sum(int(s.get("duration_sec") or 0) for s in active_sessions)
-    total_switches = sum(int(s.get("context_switches") or 0) for s in active_sessions)
-    apps = sorted({str(s.get("app_name")) for s in active_sessions if s.get("app_name")})
-    repos = sorted({str(s.get("git_repo")) for s in active_sessions if s.get("git_repo")})
+    sessions = _query_overlapping_activity_sessions(
+        conn,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+    )
+    summary = _build_correlation_summary(sessions)
 
     conn.close()
     return {
         "journal_id": journal_id,
         "range": {"start_time": start_time, "end_time": end_time},
-        "summary": {
-            "session_count": len(sessions),
-            "active_session_count": len(active_sessions),
-            "total_active_seconds": total_active_seconds,
-            "total_active_hours": round(total_active_seconds / 3600, 2),
-            "total_context_switches": total_switches,
-            "apps": apps,
-            "repos": repos,
-        },
+        "summary": summary,
         "sessions": sessions,
     }
 
@@ -3325,6 +3448,74 @@ async def upsert_reflection(date: str, payload: ReflectionUpsert):
     conn.commit()
     conn.close()
     return {"date": date, "saved": True}
+
+
+@app.get("/api/reflections/{date}")
+async def get_reflection(date: str):
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
+
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+
+    row = conn.execute(
+        "SELECT * FROM daily_reflections WHERE date = ?",
+        (date,),
+    ).fetchone()
+    conn.close()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Reflection not found")
+
+    return {"reflection": dict(row)}
+
+
+@app.get("/api/reflections/{date}/correlated-sessions")
+async def correlated_reflection_sessions(date: str, limit: int = Query(500, ge=1, le=1000)):
+    try:
+        day_start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
+
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+
+    row = conn.execute(
+        "SELECT id FROM daily_reflections WHERE date = ?",
+        (date,),
+    ).fetchone()
+    if row is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Reflection not found")
+
+    day_end = day_start + timedelta(days=1)
+    start_time = day_start.isoformat(timespec="seconds")
+    end_time = day_end.isoformat(timespec="seconds")
+
+    sessions = _query_overlapping_activity_sessions(
+        conn,
+        start_time=start_time,
+        end_time=end_time,
+        limit=limit,
+    )
+    summary = _build_correlation_summary(sessions)
+    conn.close()
+
+    return {
+        "date": date,
+        "range": {
+            "start_time": start_time,
+            "end_time": (day_end - timedelta(seconds=1)).isoformat(timespec="seconds"),
+        },
+        "summary": summary,
+        "sessions": sessions,
+    }
 
 
 @app.get("/api/reflections")
