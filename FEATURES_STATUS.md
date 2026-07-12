@@ -2,9 +2,9 @@
 
 Code-verified feature matrix for the current repository state.
 
-Last verified: 2026-07-11
+Last verified: 2026-07-12
 Verification basis:
-- Unit tests: `uv run python -m unittest discover -s tests`
+- Unit tests: `uv run python -m unittest tests.test_sync_api tests.test_sync_worker tests.test_sync_daemon`
 - Source inspection of collector, API, services, and repository layers
 
 ## Legend
@@ -48,7 +48,11 @@ Verification basis:
 | Correlated sessions for journal windows | Implemented | Correlation endpoint with overlap summary |
 | Daily reflections API | Implemented | Upsert and list reflections |
 | Weekly reports | Implemented | CLI report generator with deterministic markdown output |
-| Server SQLite sync backend (via API) | Partial | Client-side sync worker and daemon exist; server sync API/storage still pending |
+| Server SQLite sync backend (via API) | Implemented | Device register, push, pull, idempotent batches, and checkpoints |
+| Sync analytics mode (`source=sync`) | Implemented | Dashboard and `/api/stats` support explicit sync source |
+| Sync metadata endpoints | Implemented | `/api/sync/users` and `/api/sync/devices` |
+| Sync rollup endpoints | Implemented | `/api/sync/stats` and `/api/sync/rollups/rebuild` |
+| User-scoped sync isolation | Implemented | Pull/analytics enforce user scoping; schema supports user-scoped uuid uniqueness |
 | PostgreSQL backend for multi-device sync | Planned | Deferred to optional v3 backend after SQLite sync service is stable |
 | Activity export (JSON, CSV, Markdown) | Implemented | CLI exports session data in multiple formats |
 
@@ -75,4 +79,5 @@ Verification basis:
 
 - CLI supports collector flags plus `export`, `report weekly`, and `goals analyze` subcommands.
 - Retag flow creates a backup before rewriting tags for existing sessions.
+- Sync daemon failure/backoff does not block local collection or dashboard runtime.
 - This file should be updated alongside roadmap changes in README.

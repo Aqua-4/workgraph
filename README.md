@@ -94,6 +94,7 @@ This kind of insight isn't commonly available in time tracking tools, but it's e
 
 For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STATUS.md).
 For multi-device sync setup steps (server + device configuration), see [docs/sync/MULTI_DEVICE_SETUP.md](docs/sync/MULTI_DEVICE_SETUP.md).
+For sync launch validation and pre-flight checks, see [docs/sync/SYNC_HARDENING_LAUNCH.md](docs/sync/SYNC_HARDENING_LAUNCH.md).
 
 ### Version 1.0 — Collection Foundation
 
@@ -121,7 +122,11 @@ For multi-device sync setup steps (server + device configuration), see [docs/syn
 * Weekly report generator (`workgraph report weekly`)
 * Goal allocation drift analysis (`workgraph goals analyze`)
 * Activity export (`workgraph export csv|json|markdown`)
-* Server SQLite backend for multi-device sync via sync API *(in progress)*
+* Server SQLite backend for multi-device sync via sync API
+* Sync analytics from extracted `sync_sessions` columns + daily rollups
+* Explicit dashboard/API source mode (`local` or `sync`)
+* Sync metadata endpoints (`/api/sync/users`, `/api/sync/devices`)
+* Sync rollup controls (`/api/sync/stats`, `/api/sync/rollups/rebuild`)
 
 ### Version 2.0 — Analytics Engine
 
@@ -141,9 +146,20 @@ For multi-device sync setup steps (server + device configuration), see [docs/syn
 ### Future
 
 * **Meeting detection** — Automatically detect meeting time from Teams, Zoom, Google Meet, and Webex windows
-* Raspberry Pi sync API server with server-side SQLite (default)
 * PostgreSQL backend as optional v3 storage upgrade
 * Mobile companion app
+
+---
+
+## Launch Test Quickstart (Sync)
+
+Before enabling sync for daily use, run:
+
+```bash
+uv run python -m unittest tests.test_sync_api tests.test_sync_worker tests.test_sync_daemon
+```
+
+Then validate sync-mode dashboard/API flows using the checklist in [docs/sync/SYNC_HARDENING_LAUNCH.md](docs/sync/SYNC_HARDENING_LAUNCH.md).
 
 ---
 
