@@ -504,11 +504,11 @@ class JournalApiTests(unittest.TestCase):
         self.assertIn("Sync Health", journal_response.text)
         self.assertIn("registered, not synced yet", journal_response.text)
 
-    def test_dashboard_shows_sync_health_even_without_registered_devices(self) -> None:
+    def test_dashboard_hides_sync_health_in_standalone_mode(self) -> None:
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Sync Health", response.text)
-        self.assertIn("No devices registered yet.", response.text)
+        self.assertNotIn("Sync Health", response.text)
+        self.assertNotIn("No devices registered yet.", response.text)
 
 
 if __name__ == "__main__":

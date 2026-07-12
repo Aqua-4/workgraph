@@ -969,7 +969,13 @@ class SyncApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Sync Client Status", response.text)
         self.assertIn("Last Synced:", response.text)
+        self.assertNotIn("Sync Health", response.text)
         self.assertNotIn("Register On Sync Server", response.text)
+        self.assertNotIn("Registered Devices", response.text)
+        self.assertNotIn("Active Tokens", response.text)
+        self.assertNotIn("No devices registered yet.", response.text)
+        self.assertNotIn("User ID:", response.text)
+        self.assertNotIn("Device ID:", response.text)
 
 
 if __name__ == "__main__":

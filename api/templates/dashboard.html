@@ -21,11 +21,6 @@
         <div style="font-size: 0.95em; color: #4b5563;">
             Local-only dashboard and collection. No remote sync APIs are required.
         </div>
-        {% elif dashboard_mode == "sync-client" %}
-        <div class="stat-label" style="margin-bottom: 8px;">Sync Client Mode</div>
-        <div style="font-size: 0.95em; color: #4b5563;">
-            Local dashboard remains primary. Register this device on your sync server to obtain a device token.
-        </div>
         {% else %}
         <div class="stat-label" style="margin-bottom: 8px;">Sync Server Mode</div>
         <div style="font-size: 0.95em; color: #4b5563;">
@@ -40,12 +35,6 @@
         <div class="stat-label" style="margin-bottom: 8px; color: #166534;">Device already registered</div>
         <div style="font-size: 0.9em; color: #4b5563; line-height: 1.6;">
             <div><strong>Last Synced:</strong> {{ client_sync.last_synced_at|human_datetime }}</div>
-            {% if client_sync.user_id %}
-            <div><strong>User ID:</strong> {{ client_sync.user_id }}</div>
-            {% endif %}
-            {% if client_sync.device_id %}
-            <div><strong>Device ID:</strong> {{ client_sync.device_id }}</div>
-            {% endif %}
         </div>
     </div>
     {% else %}
@@ -93,7 +82,7 @@
     </div>
     {% endif %}
 
-    {% if sync_health %}
+    {% if dashboard_mode == "sync-server" and sync_health %}
     <h2>Sync Health</h2>
     <div class="card">
         {% if sync_health.registered_devices == 0 %}
