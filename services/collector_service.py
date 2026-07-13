@@ -83,7 +83,11 @@ class CollectorService:
     def collect_once(self) -> None:
         active_window = self.window_tracker.get_active_window()
         idle_state = self.idle_tracker.get_idle_state()
-        git_activity = self.git_tracker.get_activity()
+        git_activity = self.git_tracker.get_activity(
+            pid=active_window.process_id,
+            app_name=active_window.app_name,
+            window_title=active_window.window_title,
+        )
 
         sample = ActivitySample(
             observed_at=utc_now(),
