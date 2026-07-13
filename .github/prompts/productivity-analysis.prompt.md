@@ -1,5 +1,5 @@
 ---
-mode: ask
+agent: ask
 description: Analyse productivity patterns from the workgraph activity database and surface actionable insights.
 ---
 

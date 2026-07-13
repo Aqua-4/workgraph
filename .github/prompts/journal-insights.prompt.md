@@ -1,5 +1,5 @@
 ---
-mode: ask
+agent: ask
 description: Summarise, search, or draw insights from workgraph journal entries and daily reflections.
 ---
 

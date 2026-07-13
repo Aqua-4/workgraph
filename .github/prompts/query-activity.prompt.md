@@ -1,5 +1,5 @@
 ---
-mode: ask
+agent: ask
 description: Write and explain SQLite queries against the workgraph activity database.
 ---
 
