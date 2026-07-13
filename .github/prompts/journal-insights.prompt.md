@@ -1,5 +1,5 @@
 ---
-agent: ask
+agent: agent
 description: Summarise, search, or draw insights from workgraph journal entries and daily reflections.
 ---
 

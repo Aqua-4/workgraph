@@ -1,5 +1,5 @@
 ---
-agent: ask
+agent: agent
 description: Analyse productivity patterns from the workgraph activity database and surface actionable insights.
 ---
 
