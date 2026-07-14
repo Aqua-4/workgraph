@@ -93,8 +93,10 @@ This kind of insight isn't commonly available in time tracking tools, but it's e
 ## Features
 
 For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STATUS.md).
+For dashboard, timeline, journal, and API usage, see [DASHBOARD.md](DASHBOARD.md).
 For multi-device sync setup steps (server + device configuration), see [docs/sync/MULTI_DEVICE_SETUP.md](docs/sync/MULTI_DEVICE_SETUP.md).
 For sync launch validation and pre-flight checks, see [docs/sync/SYNC_HARDENING_LAUNCH.md](docs/sync/SYNC_HARDENING_LAUNCH.md).
+For the full documentation index, see [docs/README.md](docs/README.md).
 
 ### Version 1.0 — Collection Foundation
 
@@ -310,6 +312,16 @@ Future Analytics Engine
 ```text
 workgraph/
 │
+├── api/
+│   ├── app.py
+│   └── templates/
+│       ├── base.html
+│       ├── dashboard.html
+│       ├── journal.html
+│       ├── timeline.html
+│       ├── sync_server_dashboard.html
+│       └── sync_server_timeline.html
+│
 ├── collector/
 │   ├── window_tracker.py
 │   ├── browser_tracker.py
@@ -320,8 +332,17 @@ workgraph/
 │   └── session_builder.py
 │
 ├── services/
+│   ├── activity_tagger.py
 │   ├── collector_service.py
-│   └── activity_tagger.py
+│   ├── collector_supervisor.py
+│   ├── reporting.py
+│   ├── sync_daemon.py
+│   ├── sync_worker.py
+│   ├── tag_migration.py
+│   └── unified_launcher.py
+│
+├── workgraph/
+│   └── models.py
 │
 ├── db/
 │   ├── repository.py
@@ -329,14 +350,23 @@ workgraph/
 │
 ├── config/
 │   ├── settings.yaml
-│   └── tags.yaml
+│   ├── tags.yaml
+│   ├── goals.yaml
+│   └── identity.json
 │
+├── docs/
+│   ├── architecture-overview.md
+│   ├── DASHBOARD_FEATURES_AND_LOGIC.md
+│   ├── STABILIZATION_IMPLEMENTATION_ROADMAP.md
+│   ├── UI_NOTES.md
+│   ├── operations/
+│   └── sync/
+│
+├── backups/
 ├── logs/
-│
 ├── tests/
 │
 ├── activity.db
-│
 ├── main.py
 │
 └── README.md
