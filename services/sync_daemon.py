@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 import signal
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from services.sync_worker import SyncWorker
 
@@ -13,9 +13,9 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SyncDaemonSettings:
-    interval_seconds: float = 60.0
-    backoff_base_seconds: float = 1.0
-    backoff_max_seconds: float = 60.0
+    interval_seconds: float = 300.0
+    backoff_base_seconds: float = 10.0
+    backoff_max_seconds: float = 300.0
 
 
 class SyncDaemon:
@@ -46,7 +46,9 @@ class SyncDaemon:
             except Exception as exc:  # pragma: no cover - covered via run_cycles tests
                 LOGGER.exception("Sync cycle failed: %s", exc)
                 self.sleep_fn(current_backoff)
-                current_backoff = min(current_backoff * 2, self.settings.backoff_max_seconds)
+                current_backoff = min(
+                    current_backoff * 2, self.settings.backoff_max_seconds
+                )
 
     def run_cycles(self, cycles: int) -> dict[str, int]:
         success = 0
@@ -62,7 +64,9 @@ class SyncDaemon:
             except Exception:
                 errors += 1
                 self.sleep_fn(current_backoff)
-                current_backoff = min(current_backoff * 2, self.settings.backoff_max_seconds)
+                current_backoff = min(
+                    current_backoff * 2, self.settings.backoff_max_seconds
+                )
 
         return {"success": success, "errors": errors}
 

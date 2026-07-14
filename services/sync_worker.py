@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib import error, request
@@ -9,11 +10,9 @@ from db.repository import ActivityRepository
 
 
 class SyncClient(Protocol):
-    def push(self, payload: dict[str, Any]) -> dict[str, Any]:
-        ...
+    def push(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
-    def pull(self, payload: dict[str, Any]) -> dict[str, Any]:
-        ...
+    def pull(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -24,7 +23,9 @@ class SyncWorkerSettings:
 
 
 class HttpSyncClient:
-    def __init__(self, *, base_url: str, token: str, timeout_seconds: float = 10.0) -> None:
+    def __init__(
+        self, *, base_url: str, token: str, timeout_seconds: float = 10.0
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.token = token
         self.timeout_seconds = timeout_seconds
@@ -53,6 +54,19 @@ class HttpSyncClient:
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(f"Sync API HTTP {exc.code}: {detail}") from exc
+        except error.URLError as exc:
+            reason = exc.reason
+            if isinstance(reason, TimeoutError | socket.timeout):
+                raise RuntimeError(
+                    f"Sync API request timed out after {self.timeout_seconds:.1f}s. "
+                    "Increase sync_timeout_seconds or retry."
+                ) from exc
+            raise RuntimeError(f"Sync API request failed: {reason}") from exc
+        except TimeoutError as exc:
+            raise RuntimeError(
+                f"Sync API request timed out after {self.timeout_seconds:.1f}s. "
+                "Increase sync_timeout_seconds or retry."
+            ) from exc
 
 
 class SyncWorker:
@@ -118,9 +132,24 @@ class SyncWorker:
         sent_reflections = 0
 
         while True:
-            sessions = [dict(row) for row in self.repository.list_session_changes_since(cursor=cursor, limit=self.settings.batch_size)]
-            journals = [dict(row) for row in self.repository.list_journal_changes_since(cursor=cursor, limit=self.settings.batch_size)]
-            reflections = [dict(row) for row in self.repository.list_reflection_changes_since(cursor=cursor, limit=self.settings.batch_size)]
+            sessions = [
+                dict(row)
+                for row in self.repository.list_session_changes_since(
+                    cursor=cursor, limit=self.settings.batch_size
+                )
+            ]
+            journals = [
+                dict(row)
+                for row in self.repository.list_journal_changes_since(
+                    cursor=cursor, limit=self.settings.batch_size
+                )
+            ]
+            reflections = [
+                dict(row)
+                for row in self.repository.list_reflection_changes_since(
+                    cursor=cursor, limit=self.settings.batch_size
+                )
+            ]
 
             if not sessions and not journals and not reflections:
                 break
@@ -150,7 +179,12 @@ class SyncWorker:
                 or cursor
             )
 
-            if not response.get("next_push_cursor") and len(sessions) < self.settings.batch_size and len(journals) < self.settings.batch_size and len(reflections) < self.settings.batch_size:
+            if (
+                not response.get("next_push_cursor")
+                and len(sessions) < self.settings.batch_size
+                and len(journals) < self.settings.batch_size
+                and len(reflections) < self.settings.batch_size
+            ):
                 break
 
         return {
@@ -214,7 +248,11 @@ class SyncWorker:
             applied_reflections += len(reflections)
             applied_tombstones += len(tombstones)
 
-            next_cursor = response.get("next_cursor") or _max_row_cursor(sessions + journals + reflections) or cursor
+            next_cursor = (
+                response.get("next_cursor")
+                or _max_row_cursor(sessions + journals + reflections)
+                or cursor
+            )
             cursor = next_cursor
             if not response.get("has_more"):
                 break

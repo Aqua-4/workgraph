@@ -2,24 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import sqlite3
+import zipfile
 from datetime import datetime
 from pathlib import Path
-import sqlite3
-import shutil
-import zipfile
-
-from services.reporting import (
-    default_goals_path,
-    export_activity_sessions,
-    goal_drift_markdown,
-    generate_weekly_report_markdown,
-    generate_monthly_report_markdown,
-    generate_sync_report_markdown,
-    generate_goals_report_markdown,
-    write_weekly_report,
-)
-from services.sync_daemon import SyncDaemon, SyncDaemonSettings
-from services.sync_worker import HttpSyncClient, SyncWorker, SyncWorkerSettings
 
 from db.repository import ActivityRepository
 from services.activity_tagger import ActivityTagger
@@ -28,8 +15,19 @@ from services.collector_service import (
     CollectorSettings,
     configure_logging,
 )
+from services.reporting import (
+    default_goals_path,
+    export_activity_sessions,
+    generate_goals_report_markdown,
+    generate_monthly_report_markdown,
+    generate_sync_report_markdown,
+    generate_weekly_report_markdown,
+    goal_drift_markdown,
+    write_weekly_report,
+)
+from services.sync_daemon import SyncDaemon, SyncDaemonSettings
+from services.sync_worker import HttpSyncClient, SyncWorker, SyncWorkerSettings
 from workgraph.models import ActivitySession
-
 
 DEFAULT_SETTINGS_PATH = Path("config/settings.yaml")
 PERSONAL_SETTINGS_PATH = Path("config/my-settings.yaml")
@@ -38,7 +36,11 @@ PERSONAL_IDENTITY_PATH = Path("config/my-identity.json")
 
 
 def _default_config_path_str() -> str:
-    return str(PERSONAL_SETTINGS_PATH if PERSONAL_SETTINGS_PATH.exists() else DEFAULT_SETTINGS_PATH)
+    return str(
+        PERSONAL_SETTINGS_PATH
+        if PERSONAL_SETTINGS_PATH.exists()
+        else DEFAULT_SETTINGS_PATH
+    )
 
 
 def main() -> None:
@@ -91,9 +93,13 @@ def main() -> None:
         help="Exclude idle sessions from export output.",
     )
 
-    report_parser = subparsers.add_parser("report", help="Generate deterministic reports.")
+    report_parser = subparsers.add_parser(
+        "report", help="Generate deterministic reports."
+    )
     report_subparsers = report_parser.add_subparsers(dest="report_command")
-    weekly_parser = report_subparsers.add_parser("weekly", help="Generate weekly report.")
+    weekly_parser = report_subparsers.add_parser(
+        "weekly", help="Generate weekly report."
+    )
     weekly_parser.add_argument(
         "--days",
         type=int,
@@ -111,7 +117,9 @@ def main() -> None:
         help="Path to goals yaml used for drift analysis.",
     )
 
-    monthly_parser = report_subparsers.add_parser("monthly", help="Generate monthly report.")
+    monthly_parser = report_subparsers.add_parser(
+        "monthly", help="Generate monthly report."
+    )
     monthly_parser.add_argument(
         "--days",
         type=int,
@@ -129,14 +137,18 @@ def main() -> None:
         help="Path to goals yaml used for drift analysis.",
     )
 
-    sync_report_parser = report_subparsers.add_parser("sync", help="Generate sync status report.")
+    sync_report_parser = report_subparsers.add_parser(
+        "sync", help="Generate sync status report."
+    )
     sync_report_parser.add_argument(
         "--output",
         default=None,
         help="Optional output markdown file. Prints report to stdout when omitted.",
     )
 
-    goals_report_parser = report_subparsers.add_parser("goals", help="Generate goal allocation report.")
+    goals_report_parser = report_subparsers.add_parser(
+        "goals", help="Generate goal allocation report."
+    )
     goals_report_parser.add_argument(
         "--days",
         type=int,
@@ -181,7 +193,9 @@ def main() -> None:
         help="Path to a simple YAML settings file.",
     )
     backup_subparsers = backup_parser.add_subparsers(dest="backup_command")
-    backup_create_parser = backup_subparsers.add_parser("create", help="Create a backup archive.")
+    backup_create_parser = backup_subparsers.add_parser(
+        "create", help="Create a backup archive."
+    )
     backup_create_parser.add_argument(
         "--output",
         default=None,
@@ -193,7 +207,9 @@ def main() -> None:
         default=True,
         help="Include config artifacts in the archive (default: true).",
     )
-    backup_restore_parser = backup_subparsers.add_parser("restore", help="Restore a backup archive or database.")
+    backup_restore_parser = backup_subparsers.add_parser(
+        "restore", help="Restore a backup archive or database."
+    )
     backup_restore_parser.add_argument(
         "backup_path",
         help="Path to a backup archive (.zip) or database (.db).",
@@ -215,14 +231,18 @@ def main() -> None:
         help="Path to a simple YAML settings file.",
     )
 
-    sync_parser = subparsers.add_parser("sync", help="Synchronize local data with central sync service.")
+    sync_parser = subparsers.add_parser(
+        "sync", help="Synchronize local data with central sync service."
+    )
     sync_parser.add_argument(
         "--config",
         default=_default_config_path_str(),
         help="Path to a simple YAML settings file.",
     )
     sync_subparsers = sync_parser.add_subparsers(dest="sync_command")
-    sync_once_parser = sync_subparsers.add_parser("once", help="Run one push/pull sync cycle.")
+    sync_once_parser = sync_subparsers.add_parser(
+        "once", help="Run one push/pull sync cycle."
+    )
     sync_once_parser.add_argument(
         "--config",
         default=_default_config_path_str(),
@@ -363,19 +383,19 @@ def main() -> None:
         "--interval-seconds",
         type=float,
         default=None,
-        help="Seconds between successful sync cycles (fallback: sync_interval_seconds in config or default 60).",
+        help="Seconds between successful sync cycles (fallback: sync_interval_seconds in config or default 300).",
     )
     sync_daemon_parser.add_argument(
         "--backoff-base-seconds",
         type=float,
         default=None,
-        help="Initial retry backoff seconds (fallback: sync_backoff_base_seconds in config or default 1).",
+        help="Initial retry backoff seconds (fallback: sync_backoff_base_seconds in config or default 10).",
     )
     sync_daemon_parser.add_argument(
         "--backoff-max-seconds",
         type=float,
         default=None,
-        help="Maximum retry backoff seconds (fallback: sync_backoff_max_seconds in config or default 60).",
+        help="Maximum retry backoff seconds (fallback: sync_backoff_max_seconds in config or default 300).",
     )
     sync_migrate_parser = sync_subparsers.add_parser(
         "migrate",
@@ -614,7 +634,9 @@ def run_goals_analyze_command(args: argparse.Namespace) -> None:
     goals_path = Path(args.goals)
     if not goals_path.exists():
         print(f"Goals file not found: {goals_path}")
-        print("Create config/my-goals.yaml or config/goals.yaml with a top-level 'goals' mapping.")
+        print(
+            "Create config/my-goals.yaml or config/goals.yaml with a top-level 'goals' mapping."
+        )
         return
 
     report = goal_drift_markdown(
@@ -717,9 +739,13 @@ def _create_backup_archive(
 
     archive_members: list[tuple[Path, str]] = [(db_backup_path, "activity.db")]
     if include_config:
-        archive_members.extend(_backup_config_members(config_path=config_path, identity_path=identity_path))
+        archive_members.extend(
+            _backup_config_members(config_path=config_path, identity_path=identity_path)
+        )
 
-    with zipfile.ZipFile(output_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(
+        output_path, mode="w", compression=zipfile.ZIP_DEFLATED
+    ) as archive:
         for source_path, archive_name in archive_members:
             if source_path.exists():
                 archive.write(source_path, arcname=archive_name)
@@ -732,7 +758,9 @@ def _create_backup_archive(
     return output_path
 
 
-def _backup_config_members(*, config_path: Path, identity_path: Path) -> list[tuple[Path, str]]:
+def _backup_config_members(
+    *, config_path: Path, identity_path: Path
+) -> list[tuple[Path, str]]:
     members: list[tuple[Path, str]] = []
     for source_path in [
         config_path,
@@ -757,7 +785,9 @@ def _archive_member_name(source_path: Path) -> str:
         return resolved.as_posix().lstrip("/")
 
 
-def _restore_backup_artifact(*, backup_path: Path, db_path: Path, restore_config: bool) -> Path:
+def _restore_backup_artifact(
+    *, backup_path: Path, db_path: Path, restore_config: bool
+) -> Path:
     if backup_path.suffix.lower() == ".zip":
         if restore_config:
             _restore_backup_config_files(backup_path)
@@ -895,7 +925,9 @@ def _expected_index_map() -> dict[str, list[str]]:
     }
 
 
-def _missing_indexes(conn: sqlite3.Connection, table_name: str, index_names: list[str]) -> list[str]:
+def _missing_indexes(
+    conn: sqlite3.Connection, table_name: str, index_names: list[str]
+) -> list[str]:
     if not _table_exists(conn, table_name):
         return []
 
@@ -904,7 +936,9 @@ def _missing_indexes(conn: sqlite3.Connection, table_name: str, index_names: lis
         (table_name,),
     ).fetchall()
     existing_names = {str(row[0]) for row in existing_rows}
-    return [index_name for index_name in index_names if index_name not in existing_names]
+    return [
+        index_name for index_name in index_names if index_name not in existing_names
+    ]
 
 
 def _collect_timestamp_issues(conn: sqlite3.Connection) -> list[str]:
@@ -994,10 +1028,14 @@ def _timestamp_issues_for_table(
     for column in columns:
         if column not in available_columns:
             continue
-        invalid_count = _count_invalid_timestamp_values(conn, table_name, column, treat_date_columns)
+        invalid_count = _count_invalid_timestamp_values(
+            conn, table_name, column, treat_date_columns
+        )
         if invalid_count > 0:
             label = "date" if treat_date_columns and column == "date" else "timestamp"
-            issues.append(f"{table_name}.{column} invalid {label} values: {invalid_count}")
+            issues.append(
+                f"{table_name}.{column} invalid {label} values: {invalid_count}"
+            )
     return issues
 
 
@@ -1023,7 +1061,9 @@ def _count_invalid_timestamp_values(
 
 
 def _collect_rollup_issues(conn: sqlite3.Connection) -> list[str]:
-    if not _table_exists(conn, "sync_sessions") or not _table_exists(conn, "sync_metrics_daily"):
+    if not _table_exists(conn, "sync_sessions") or not _table_exists(
+        conn, "sync_metrics_daily"
+    ):
         return []
 
     rows = conn.execute(
@@ -1044,7 +1084,9 @@ def _collect_rollup_issues(conn: sqlite3.Connection) -> list[str]:
         day_utc = str(row["day_utc"])
         if not user_id or not device_id or not day_utc:
             continue
-        expected = _sync_rollup_expected_values(conn, user_id=user_id, device_id=device_id, day_utc=day_utc)
+        expected = _sync_rollup_expected_values(
+            conn, user_id=user_id, device_id=device_id, day_utc=day_utc
+        )
         stored = conn.execute(
             """
             SELECT active_seconds, focus_seconds, meeting_seconds, context_switches
@@ -1058,14 +1100,20 @@ def _collect_rollup_issues(conn: sqlite3.Connection) -> list[str]:
             continue
 
         mismatched_fields: list[str] = []
-        for field in ["active_seconds", "focus_seconds", "meeting_seconds", "context_switches"]:
+        for field in [
+            "active_seconds",
+            "focus_seconds",
+            "meeting_seconds",
+            "context_switches",
+        ]:
             if int(stored[field] or 0) != int(expected[field]):
                 mismatched_fields.append(
                     f"{field}: stored={int(stored[field] or 0)} expected={int(expected[field])}"
                 )
         if mismatched_fields:
             issues.append(
-                f"sync rollup mismatch for {user_id}/{device_id}/{day_utc}: " + "; ".join(mismatched_fields)
+                f"sync rollup mismatch for {user_id}/{device_id}/{day_utc}: "
+                + "; ".join(mismatched_fields)
             )
 
     return issues
@@ -1159,7 +1207,9 @@ def _sync_rollup_expected_values(
         (user_id, device_id, day_utc),
     ).fetchone()
 
-    derived_switches = int((derived_switches_row["switch_count"] if derived_switches_row else 0) or 0)
+    derived_switches = int(
+        (derived_switches_row["switch_count"] if derived_switches_row else 0) or 0
+    )
     payload_switches = int(row["context_switches_payload"] or 0)
 
     return {
@@ -1194,7 +1244,9 @@ def _parse_date_str(value: str) -> datetime | None:
 def run_sync_once_command(args: argparse.Namespace) -> None:
     settings = load_settings(args.config)
     resolved_config_path = _resolve_settings_path(args.config)
-    raw_values = _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+    raw_values = (
+        _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+    )
 
     base_url = args.base_url or raw_values.get("sync_base_url")
     token = args.token or raw_values.get("sync_token")
@@ -1207,19 +1259,32 @@ def run_sync_once_command(args: argparse.Namespace) -> None:
 
     batch_size = int(args.batch_size or raw_values.get("sync_batch_size", 1000))
     pull_limit = int(args.pull_limit or raw_values.get("sync_pull_limit", 1000))
-    max_pull_pages = int(args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20))
-    timeout_seconds = float(args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0))
+    max_pull_pages = int(
+        args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20)
+    )
+    timeout_seconds = float(
+        args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0)
+    )
 
     worker_settings = SyncWorkerSettings(
         batch_size=batch_size,
         pull_limit=pull_limit,
         max_pull_pages=max_pull_pages,
     )
-    client = HttpSyncClient(base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds)
+    client = HttpSyncClient(
+        base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds
+    )
 
-    with ActivityRepository(settings.database_path, identity_path=settings.identity_path) as repository:
+    with ActivityRepository(
+        settings.database_path, identity_path=settings.identity_path
+    ) as repository:
         worker = SyncWorker(repository, client, worker_settings)
-        summary = worker.run_once()
+        try:
+            summary = worker.run_once()
+        except RuntimeError as exc:
+            print("Sync failed")
+            print(str(exc))
+            return
 
     print("Sync complete")
     print(f"Push: {summary['push']}")
@@ -1229,7 +1294,9 @@ def run_sync_once_command(args: argparse.Namespace) -> None:
 def run_sync_daemon_command(args: argparse.Namespace) -> None:
     settings = load_settings(args.config)
     resolved_config_path = _resolve_settings_path(args.config)
-    raw_values = _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+    raw_values = (
+        _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+    )
 
     base_url = args.base_url or raw_values.get("sync_base_url")
     token = args.token or raw_values.get("sync_token")
@@ -1243,23 +1310,35 @@ def run_sync_daemon_command(args: argparse.Namespace) -> None:
     worker_settings = SyncWorkerSettings(
         batch_size=int(args.batch_size or raw_values.get("sync_batch_size", 1000)),
         pull_limit=int(args.pull_limit or raw_values.get("sync_pull_limit", 1000)),
-        max_pull_pages=int(args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20)),
+        max_pull_pages=int(
+            args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20)
+        ),
     )
     daemon_settings = SyncDaemonSettings(
-        interval_seconds=float(args.interval_seconds or raw_values.get("sync_interval_seconds", 60.0)),
+        interval_seconds=float(
+            args.interval_seconds or raw_values.get("sync_interval_seconds", 300.0)
+        ),
         backoff_base_seconds=float(
-            args.backoff_base_seconds or raw_values.get("sync_backoff_base_seconds", 1.0)
+            args.backoff_base_seconds
+            or raw_values.get("sync_backoff_base_seconds", 10.0)
         ),
         backoff_max_seconds=float(
-            args.backoff_max_seconds or raw_values.get("sync_backoff_max_seconds", 60.0)
+            args.backoff_max_seconds
+            or raw_values.get("sync_backoff_max_seconds", 300.0)
         ),
     )
-    timeout_seconds = float(args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0))
+    timeout_seconds = float(
+        args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0)
+    )
 
-    client = HttpSyncClient(base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds)
+    client = HttpSyncClient(
+        base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds
+    )
 
     print("Starting sync daemon. Press Ctrl+C to stop.")
-    with ActivityRepository(settings.database_path, identity_path=settings.identity_path) as repository:
+    with ActivityRepository(
+        settings.database_path, identity_path=settings.identity_path
+    ) as repository:
         worker = SyncWorker(repository, client, worker_settings)
         daemon = SyncDaemon(worker, daemon_settings)
         daemon.run_forever()
@@ -1268,7 +1347,9 @@ def run_sync_daemon_command(args: argparse.Namespace) -> None:
 def run_sync_catchup_command(args: argparse.Namespace) -> None:
     settings = load_settings(args.config)
     resolved_config_path = _resolve_settings_path(args.config)
-    raw_values = _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+    raw_values = (
+        _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+    )
 
     base_url = args.base_url or raw_values.get("sync_base_url")
     token = args.token or raw_values.get("sync_token")
@@ -1281,8 +1362,12 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
 
     batch_size = int(args.batch_size or raw_values.get("sync_batch_size", 1000))
     pull_limit = int(args.pull_limit or raw_values.get("sync_pull_limit", 1000))
-    max_pull_pages = int(args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20))
-    timeout_seconds = float(args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0))
+    max_pull_pages = int(
+        args.max_pull_pages or raw_values.get("sync_max_pull_pages", 20)
+    )
+    timeout_seconds = float(
+        args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0)
+    )
     max_cycles = max(1, int(args.max_cycles))
     settle_cycles = max(1, int(args.settle_cycles))
 
@@ -1291,7 +1376,9 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
         pull_limit=pull_limit,
         max_pull_pages=max_pull_pages,
     )
-    client = HttpSyncClient(base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds)
+    client = HttpSyncClient(
+        base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds
+    )
 
     totals = {
         "push_sessions": 0,
@@ -1306,7 +1393,9 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
     no_progress_cycles = 0
     cycles_run = 0
 
-    with ActivityRepository(settings.database_path, identity_path=settings.identity_path) as repository:
+    with ActivityRepository(
+        settings.database_path, identity_path=settings.identity_path
+    ) as repository:
         worker = SyncWorker(repository, client, worker_settings)
 
         for cycle in range(1, max_cycles + 1):
@@ -1370,16 +1459,24 @@ def run_sync_migrate_command(args: argparse.Namespace) -> None:
     db_path = Path(settings.database_path)
 
     before = _count_sync_metadata_gaps(db_path)
-    with ActivityRepository(settings.database_path, identity_path=settings.identity_path):
+    with ActivityRepository(
+        settings.database_path, identity_path=settings.identity_path
+    ):
         pass
     after = _count_sync_metadata_gaps(db_path)
 
     print("Sync migration complete")
     print(f"Database: {db_path}")
     print(f"Identity: {settings.identity_path}")
-    print(f"Sessions with missing sync metadata: {before['activity_sessions']} -> {after['activity_sessions']}")
-    print(f"Journal entries with missing sync metadata: {before['journal_entries']} -> {after['journal_entries']}")
-    print(f"Reflections with missing sync metadata: {before['daily_reflections']} -> {after['daily_reflections']}")
+    print(
+        f"Sessions with missing sync metadata: {before['activity_sessions']} -> {after['activity_sessions']}"
+    )
+    print(
+        f"Journal entries with missing sync metadata: {before['journal_entries']} -> {after['journal_entries']}"
+    )
+    print(
+        f"Reflections with missing sync metadata: {before['daily_reflections']} -> {after['daily_reflections']}"
+    )
 
 
 def run_sync_validate_command(args: argparse.Namespace) -> None:
@@ -1396,7 +1493,9 @@ def run_sync_validate_command(args: argparse.Namespace) -> None:
     try:
         session_missing = _count_missing_session_fields(conn)
         if session_missing > 0:
-            issues.append(f"activity_sessions rows missing required fields: {session_missing}")
+            issues.append(
+                f"activity_sessions rows missing required fields: {session_missing}"
+            )
 
         for table_name in [
             "activity_sessions",
@@ -1406,24 +1505,38 @@ def run_sync_validate_command(args: argparse.Namespace) -> None:
             "sync_journal_entries",
             "sync_daily_reflections",
         ]:
-            empty_uuid_count, duplicate_uuid_count = _count_uuid_issues(conn, table_name)
+            empty_uuid_count, duplicate_uuid_count = _count_uuid_issues(
+                conn, table_name
+            )
             if empty_uuid_count > 0:
                 issues.append(f"{table_name} empty UUID rows: {empty_uuid_count}")
             if duplicate_uuid_count > 0:
-                issues.append(f"{table_name} duplicate UUID groups: {duplicate_uuid_count}")
+                issues.append(
+                    f"{table_name} duplicate UUID groups: {duplicate_uuid_count}"
+                )
 
-        for table_name in ["sync_sessions", "sync_journal_entries", "sync_daily_reflections"]:
+        for table_name in [
+            "sync_sessions",
+            "sync_journal_entries",
+            "sync_daily_reflections",
+        ]:
             corrupt_payload_count = _count_corrupt_payload_rows(conn, table_name)
             if corrupt_payload_count > 0:
-                issues.append(f"{table_name} corrupt payload rows: {corrupt_payload_count}")
+                issues.append(
+                    f"{table_name} corrupt payload rows: {corrupt_payload_count}"
+                )
 
         broken_git_refs = _count_broken_git_activity_refs(conn)
         if broken_git_refs > 0:
-            issues.append(f"git_activity rows with missing session reference: {broken_git_refs}")
+            issues.append(
+                f"git_activity rows with missing session reference: {broken_git_refs}"
+            )
 
         broken_sync_state_refs = _count_broken_sync_state_refs(conn)
         if broken_sync_state_refs > 0:
-            issues.append(f"sync_state rows with missing device/user reference: {broken_sync_state_refs}")
+            issues.append(
+                f"sync_state rows with missing device/user reference: {broken_sync_state_refs}"
+            )
     finally:
         conn.close()
 
@@ -1435,7 +1548,9 @@ def run_sync_validate_command(args: argparse.Namespace) -> None:
 
     print("Sync validation: PASS")
     print(f"Database: {db_path}")
-    print("Checked: missing sessions, corrupt payloads, duplicate UUIDs, broken references")
+    print(
+        "Checked: missing sessions, corrupt payloads, duplicate UUIDs, broken references"
+    )
 
 
 def run_sync_verify_command(args: argparse.Namespace) -> None:
@@ -1447,7 +1562,9 @@ def run_sync_verify_command(args: argparse.Namespace) -> None:
         return
 
     resolved_config_path = _resolve_settings_path(args.config)
-    raw_values = _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+    raw_values = (
+        _read_simple_yaml(resolved_config_path) if resolved_config_path.exists() else {}
+    )
 
     base_url = args.base_url or raw_values.get("sync_base_url")
     token = args.token or raw_values.get("sync_token")
@@ -1462,7 +1579,9 @@ def run_sync_verify_command(args: argparse.Namespace) -> None:
 
     pull_limit = int(args.pull_limit or raw_values.get("sync_pull_limit", 1000))
     max_pages = max(1, int(args.max_pages))
-    timeout_seconds = float(args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0))
+    timeout_seconds = float(
+        args.timeout_seconds or raw_values.get("sync_timeout_seconds", 10.0)
+    )
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -1476,7 +1595,9 @@ def run_sync_verify_command(args: argparse.Namespace) -> None:
     finally:
         conn.close()
 
-    client = HttpSyncClient(base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds)
+    client = HttpSyncClient(
+        base_url=str(base_url), token=str(token), timeout_seconds=timeout_seconds
+    )
     try:
         server_totals, truncated = _pull_server_totals(
             client=client,
@@ -1562,7 +1683,9 @@ def _count_active_rows(conn: sqlite3.Connection, table_name: str) -> int:
     if "deleted_at" in columns:
         deleted_clause = " WHERE deleted_at IS NULL"
 
-    row = conn.execute(f"SELECT COUNT(*) AS total_rows FROM {table_name}{deleted_clause}").fetchone()
+    row = conn.execute(
+        f"SELECT COUNT(*) AS total_rows FROM {table_name}{deleted_clause}"
+    ).fetchone()
     return int(row["total_rows"] if row is not None else 0)
 
 
@@ -1618,7 +1741,9 @@ def _pull_server_totals(
         totals["sessions"] += len(sessions)
         totals["journal_entries"] += len(journals)
         totals["daily_reflections"] += len(reflections)
-        totals["active_seconds"] += sum(int(item.get("duration_sec") or 0) for item in sessions)
+        totals["active_seconds"] += sum(
+            int(item.get("duration_sec") or 0) for item in sessions
+        )
 
         cursor = response.get("next_cursor") or cursor
         has_more = bool(response.get("has_more"))
@@ -1689,7 +1814,9 @@ def _count_uuid_issues(conn: sqlite3.Connection, table_name: str) -> tuple[int, 
             )
             """
         ).fetchone()
-    duplicate_groups = int(duplicate_row["duplicate_groups"] if duplicate_row is not None else 0)
+    duplicate_groups = int(
+        duplicate_row["duplicate_groups"] if duplicate_row is not None else 0
+    )
     return empty_count, duplicate_groups
 
 
@@ -1718,7 +1845,9 @@ def _count_corrupt_payload_rows(conn: sqlite3.Connection, table_name: str) -> in
 
 
 def _count_broken_git_activity_refs(conn: sqlite3.Connection) -> int:
-    if not _table_exists(conn, "git_activity") or not _table_exists(conn, "activity_sessions"):
+    if not _table_exists(conn, "git_activity") or not _table_exists(
+        conn, "activity_sessions"
+    ):
         return 0
     row = conn.execute(
         """
@@ -1805,6 +1934,7 @@ def start_web_dashboard(port: int = 8000) -> None:
     """Start the web dashboard server."""
     try:
         import uvicorn
+
         from api.app import app
     except ImportError:
         print("Error: FastAPI and Uvicorn required for web dashboard.")
@@ -1835,7 +1965,9 @@ def load_settings(path: str) -> CollectorSettings:
         poll_interval_seconds=float(values["poll_interval_seconds"]),
         idle_threshold_seconds=int(values["idle_threshold_seconds"]),
         session_gap_seconds=int(values["session_gap_seconds"]),
-        browser_history_lookback_seconds=int(values["browser_history_lookback_seconds"]),
+        browser_history_lookback_seconds=int(
+            values["browser_history_lookback_seconds"]
+        ),
         log_path=str(values["log_path"]),
         identity_path=resolved_identity_path,
     )
