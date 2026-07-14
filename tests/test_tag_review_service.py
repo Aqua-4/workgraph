@@ -3,12 +3,15 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from services.tag_review import (
+    build_tag_review_groups,
     build_tag_review_suggestions,
     build_yaml_preview,
+    derive_browser_context,
     find_rule_conflicts,
     load_custom_tag_rules,
     normalize_domain_candidate,
     normalize_repo_candidate,
+    resolve_tag_review_group,
 )
 
 
@@ -96,6 +99,90 @@ tags:
         )
         self.assertEqual(suggestions["Development"]["domains"][0]["sample_count"], 2)
         self.assertEqual(suggestions["Development"]["repos"][0]["value"], "workgraph")
+
+    def test_derive_browser_context_extracts_known_browser_titles(self) -> None:
+        self.assertEqual(
+            derive_browser_context(
+                "Brave - compare text and find differences online or offline - Diffchecker - Brave",
+                "Brave",
+            ),
+            "Diffchecker",
+        )
+        self.assertEqual(
+            derive_browser_context("Brave - YouTube Music", "Brave"),
+            "YouTube Music",
+        )
+        self.assertEqual(
+            derive_browser_context("Brave - New Tab - Brave", "Brave"),
+            "New Tab",
+        )
+        self.assertIsNone(derive_browser_context("README.md", "Code"))
+
+    def test_resolve_tag_review_group_prefers_domain_then_browser_context_then_app(
+        self,
+    ) -> None:
+        self.assertEqual(
+            resolve_tag_review_group(
+                {
+                    "app_name": "Chrome",
+                    "process_name": "chrome",
+                    "window_title": "Diffchecker - Brave",
+                    "browser_domain": "diffchecker.com",
+                    "git_repo": None,
+                }
+            ),
+            {"group_type": "domain", "group_value": "diffchecker.com"},
+        )
+        self.assertEqual(
+            resolve_tag_review_group(
+                {
+                    "app_name": "Chrome",
+                    "process_name": "chrome",
+                    "window_title": "Brave - New Tab - Brave",
+                    "browser_domain": None,
+                    "git_repo": None,
+                }
+            ),
+            {"group_type": "browser_context", "group_value": "New Tab"},
+        )
+        self.assertEqual(
+            resolve_tag_review_group(
+                {
+                    "app_name": "Slack",
+                    "process_name": "slack",
+                    "window_title": "Engineering",
+                    "browser_domain": None,
+                    "git_repo": None,
+                }
+            ),
+            {"group_type": "app", "group_value": "Slack"},
+        )
+
+    def test_build_tag_review_groups_groups_browser_context_rows_separately(
+        self,
+    ) -> None:
+        groups = build_tag_review_groups(
+            [
+                {
+                    "app_name": "Brave",
+                    "process_name": "brave",
+                    "window_title": "Brave - YouTube Music",
+                    "browser_domain": None,
+                    "git_repo": None,
+                },
+                {
+                    "app_name": "Brave",
+                    "process_name": "brave",
+                    "window_title": "Brave - New Tab - Brave",
+                    "browser_domain": None,
+                    "git_repo": None,
+                },
+            ]
+        )
+
+        self.assertIn(("browser_context", "YouTube Music"), groups)
+        self.assertIn(("browser_context", "New Tab"), groups)
+        self.assertEqual(len(groups[("browser_context", "YouTube Music")]), 1)
 
     def test_find_rule_conflicts_flags_values_owned_by_other_tags(self) -> None:
         existing_rules = {

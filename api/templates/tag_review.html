@@ -50,7 +50,7 @@
             <p class="tag-review-muted mb-0">Review missed entries, keep manual overrides, and export reusable YAML
                 suggestions.</p>
         </div>
-        <span class="badge text-bg-secondary">{{ candidate_count }} candidates</span>
+        <span class="badge text-bg-secondary">{{ group_count }} groups</span>
     </div>
 
     {% if sync_health and sync_health.enabled %}
@@ -98,35 +98,53 @@
     <div class="tag-review-grid">
         <div class="card p-3 p-md-4">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                <h3 class="m-0">Missed Entries</h3>
-                <span class="tag-review-muted">Manual assignment updates session tags immediately.</span>
+                <h3 class="m-0">Grouped Review Queue</h3>
+                <span class="tag-review-muted">Assigning a tag updates all matching sessions in the bucket immediately.</span>
             </div>
             <div id="tag-review-feedback" style="display: none;"></div>
-            {% if sessions %}
+            {% if groups %}
             <div class="table-responsive">
                 <table class="table table-sm tag-review-table align-middle mb-0">
                     <thead>
                         <tr>
-                            <th>Start</th>
-                            <th>App</th>
-                            <th>Domain / Repo</th>
+                            <th>Group</th>
+                            <th>Coverage</th>
+                            <th>Samples</th>
                             <th>Assign</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for session in sessions %}
-                        <tr data-session-id="{{ session.id }}">
-                            <td class="time-small">{{ session.start_time|human_datetime }}</td>
+                        {% for group in groups %}
+                        <tr data-group-type="{{ group.group_type }}" data-group-value="{{ group.group_value }}">
                             <td>
-                                <div><strong>{{ session.app_name }}</strong></div>
-                                <div class="tag-review-muted">{{ session.window_title or '-' }}</div>
+                                <div><strong>{{ group.group_type.replace('_', ' ')|title }}</strong></div>
+                                <div>{{ group.group_value }}</div>
                             </td>
                             <td>
-                                <div>{{ session.browser_domain or '-' }}</div>
-                                <div class="tag-review-muted">{{ session.git_repo or '-' }}</div>
+                                <div>{{ group.session_count }} sessions</div>
+                                <div class="tag-review-muted">{{ "%.1f"|format((group.total_seconds / 3600) if group.total_seconds else 0) }}h active</div>
+                                {% if group.dominant_apps %}
+                                <div class="tag-review-muted">Apps: {{ group.dominant_apps|join(', ') }}</div>
+                                {% endif %}
                             </td>
                             <td>
-                                <div class="d-flex gap-2 flex-wrap">
+                                {% if group.sample_sessions %}
+                                <ul class="mb-0 ps-3">
+                                    {% for sample in group.sample_sessions %}
+                                    <li>
+                                        {{ sample.app_name }}
+                                        {% if sample.window_title %}
+                                        <span class="tag-review-muted">- {{ sample.window_title }}</span>
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <span class="tag-review-muted">No sample sessions available.</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex gap-2 flex-wrap align-items-start">
                                     <select class="form-select form-select-sm tag-review-select"
                                         style="min-width: 180px;">
                                         <option value="">Choose tag</option>
@@ -144,7 +162,7 @@
                 </table>
             </div>
             {% else %}
-            <p class="text-muted mb-0">No matching review candidates in this range.</p>
+            <p class="text-muted mb-0">No matching review groups in this range.</p>
             {% endif %}
         </div>
 
@@ -256,20 +274,23 @@
             button.addEventListener("click", async () => {
                 const row = button.closest("tr");
                 const select = row?.querySelector(".tag-review-select");
-                const sessionId = row?.getAttribute("data-session-id");
+                const groupType = row?.getAttribute("data-group-type");
+                const groupValue = row?.getAttribute("data-group-value");
                 const selectedTag = select?.value || "";
-                if (!sessionId || !selectedTag) {
+                if (!groupType || !groupValue || !selectedTag) {
                     setFeedback("Choose a tag before assigning.", "error");
                     return;
                 }
 
-                const response = await fetch("/api/tag-review/assign", {
+                const response = await fetch("/api/tag-review/assign-group", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        session_id: Number(sessionId),
+                        group_type: groupType,
+                        group_value: groupValue,
                         selected_tag: selectedTag,
-                        source_signal: "manual-review",
+                        source_signal: groupType,
+                        days: {{ days }},
                     }),
                 });
                 if (!response.ok) {
@@ -277,7 +298,7 @@
                     return;
                 }
 
-                setFeedback(`Assigned ${selectedTag}. Refreshing page...`, "success");
+                setFeedback(`Assigned ${selectedTag} to the ${groupType} bucket. Refreshing page...`, "success");
                 window.location.reload();
             });
         });

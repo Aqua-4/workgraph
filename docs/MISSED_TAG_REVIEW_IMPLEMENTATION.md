@@ -33,13 +33,28 @@ Sections:
 - Include weakly tagged entries toggle (optional phase 2).
 - App/domain/repo quick filters.
 
-2. Missed Entries Queue
+2. Grouped Review Queue
 
-- Paginated table/card list of candidate sessions.
-- Each row shows start/end, app, window title, browser domain, repo, current tag.
-- Actions per row:
-  - Assign existing tag.
-  - Create new tag and assign.
+- Show grouped candidate buckets instead of individual session rows.
+- Primary grouping dimensions:
+  - app_name
+  - browser_domain
+  - git_repo
+- Browser-aware sub-grouping for browser apps:
+  - domain-first when browser_domain is present
+  - title-aware fallback when browser_domain is missing or too generic
+  - app-only only when neither domain nor useful title signal exists
+- Each bucket shows:
+  - grouping type, for example domain or repo
+  - grouping value, for example github.com or workgraph
+  - session count
+  - total active time
+  - recent sample window titles or apps
+  - current tag distribution, if mixed
+- Actions per bucket:
+  - Assign existing tag to all matching sessions in the bucket.
+  - Create new tag and assign to the bucket.
+  - Expand bucket to inspect sample sessions.
   - Skip.
 
 3. Rule Suggestions Panel
@@ -67,6 +82,30 @@ Candidate query conditions:
 - tag IS NULL OR tag = '' for missed entries.
 - optional future: suspicious tag quality heuristics.
 
+Grouping strategy:
+
+- Build review buckets from untagged sessions grouped by repo, domain, and app.
+- Prefer repo and domain buckets over app-only buckets when stronger signals exist.
+- Avoid showing the same session in multiple primary buckets in the same pass.
+- Keep app-only buckets as a fallback for sessions with no repo and no domain.
+
+Browser edge case handling:
+
+- Do not treat the browser app name itself, for example Brave or Chrome, as the main grouping key when a stronger browsing signal exists.
+- Prefer browser_domain when present because a single browser can span multiple categories.
+- When browser_domain is missing, empty, or too generic, derive a browser_context bucket from window_title.
+- Example outcomes:
+  - "Brave - compare text and find differences online or offline - Diffchecker - Brave" -> Development-oriented browser_context or diffchecker.com domain if available
+  - "Brave - New Tab - Brave" -> generic browser bucket, usually skipped or deprioritized
+  - "Brave - YouTube Music" -> Entertainment-oriented browser_context or music.youtube.com / youtube.com domain bucket if available
+
+Recommended browser grouping precedence:
+
+1. repo
+2. browser_domain
+3. browser_context from window_title
+4. app_name fallback
+
 ### New Persistence for Review Workflow
 
 Add a lightweight review audit table so page actions are recoverable and auditable.
@@ -87,15 +126,24 @@ Fields:
 
 Why:
 
-- Records explicit user review actions even when session tags are updated immediately.
+- Records explicit user review actions even when bucket-level tagging updates sessions immediately.
 - Allows generation of suggestions from reviewed examples.
 - Supports rollback, debugging, and later sync propagation for manual overrides.
 
+Recommended extension:
+
+- Add optional group metadata fields later if needed:
+  - group_type, for example repo, domain, app
+  - group_value
+  - group_label for friendlier browser-context display
+
+This is not required for MVP because the affected sessions already capture the underlying grouping signal.
+
 ## API Design
 
-### 1) Fetch candidates
+### 1) Fetch grouped candidates
 
-GET /api/tag-review/candidates
+GET /api/tag-review/groups
 
 Query params:
 
@@ -106,26 +154,52 @@ Query params:
 
 Response includes:
 
-- sessions list
-- total count
+- groups list
+- total group count
 - current filters
 
-### 2) Save manual assignments
+Each group includes:
 
-POST /api/tag-review/assign
+- group_type
+- group_value
+- group_label
+- session_count
+- total_seconds
+- sample_sessions
+- dominant_apps
+- current_tags
+
+### 2) Inspect a group
+
+GET /api/tag-review/groups/{group_type}/{group_value}
+
+Response includes:
+
+- matching sessions
+- sample titles
+- date coverage
+- summary statistics
+- any derived browser context clues used for the grouping
+
+### 3) Save group assignments
+
+POST /api/tag-review/assign-group
 
 Payload:
 
-- session_id or session_uuid
+- group_type
+- group_value
 - selected_tag
 - reason (optional)
 
 Behavior:
 
-- Insert row into tag_review_actions.
-- Update activity_sessions.tag immediately for that session so analytics improve now.
+- Resolve all matching sessions in the group.
+- Insert one audit row per affected session into tag_review_actions.
+- Update activity_sessions.tag immediately for all matching sessions so analytics improve now.
+- Return affected session count and updated summary.
 
-### 3) Generate rule suggestions
+### 4) Generate rule suggestions
 
 POST /api/tag-review/suggestions
 
@@ -142,7 +216,7 @@ Output:
   - sample_count per token
   - estimated historical matches
 
-### 4) YAML preview
+### 5) YAML preview
 
 GET /api/tag-review/yaml-preview
 
@@ -151,7 +225,7 @@ Output:
 - merged YAML text (existing my-tags + proposed additions)
 - warnings (conflicts, duplicates, low-confidence keywords)
 
-### 5) Apply YAML update
+### 6) Apply YAML update
 
 Phase 2 only.
 
@@ -169,7 +243,7 @@ Behavior:
 - updates config/my-tags.yaml
 - returns updated file hash and summary
 
-### 6) Download generated YAML
+### 7) Download generated YAML
 
 POST /api/tag-review/yaml-download
 
@@ -179,7 +253,7 @@ Output:
 
 ## Rule Generation Heuristics
 
-Build suggestions from reviewed actions with conservative defaults.
+Build suggestions from reviewed group assignments with conservative defaults.
 
 1. Domain suggestions
 
@@ -191,6 +265,20 @@ Build suggestions from reviewed actions with conservative defaults.
 
 - Extract stable repo identifier from git_repo path.
 - Keep tokens with frequency >= min_repo_hits, default 2.
+
+Browser context fallback:
+
+- If browser_domain is unavailable but the bucket came from a browser_context derived from window_title, use that only for review UX, not as a reusable YAML rule source.
+- Do not generate new YAML rules directly from raw browser window titles in MVP.
+- Instead, use browser_context buckets to help the user bulk-tag sessions, then rely on future domain captures or explicit YAML edits for reusable rules.
+
+App-only fallback:
+
+- Do not write app_name into YAML rules by default.
+- Use app-only grouping only to help users find missed work faster.
+- Use browser_context grouping in the same way: useful for bulk review, but not a direct rule source in MVP.
+- If an app-only bucket is reviewed, rely on the sessions inside it to derive repo/domain rules when possible.
+- If no repo/domain signal exists, keep the manual session tags but do not generate a new reusable rule in MVP.
 
 3. Keyword suggestions
 
@@ -272,9 +360,10 @@ Implementation note:
 
 ### Phase 1: MVP
 
-- Tag Review page with untagged queue.
-- Manual assign action updates session tag + review table.
-- Suggestion generator for domains/repos.
+- Tag Review page with grouped untagged buckets.
+- Group assign action updates matching session tags + review table.
+- Suggestion generator for domains/repos from reviewed groups.
+- Browser-aware grouping that can split browser activity by domain or title-derived browser context.
 - YAML preview + download only.
 
 ### Phase 2: Apply and refine
@@ -293,15 +382,17 @@ Implementation note:
 
 1. Unit tests
 
-- suggestion extraction from reviewed samples
+- suggestion extraction from reviewed group assignments
 - collision detection
 - YAML merge idempotency and dedupe
+- browser grouping precedence, including browser_domain versus browser_context fallback
 
 2. API tests
 
-- candidate filtering and pagination
-- assign endpoint updates review table and session tag
+- grouped candidate aggregation and pagination
+- group assign endpoint updates review table and matching session tags
 - yaml preview/apply/download responses
+- browser sessions with different titles/domains land in different review buckets when appropriate
 
 3. Integration tests
 
@@ -323,7 +414,7 @@ Implementation note:
 
 ### Phase 1 Delivery Goal
 
-Deliver a review page that lets a user find untagged sessions, assign a tag immediately, accumulate reviewed examples, and export a YAML preview for future rule updates.
+Deliver a review page that lets a user find grouped untagged activity buckets, assign a tag to all matching sessions immediately, accumulate reviewed examples, and export a YAML preview for future rule updates.
 
 ### Step 1: Data model and repository helpers
 
@@ -337,9 +428,10 @@ Work:
 
 - Add a new tag_review_actions table to the schema.
 - Add repository helpers to:
-  - list candidate sessions for review
+  - list grouped review buckets
+  - list sessions within a selected bucket
   - insert a review action
-  - update a session tag by session id
+  - update session tags for a group of session ids
   - query reviewed actions for suggestion generation
 - Keep the new helpers local-only in Phase 1.
 
@@ -347,6 +439,7 @@ Notes:
 
 - The table should behave as an audit log, not as a second source of truth for current tag state.
 - activity_sessions.tag remains the canonical local tag for dashboard and reporting.
+- Group assignment is only a review workflow convenience, not a new persisted entity.
 
 ### Step 2: Tag review service layer
 
@@ -360,6 +453,8 @@ Work:
 
 - Add a small service module for:
   - normalizing repo and domain candidates
+  - building grouped review buckets by repo, domain, and app
+  - deriving browser_context buckets from browser window titles when domain data is missing or too generic
   - grouping reviewed actions by selected_tag
   - generating repo/domain suggestions with counts
   - loading current config/my-tags.yaml and preparing merged preview output
@@ -371,6 +466,8 @@ Notes:
 - Keep keyword handling read-only in MVP.
 - If a selected tag already exists in my-tags.yaml, merge into that block.
 - If a selected tag is new, create an empty tag block and populate only reviewed repo/domain suggestions.
+- If a reviewed group is app-only and has no repo/domain signal, do not generate a new reusable rule in MVP.
+- If a reviewed group is browser_context-only and has no repo/domain signal, use it for bulk tagging only and do not generate a reusable YAML rule in MVP.
 
 ### Step 3: API endpoints and route wiring
 
@@ -382,8 +479,9 @@ Files:
 Work:
 
 - Add GET /tag-review for the HTML page.
-- Add GET /api/tag-review/candidates.
-- Add POST /api/tag-review/assign.
+- Add GET /api/tag-review/groups.
+- Add GET /api/tag-review/groups/{group_type}/{group_value}.
+- Add POST /api/tag-review/assign-group.
 - Add POST /api/tag-review/suggestions.
 - Add GET /api/tag-review/yaml-preview.
 - Add POST /api/tag-review/yaml-download.
@@ -391,11 +489,12 @@ Work:
 
 Behavior:
 
-- POST /api/tag-review/assign should:
+- POST /api/tag-review/assign-group should:
   - validate selected_tag
-  - write a row to tag_review_actions
-  - immediately update activity_sessions.tag
-  - return updated session summary and a success flag
+  - resolve the affected sessions for the selected bucket
+  - write one row to tag_review_actions per affected session
+  - immediately update activity_sessions.tag for all affected sessions
+  - return affected count, sample rows, and a success flag
 - In sync-client mode, structure the code so the manual override can later flow into sync session updates without rewriting the API contract.
 
 Notes:
@@ -416,8 +515,10 @@ Work:
 - Add a Tag Review nav link for standalone and sync-client.
 - Create a page with:
   - filter form
-  - candidate table
-  - tag assignment controls
+  - grouped review table
+  - bucket assignment controls
+  - expandable sample-session inspector
+  - clear display of bucket source, for example repo, domain, or browser context
   - suggestion summary panel
   - YAML preview/download controls
 - Keep the UI close to current dashboard and timeline patterns.
@@ -425,16 +526,17 @@ Work:
 Interaction flow:
 
 1. User opens Tag Review.
-2. Client loads untagged candidates from the API.
-3. User assigns a tag to one or more sessions.
-4. UI refreshes the reviewed queue and suggestion panel.
-5. User previews generated YAML.
-6. User downloads YAML for manual merge or replacement later.
+2. Client loads grouped untagged buckets from the API.
+3. User reviews a bucket, optionally expands it to inspect sample sessions.
+4. User assigns a tag to the entire bucket.
+5. UI refreshes the grouped queue and suggestion panel.
+6. User previews generated YAML.
+7. User downloads YAML for manual merge or replacement later.
 
 Notes:
 
 - Prefer simple server-rendered HTML plus small fetch calls instead of a large client-side framework.
-- Show the current tag and a clear "updated locally" status after assignment.
+- Show affected session count and a clear "updated locally" status after group assignment.
 
 ### Step 5: Sync-client follow-up hook
 
@@ -461,8 +563,9 @@ Notes:
 
 Add focused coverage for:
 
-- candidate query returns only untagged sessions by default
-- assignment writes audit row and updates session tag immediately
+- grouped candidate query returns expected repo/domain/app buckets by default
+- browser sessions split correctly across domain and browser-context buckets
+- group assignment writes audit rows and updates matching session tags immediately
 - suggestion generation groups repos/domains correctly
 - preview output dedupes entries case-insensitively
 - sync-server mode rejects or hides the route
@@ -470,91 +573,142 @@ Add focused coverage for:
 
 ### Suggested execution order
 
-1. Add schema and repository helpers.
-2. Add suggestion and YAML preview service code.
-3. Add API endpoints and tests.
+1. Add grouped repository helpers.
+2. Add grouping and YAML preview service code.
+3. Add grouped API endpoints and tests.
 4. Add the Tag Review template and navigation.
-5. Add download workflow.
+5. Add group-inspector and download workflow.
 6. Add sync-client propagation hook if the tag update path is already stable.
 
 ## Concrete Task Checklist
 
+Status legend:
+
+- [x] Implemented
+- [~] Partially implemented or documented but not fully wired
+- [ ] Not implemented yet
+
+### Implemented So Far Snapshot
+
+- [x] Audit table, grouped repository helpers, and grouped bulk tag updates are implemented.
+- [x] Tag Review page, grouped APIs, YAML preview/download, and focused tests are implemented.
+- [x] Sync manual-override propagation is covered by a focused sync test.
+- [x] Browser edge-case handling is now implemented with browser_context-aware grouping and focused tests.
+- [~] Legacy per-session tag-review endpoints still coexist with the grouped workflow.
+
 ### Database and repository
 
-- Add tag_review_actions DDL to db/schema.sql.
-- Add a helper in db/repository.py to ensure the new table exists during migrations or startup.
-- Add a repository function such as list_tag_review_candidates(db_path, days, only_untagged, app_name, domain, repo, limit, offset).
-- Add a repository function such as count_tag_review_candidates(db_path, days, only_untagged, app_name, domain, repo).
-- Add a repository function such as create_tag_review_action(db_path, session_id, original_tag, selected_tag, reason, source_signal).
-- Add a repository function such as update_activity_session_tag(db_path, session_id, selected_tag).
-- Add a repository function such as list_review_actions_for_suggestions(db_path, days=None, selected_tag=None).
-- Add tests in tests/test_repository.py for candidate filtering, audit row insertion, and immediate session tag update.
+- [x] Add tag_review_actions DDL to db/schema.sql.
+- [x] Add a helper in db/repository.py to ensure the new table exists during migrations or startup.
+- [x] Add a repository function such as list_tag_review_groups(db_path, days, only_untagged, app_name, domain, repo, limit, offset).
+- [x] Add a repository function such as count_tag_review_groups(db_path, days, only_untagged, app_name, domain, repo).
+- [x] Add a repository function such as list_tag_review_group_sessions(db_path, group_type, group_value, limit).
+- [x] Make the grouping resolver browser-aware so browser sessions can fall back to browser_context derived from window_title when domain is missing.
+- [x] Add a repository function such as create_tag_review_action(db_path, session_id, original_tag, selected_tag, reason, source_signal).
+- [x] Add a repository function such as update_activity_session_tags(db_path, session_ids, selected_tag).
+- [x] Add a repository function such as list_review_actions_for_suggestions(db_path, days=None, selected_tag=None).
+- [x] Add tests in tests/test_repository.py for group aggregation, audit row insertion, and immediate grouped tag updates.
 
 ### Tag review service
 
-- Create services/tag_review.py.
-- Add a helper such as normalize_repo_candidate(git_repo) that extracts a stable repo token.
-- Add a helper such as normalize_domain_candidate(browser_domain) that strips noise and lowercases domains.
-- Add a helper such as load_custom_tag_rules(config_path=None) for config/my-tags.yaml access.
-- Add a helper such as build_tag_review_suggestions(review_actions, existing_rules) returning grouped repo/domain suggestions.
-- Add a helper such as build_yaml_preview(existing_rules, selected_suggestions) returning preview text and warning metadata.
-- Add a helper such as find_rule_conflicts(existing_rules, candidate_rules) to flag collisions across tags.
-- Keep keyword output read-only by exposing only existing keywords for the selected tag.
-- Add focused tests in a new test file such as tests/test_tag_review_service.py.
+- [x] Create services/tag_review.py.
+- [x] Add a helper such as normalize_repo_candidate(git_repo) that extracts a stable repo token.
+- [x] Add a helper such as normalize_domain_candidate(browser_domain) that strips noise and lowercases domains.
+- [x] Add a helper such as build_tag_review_groups(sessions) that prioritizes repo/domain/app buckets.
+- [x] Add a helper such as derive_browser_context(window_title, app_name) that extracts meaningful browser review buckets from titles like Diffchecker or YouTube Music.
+- [x] Add a helper such as load_custom_tag_rules(config_path=None) for config/my-tags.yaml access.
+- [x] Add a helper such as build_tag_review_suggestions(review_actions, existing_rules) returning grouped repo/domain suggestions.
+- [x] Add a helper such as build_yaml_preview(existing_rules, selected_suggestions) returning preview text and warning metadata.
+- [x] Add a helper such as find_rule_conflicts(existing_rules, candidate_rules) to flag collisions across tags.
+- [x] Keep keyword output read-only by exposing only existing keywords for the selected tag.
+- [x] Add focused tests in a new test file such as tests/test_tag_review_service.py.
 
 ### API routes
 
-- In api/app.py, add a guard helper such as _ensure_tag_review_features_enabled() that rejects sync-server mode.
-- Add GET /tag-review to render the new page.
-- Add GET /api/tag-review/candidates.
-- Add POST /api/tag-review/assign.
-- Add POST /api/tag-review/suggestions.
-- Add GET /api/tag-review/yaml-preview.
-- Add POST /api/tag-review/yaml-download.
-- Add request models for assignment and suggestion inputs if payload validation is needed.
-- Make POST /api/tag-review/assign call repository write functions in this order:
-  1. read current session
-  2. insert audit row
-  3. update activity_sessions.tag
-  4. return updated session payload
-- Add route tests in a new file such as tests/test_tag_review_api.py.
+- [x] In api/app.py, add a guard helper such as _ensure_tag_review_features_enabled() that rejects sync-server mode.
+- [x] Add GET /tag-review to render the new page.
+- [x] Add GET /api/tag-review/groups.
+- [x] Add GET /api/tag-review/groups/{group_type}/{group_value}.
+- [x] Add POST /api/tag-review/assign-group.
+- [x] Add POST /api/tag-review/suggestions.
+- [x] Add GET /api/tag-review/yaml-preview.
+- [x] Add POST /api/tag-review/yaml-download.
+- [x] Add request models for assignment and suggestion inputs if payload validation is needed.
+- [x] Make POST /api/tag-review/assign-group call repository write functions in this order:
+  1. resolve group sessions
+  2. insert audit row for each affected session
+  3. update activity_sessions.tag for affected session ids
+  4. return affected count and updated summary
+- [x] Add route tests in a new file such as tests/test_tag_review_api.py.
 
 ### Template and frontend behavior
 
-- Add a nav link in api/templates/base.html for Tag Review.
-- Create api/templates/tag_review.html.
-- Reuse the existing dashboard/timeline card and table styling where practical.
-- Add a filter form with days, only_untagged, app_name, domain, and repo inputs.
-- Add a candidate list region that renders session metadata and tag controls.
-- Add a suggestion panel that renders grouped repo/domain suggestions by selected tag.
-- Add a YAML preview region and a download button.
-- Use small fetch-based interactions rather than a heavy client-side app.
-- Show optimistic success state only after the assign API confirms the write.
+- [x] Add a nav link in api/templates/base.html for Tag Review.
+- [x] Create api/templates/tag_review.html.
+- [x] Reuse the existing dashboard/timeline card and table styling where practical.
+- [x] Add a filter form with days, only_untagged, app_name, domain, and repo inputs.
+- [x] Add a grouped candidate list region that renders bucket metadata and tag controls.
+- [ ] Add an expandable sample-session region per bucket.
+- [~] Distinguish visually between repo buckets, domain buckets, browser-context buckets, and app fallback buckets.
+- [x] Add a suggestion panel that renders grouped repo/domain suggestions by selected tag.
+- [x] Add a YAML preview region and a download button.
+- [x] Use small fetch-based interactions rather than a heavy client-side app.
+- [x] Show optimistic success state only after the group-assign API confirms the write.
 
 ### Sync-client seam
 
-- Identify where manual session tag updates can be included in sync payload updates.
-- Add a small seam in services/sync_worker.py or adjacent sync code so a later change can propagate reviewed tag overrides without changing the tag review UI contract.
-- Keep the first implementation safe even if cross-device propagation is deferred.
+- [x] Identify where manual session tag updates can be included in sync payload updates.
+- [x] Add a small seam in services/sync_worker.py or adjacent sync code so a later change can propagate reviewed tag overrides without changing the tag review UI contract.
+- [x] Keep the first implementation safe even if cross-device propagation is deferred.
 
 ### Validation checklist before coding complete
 
-- Tag Review link appears only in standalone and sync-client modes.
-- Untagged candidates load correctly from local activity_sessions.
-- Assigning a tag updates dashboard-visible data immediately.
-- Suggestions are generated only from reviewed actions.
-- Existing keywords from config/my-tags.yaml remain visible, but new keyword suggestions are not generated.
-- YAML preview is deterministic and case-insensitive dedupe works.
-- YAML download returns valid YAML without mutating config/my-tags.yaml.
-- Sync-server mode returns a clear unsupported response for page and API routes.
+- [x] Tag Review link appears only in standalone and sync-client modes.
+- [x] Grouped candidates load correctly from local activity_sessions.
+- [x] Browser rows such as Diffchecker, New Tab, and YouTube Music fall into sensible separate review buckets.
+- [x] Assigning a tag to a bucket updates dashboard-visible data immediately.
+- [x] Suggestions are generated only from reviewed actions.
+- [x] Existing keywords from config/my-tags.yaml remain visible, but new keyword suggestions are not generated.
+- [x] YAML preview is deterministic and case-insensitive dedupe works.
+- [x] YAML download returns valid YAML without mutating config/my-tags.yaml.
+- [x] Sync-server mode returns a clear unsupported response for page and API routes.
 
 ## Recommended First Slice
 
 Start with a low-risk first slice:
 
 - Add Tag Review page in standalone and sync-client.
-- Support manual tagging and suggestions from domain/repo only.
+- Support grouped tagging by repo, domain, and app, with reusable suggestions generated from repo/domain only.
+- Include browser-aware grouping so mixed browser usage is split by domain or title-derived browser context rather than collapsing into one browser-app bucket.
 - Provide YAML preview and download.
 - Defer direct YAML file mutation until after user validates quality.
+
+## Browser Edge Case Recommendation
+
+Problem:
+
+- A browser app such as Brave or Chrome can contain work, entertainment, research, and generic browsing in the same app.
+- Grouping only by app_name would mix unrelated activities into one review bucket.
+- Domain grouping helps when browser_domain is present, but some sessions may only have window titles.
+
+Recommended solution:
+
+1. Add a browser-specific review grouping layer.
+2. Prefer browser_domain whenever it exists and is meaningful.
+3. If browser_domain is missing, derive a browser_context from the window title.
+4. Treat generic browser titles as low-value buckets and deprioritize them.
+
+Suggested browser_context examples:
+
+- Diffchecker from titles containing Diffchecker or compare text and find differences.
+- YouTube Music from titles containing YouTube Music.
+- New Tab from titles containing New Tab.
+
+Practical rule:
+
+- browser_context is a review aid, not a new YAML rule source in MVP.
+- Only repo/domain-derived signals should become reusable YAML suggestions by default.
+
+This keeps the review page useful for bulk cleanup without polluting my-tags.yaml with fragile title-based rules.
 
 This delivers immediate value while minimizing accidental rule pollution.

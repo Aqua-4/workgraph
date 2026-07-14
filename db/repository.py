@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import NAMESPACE_DNS, uuid4, uuid5
 
+from services.tag_review import resolve_tag_review_group
 from workgraph.models import ActivitySession
 
 
@@ -468,6 +469,153 @@ class ActivityRepository:
         cursor = self._connection.execute(query, params)
         row = cursor.fetchone()
         return int(row["total"] if row is not None else 0)
+
+    def list_tag_review_groups(
+        self,
+        *,
+        days: int = 7,
+        only_untagged: bool = True,
+        app_name: str | None = None,
+        domain: str | None = None,
+        repo: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, object]]:
+        sessions = self.list_tag_review_candidates(
+            days=days,
+            only_untagged=only_untagged,
+            app_name=app_name,
+            domain=domain,
+            repo=repo,
+            limit=5000,
+            offset=0,
+        )
+
+        grouped: dict[tuple[str, str], dict[str, object]] = {}
+        for row in sessions:
+            group = _resolve_tag_review_group(dict(row))
+            if group is None:
+                continue
+
+            group_key = (group["group_type"], group["group_value"])
+            if group_key not in grouped:
+                grouped[group_key] = {
+                    "group_type": group["group_type"],
+                    "group_value": group["group_value"],
+                    "session_count": 0,
+                    "total_seconds": 0,
+                    "sample_sessions": [],
+                    "dominant_apps": set(),
+                    "current_tags": set(),
+                    "latest_start_time": None,
+                }
+
+            item = grouped[group_key]
+            item["session_count"] = int(item["session_count"]) + 1
+            item["total_seconds"] = int(item["total_seconds"]) + int(
+                row["duration_sec"] or 0
+            )
+            if row["app_name"]:
+                item["dominant_apps"].add(str(row["app_name"]))
+            if row["tag"]:
+                item["current_tags"].add(str(row["tag"]))
+            latest = item["latest_start_time"]
+            start_time = str(row["start_time"] or "")
+            if latest is None or start_time > latest:
+                item["latest_start_time"] = start_time
+            if len(item["sample_sessions"]) < 3:
+                item["sample_sessions"].append(
+                    {
+                        "id": row["id"],
+                        "start_time": row["start_time"],
+                        "app_name": row["app_name"],
+                        "window_title": row["window_title"],
+                        "browser_domain": row["browser_domain"],
+                        "git_repo": row["git_repo"],
+                    }
+                )
+
+        groups = []
+        for item in grouped.values():
+            groups.append(
+                {
+                    "group_type": item["group_type"],
+                    "group_value": item["group_value"],
+                    "session_count": item["session_count"],
+                    "total_seconds": item["total_seconds"],
+                    "sample_sessions": item["sample_sessions"],
+                    "dominant_apps": sorted(item["dominant_apps"]),
+                    "current_tags": sorted(item["current_tags"]),
+                    "latest_start_time": item["latest_start_time"],
+                }
+            )
+
+        groups.sort(
+            key=lambda item: (
+                -int(item["session_count"]),
+                -int(item["total_seconds"]),
+                str(item["group_type"]),
+                str(item["group_value"]),
+            )
+        )
+        return groups[offset : offset + limit]
+
+    def count_tag_review_groups(
+        self,
+        *,
+        days: int = 7,
+        only_untagged: bool = True,
+        app_name: str | None = None,
+        domain: str | None = None,
+        repo: str | None = None,
+    ) -> int:
+        return len(
+            self.list_tag_review_groups(
+                days=days,
+                only_untagged=only_untagged,
+                app_name=app_name,
+                domain=domain,
+                repo=repo,
+                limit=5000,
+                offset=0,
+            )
+        )
+
+    def list_tag_review_group_sessions(
+        self,
+        *,
+        group_type: str,
+        group_value: str,
+        days: int = 7,
+        only_untagged: bool = True,
+        limit: int = 500,
+    ) -> list[sqlite3.Row]:
+        sessions = self.list_tag_review_candidates(
+            days=days,
+            only_untagged=only_untagged,
+            limit=5000,
+            offset=0,
+        )
+        matched: list[sqlite3.Row] = []
+        for row in sessions:
+            group = _resolve_tag_review_group(dict(row))
+            if group is None:
+                continue
+            if (
+                group["group_type"] == group_type
+                and group["group_value"] == group_value
+            ):
+                matched.append(row)
+            if len(matched) >= limit:
+                break
+        return matched
+
+    def update_session_tags(self, session_ids: Iterable[int], tag: str | None) -> int:
+        updated = 0
+        for session_id in session_ids:
+            self.update_session_tag(int(session_id), tag)
+            updated += 1
+        return updated
 
     def create_tag_review_action(
         self,
@@ -1340,6 +1488,39 @@ class ActivityRepository:
 
 def _format_datetime(value: datetime) -> str:
     return value.isoformat(timespec="seconds")
+
+
+def _resolve_tag_review_group(session: dict[str, object]) -> dict[str, str] | None:
+    resolved = resolve_tag_review_group(session)
+    return dict(resolved) if resolved is not None else None
+
+
+def _normalize_tag_review_repo_value(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().rstrip("/\\")
+    if not text:
+        return None
+    normalized = text.replace("\\", "/")
+    if normalized.endswith("/.git"):
+        normalized = normalized[: -len("/.git")]
+    repo_name = normalized.split("/")[-1]
+    if repo_name.endswith(".git"):
+        repo_name = repo_name[:-4]
+    repo_name = repo_name.strip()
+    return repo_name or None
+
+
+def _normalize_tag_review_domain_value(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    text = text.split("/")[0].split(":")[0].strip(".")
+    if text.startswith("www."):
+        text = text[4:]
+    return text or None
 
 
 def _parse_sync_cursor(cursor: str | None) -> tuple[str | None, str | None]:

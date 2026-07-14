@@ -32,7 +32,7 @@ class TagReviewApiTests(unittest.TestCase):
         self.db_patcher.stop()
         self.temp_dir.cleanup()
 
-    def test_tag_review_candidates_lists_only_untagged_by_default(self) -> None:
+    def test_tag_review_groups_lists_grouped_untagged_buckets_by_default(self) -> None:
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
@@ -42,6 +42,24 @@ class TagReviewApiTests(unittest.TestCase):
                     app_name="Firefox",
                     process_name="firefox",
                     window_title="GitHub issue",
+                    browser_domain="github.com",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=1,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 10, 40, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 11, 0, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Firefox",
+                    process_name="firefox",
+                    window_title="Another GitHub issue",
                     browser_domain="github.com",
                     is_idle=False,
                     idle_seconds=0,
@@ -71,17 +89,19 @@ class TagReviewApiTests(unittest.TestCase):
                 )
             )
 
-        response = self.client.get("/api/tag-review/candidates", params={"days": 3650})
+        response = self.client.get("/api/tag-review/groups", params={"days": 3650})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["count"], 1)
-        self.assertEqual(len(payload["sessions"]), 1)
-        self.assertEqual(payload["sessions"][0]["browser_domain"], "github.com")
+        self.assertEqual(len(payload["groups"]), 1)
+        self.assertEqual(payload["groups"][0]["group_type"], "domain")
+        self.assertEqual(payload["groups"][0]["group_value"], "github.com")
+        self.assertEqual(payload["groups"][0]["session_count"], 2)
 
-    def test_tag_review_assign_updates_session_and_records_action(self) -> None:
+    def test_tag_review_assign_group_updates_sessions_and_records_actions(self) -> None:
         with ActivityRepository(self.db_path) as repository:
-            session_id = repository.save_session(
+            repository.save_session(
                 ActivitySession(
                     start_time=datetime(2026, 7, 13, 9, 0, tzinfo=UTC),
                     end_time=datetime(2026, 7, 13, 9, 20, tzinfo=UTC),
@@ -99,32 +119,189 @@ class TagReviewApiTests(unittest.TestCase):
                     tag=None,
                 )
             )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 9, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 9, 50, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Chrome",
+                    process_name="chrome",
+                    window_title="TradingView chart",
+                    browser_domain="tradingview.com",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
 
         response = self.client.post(
-            "/api/tag-review/assign",
+            "/api/tag-review/assign-group",
             json={
-                "session_id": session_id,
+                "group_type": "domain",
+                "group_value": "tradingview.com",
                 "selected_tag": "Finance",
                 "reason": "Reviewed missed browser activity",
                 "source_signal": "browser_domain",
+                "days": 3650,
             },
         )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["session"]["tag"], "Finance")
+        self.assertEqual(payload["affected_count"], 2)
+        self.assertEqual(payload["sessions"][0]["tag"], "Finance")
 
         with ActivityRepository(self.db_path) as repository:
-            stored = repository.get_session(session_id)
             review_actions = repository.list_review_actions_for_suggestions(
                 days=3650,
                 selected_tag="Finance",
             )
+            grouped_sessions = repository.list_tag_review_group_sessions(
+                group_type="domain",
+                group_value="tradingview.com",
+                days=3650,
+                only_untagged=False,
+            )
 
-        self.assertEqual(stored["tag"], "Finance")
-        self.assertEqual(len(review_actions), 1)
+        self.assertEqual(len(grouped_sessions), 2)
+        self.assertTrue(all(row["tag"] == "Finance" for row in grouped_sessions))
+        self.assertEqual(len(review_actions), 2)
         self.assertEqual(review_actions[0]["source_signal"], "browser_domain")
+
+    def test_tag_review_group_detail_returns_matching_sessions(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 8, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 8, 15, tzinfo=UTC),
+                    duration_sec=900,
+                    app_name="Code",
+                    process_name="code",
+                    window_title="main.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="/tmp/workgraph",
+                    git_branch="main",
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.get(
+            "/api/tag-review/groups/repo/workgraph", params={"days": 3650}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["group_type"], "repo")
+        self.assertEqual(payload["group_value"], "workgraph")
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["sessions"][0]["app_name"], "Code")
+
+    def test_tag_review_groups_use_browser_context_for_browser_titles_without_domain(
+        self,
+    ) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 12, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 12, 15, tzinfo=UTC),
+                    duration_sec=900,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - YouTube Music",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 12, 20, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 12, 35, tzinfo=UTC),
+                    duration_sec=900,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - New Tab - Brave",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.get("/api/tag-review/groups", params={"days": 3650})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        group_keys = {
+            (group["group_type"], group["group_value"]) for group in payload["groups"]
+        }
+        self.assertIn(("browser_context", "YouTube Music"), group_keys)
+        self.assertIn(("browser_context", "New Tab"), group_keys)
+
+    def test_tag_review_browser_context_group_detail_and_assignment(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 14, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 14, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - YouTube Music",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        detail_response = self.client.get(
+            "/api/tag-review/groups/browser_context/YouTube Music",
+            params={"days": 3650},
+        )
+        assign_response = self.client.post(
+            "/api/tag-review/assign-group",
+            json={
+                "group_type": "browser_context",
+                "group_value": "YouTube Music",
+                "selected_tag": "Music",
+                "source_signal": "browser_context",
+                "days": 3650,
+            },
+        )
+
+        self.assertEqual(detail_response.status_code, 200)
+        detail_payload = detail_response.json()
+        self.assertEqual(detail_payload["group_type"], "browser_context")
+        self.assertEqual(detail_payload["group_value"], "YouTube Music")
+        self.assertEqual(detail_payload["count"], 1)
+
+        self.assertEqual(assign_response.status_code, 200)
+        assign_payload = assign_response.json()
+        self.assertEqual(assign_payload["affected_count"], 1)
+        self.assertEqual(assign_payload["sessions"][0]["tag"], "Music")
 
     def test_tag_review_suggestions_and_yaml_preview_use_reviewed_actions(self) -> None:
         with ActivityRepository(self.db_path) as repository:
@@ -249,21 +426,25 @@ class TagReviewApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Tag Review", response.text)
-        self.assertIn("Missed Entries", response.text)
+        self.assertIn("Grouped Review Queue", response.text)
         self.assertIn("YAML Preview", response.text)
 
     def test_sync_server_mode_disables_tag_review_routes(self) -> None:
         with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
             page = self.client.get("/tag-review")
-            candidates = self.client.get("/api/tag-review/candidates")
+            groups = self.client.get("/api/tag-review/groups")
             assign = self.client.post(
-                "/api/tag-review/assign",
-                json={"session_id": 1, "selected_tag": "Development"},
+                "/api/tag-review/assign-group",
+                json={
+                    "group_type": "app",
+                    "group_value": "Code",
+                    "selected_tag": "Development",
+                },
             )
             preview = self.client.get("/api/tag-review/yaml-preview")
 
         self.assertEqual(page.status_code, 404)
-        self.assertEqual(candidates.status_code, 404)
+        self.assertEqual(groups.status_code, 404)
         self.assertEqual(assign.status_code, 404)
         self.assertEqual(preview.status_code, 404)
 

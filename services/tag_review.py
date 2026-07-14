@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
@@ -9,6 +10,35 @@ from urllib.parse import urlparse
 import yaml
 
 TagRuleMap = dict[str, dict[str, list[str]]]
+
+_BROWSER_APP_NAMES = {
+    "arc",
+    "brave",
+    "brave browser",
+    "brave-browser",
+    "chrome",
+    "firefox",
+    "google chrome",
+    "microsoft edge",
+    "edge",
+    "opera",
+    "safari",
+    "vivaldi",
+}
+
+_GENERIC_BROWSER_DOMAINS = {
+    "newtab",
+    "new-tab",
+    "new-tab-page",
+    "newtab-page",
+}
+
+_BROWSER_CONTEXT_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("youtube music", "YouTube Music"),
+    ("diffchecker", "Diffchecker"),
+    ("compare text and find differences", "Diffchecker"),
+    ("new tab", "New Tab"),
+)
 
 
 def normalize_repo_candidate(git_repo: str | None) -> str | None:
@@ -48,6 +78,74 @@ def normalize_domain_candidate(browser_domain: str | None) -> str | None:
         text = text[4:]
 
     return text or None
+
+
+def derive_browser_context(
+    window_title: str | None,
+    app_name: str | None,
+    process_name: str | None = None,
+) -> str | None:
+    if not is_browser_app(app_name, process_name):
+        return None
+
+    normalized_title = _normalize_browser_title(window_title)
+    if not normalized_title:
+        return None
+
+    for pattern, label in _BROWSER_CONTEXT_PATTERNS:
+        if pattern in normalized_title:
+            return label
+
+    return None
+
+
+def resolve_tag_review_group(session: Mapping[str, object]) -> dict[str, str] | None:
+    repo_value = normalize_repo_candidate(_as_optional_string(session.get("git_repo")))
+    if repo_value:
+        return {"group_type": "repo", "group_value": repo_value}
+
+    domain_value = normalize_domain_candidate(
+        _as_optional_string(session.get("browser_domain"))
+    )
+    if domain_value and _is_meaningful_browser_domain(domain_value):
+        return {"group_type": "domain", "group_value": domain_value}
+
+    browser_context = derive_browser_context(
+        _as_optional_string(session.get("window_title")),
+        _as_optional_string(session.get("app_name")),
+        _as_optional_string(session.get("process_name")),
+    )
+    if browser_context:
+        return {"group_type": "browser_context", "group_value": browser_context}
+
+    app_name = _as_optional_string(session.get("app_name"))
+    if app_name:
+        return {"group_type": "app", "group_value": app_name}
+
+    return None
+
+
+def build_tag_review_groups(
+    sessions: Iterable[Mapping[str, object]],
+) -> dict[tuple[str, str], list[Mapping[str, object]]]:
+    grouped: dict[tuple[str, str], list[Mapping[str, object]]] = defaultdict(list)
+    for session in sessions:
+        group = resolve_tag_review_group(session)
+        if group is None:
+            continue
+        grouped[(group["group_type"], group["group_value"])].append(session)
+    return dict(grouped)
+
+
+def is_browser_app(app_name: str | None, process_name: str | None = None) -> bool:
+    candidates = [app_name, process_name]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        normalized = candidate.strip().casefold().replace(".exe", "")
+        if normalized in _BROWSER_APP_NAMES:
+            return True
+    return False
 
 
 def load_custom_tag_rules(config_path: Path | str | None = None) -> TagRuleMap:
@@ -319,3 +417,31 @@ def _as_optional_string(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _normalize_browser_title(value: str | None) -> str:
+    if not value:
+        return ""
+
+    normalized = re.sub(
+        r"\s+-\s+(Brave|Google Chrome|Microsoft Edge|Mozilla Firefox|Firefox|Chrome)$",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+    normalized = re.sub(
+        r"^(Brave|Google Chrome|Microsoft Edge|Mozilla Firefox|Firefox|Chrome)\s+-\s+",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    return " ".join(normalized.casefold().split())
+
+
+def _is_meaningful_browser_domain(value: str) -> bool:
+    candidate = value.casefold()
+    if candidate in _GENERIC_BROWSER_DOMAINS:
+        return False
+    if candidate.startswith("chrome:") or candidate.startswith("about:"):
+        return False
+    return True

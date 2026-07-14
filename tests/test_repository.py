@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
 import json
+import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 
 from db.repository import ActivityRepository
 from workgraph.models import ActivitySession
@@ -13,8 +13,8 @@ class ActivityRepositoryTests(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "activity.db"
             session = ActivitySession(
-                start_time=datetime(2026, 7, 9, 10, 0, tzinfo=timezone.utc),
-                end_time=datetime(2026, 7, 9, 10, 5, tzinfo=timezone.utc),
+                start_time=datetime(2026, 7, 9, 10, 0, tzinfo=UTC),
+                end_time=datetime(2026, 7, 9, 10, 5, tzinfo=UTC),
                 duration_sec=300,
                 app_name="Code",
                 process_name="Code.exe",
@@ -47,9 +47,9 @@ class ActivityRepositoryTests(unittest.TestCase):
 
             with ActivityRepository(db_path) as repository:
                 entry_id = repository.save_journal_entry(
-                    created_at=datetime(2026, 7, 10, 15, 0, tzinfo=timezone.utc),
-                    start_time=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc),
+                    created_at=datetime(2026, 7, 10, 15, 0, tzinfo=UTC),
+                    start_time=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
                     title="Historical note",
                     notes="Network outage affected delivery.",
                     metadata={"labels": ["incident", "delivery"]},
@@ -69,8 +69,8 @@ class ActivityRepositoryTests(unittest.TestCase):
             db_path = Path(temp_dir) / "activity.db"
 
             inside = ActivitySession(
-                start_time=datetime(2026, 7, 9, 10, 0, tzinfo=timezone.utc),
-                end_time=datetime(2026, 7, 9, 10, 30, tzinfo=timezone.utc),
+                start_time=datetime(2026, 7, 9, 10, 0, tzinfo=UTC),
+                end_time=datetime(2026, 7, 9, 10, 30, tzinfo=UTC),
                 duration_sec=1800,
                 app_name="Code",
                 process_name="Code",
@@ -85,8 +85,8 @@ class ActivityRepositoryTests(unittest.TestCase):
                 tag="Client Delivery",
             )
             outside = ActivitySession(
-                start_time=datetime(2026, 7, 9, 14, 0, tzinfo=timezone.utc),
-                end_time=datetime(2026, 7, 9, 14, 30, tzinfo=timezone.utc),
+                start_time=datetime(2026, 7, 9, 14, 0, tzinfo=UTC),
+                end_time=datetime(2026, 7, 9, 14, 30, tzinfo=UTC),
                 duration_sec=1800,
                 app_name="Chrome",
                 process_name="chrome",
@@ -105,8 +105,8 @@ class ActivityRepositoryTests(unittest.TestCase):
                 repository.save_session(inside)
                 repository.save_session(outside)
                 results = repository.correlated_sessions(
-                    start_time=datetime(2026, 7, 9, 9, 45, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 9, 11, 0, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 9, 9, 45, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 9, 11, 0, tzinfo=UTC),
                 )
 
         self.assertEqual(len(results), 1)
@@ -148,8 +148,8 @@ class ActivityRepositoryTests(unittest.TestCase):
 
             with ActivityRepository(db_path) as repository:
                 event_id = repository.save_work_event(
-                    created_at=datetime(2026, 7, 10, 15, 0, tzinfo=timezone.utc),
-                    event_time=datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc),
+                    created_at=datetime(2026, 7, 10, 15, 0, tzinfo=UTC),
+                    event_time=datetime(2026, 7, 10, 14, 30, tzinfo=UTC),
                     event_type="Incident",
                     title="Demo failure",
                     impact="High",
@@ -291,7 +291,9 @@ class ActivityRepositoryTests(unittest.TestCase):
 
                 first_page = repository.list_session_changes_since(limit=1)
                 cursor = f"{first_page[0]['updated_at']}|{first_page[0]['uuid']}"
-                second_page = repository.list_session_changes_since(cursor=cursor, limit=10)
+                second_page = repository.list_session_changes_since(
+                    cursor=cursor, limit=10
+                )
 
         self.assertEqual(len(first_page), 1)
         self.assertEqual(first_page[0]["uuid"], "00000000-0000-0000-0000-000000000001")
@@ -384,7 +386,9 @@ class ActivityRepositoryTests(unittest.TestCase):
         self.assertEqual(row["deleted_at"], "2026-07-10T12:30:00+00:00")
         self.assertEqual(row["updated_at"], "2026-07-10T12:30:00+00:00")
 
-    def test_repository_upsert_reflection_by_uuid_resolves_same_date_conflict(self) -> None:
+    def test_repository_upsert_reflection_by_uuid_resolves_same_date_conflict(
+        self,
+    ) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "activity.db"
 
@@ -418,8 +422,8 @@ class ActivityRepositoryTests(unittest.TestCase):
             db_path = Path(temp_dir) / "activity.db"
 
             untagged = ActivitySession(
-                start_time=datetime(2026, 7, 13, 10, 0, tzinfo=timezone.utc),
-                end_time=datetime(2026, 7, 13, 10, 30, tzinfo=timezone.utc),
+                start_time=datetime(2026, 7, 13, 10, 0, tzinfo=UTC),
+                end_time=datetime(2026, 7, 13, 10, 30, tzinfo=UTC),
                 duration_sec=1800,
                 app_name="Firefox",
                 process_name="firefox",
@@ -434,8 +438,8 @@ class ActivityRepositoryTests(unittest.TestCase):
                 tag=None,
             )
             tagged = ActivitySession(
-                start_time=datetime(2026, 7, 13, 11, 0, tzinfo=timezone.utc),
-                end_time=datetime(2026, 7, 13, 11, 20, tzinfo=timezone.utc),
+                start_time=datetime(2026, 7, 13, 11, 0, tzinfo=UTC),
+                end_time=datetime(2026, 7, 13, 11, 20, tzinfo=UTC),
                 duration_sec=1200,
                 app_name="Code",
                 process_name="code",
@@ -469,12 +473,190 @@ class ActivityRepositoryTests(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(filtered[0]["browser_domain"], "github.com")
 
-    def test_repository_records_tag_review_action_and_updates_tag_timestamp(self) -> None:
+    def test_repository_groups_tag_review_candidates_by_repo_domain_and_app(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            with ActivityRepository(db_path) as repository:
+                repository.save_session(
+                    ActivitySession(
+                        start_time=datetime(2026, 7, 13, 8, 0, tzinfo=UTC),
+                        end_time=datetime(2026, 7, 13, 8, 30, tzinfo=UTC),
+                        duration_sec=1800,
+                        app_name="Code",
+                        process_name="code",
+                        window_title="main.py",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo="/tmp/workgraph",
+                        git_branch="main",
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+                repository.save_session(
+                    ActivitySession(
+                        start_time=datetime(2026, 7, 13, 9, 0, tzinfo=UTC),
+                        end_time=datetime(2026, 7, 13, 9, 15, tzinfo=UTC),
+                        duration_sec=900,
+                        app_name="Code",
+                        process_name="code",
+                        window_title="README.md",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo="/tmp/workgraph/.git",
+                        git_branch="main",
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+                repository.save_session(
+                    ActivitySession(
+                        start_time=datetime(2026, 7, 13, 10, 0, tzinfo=UTC),
+                        end_time=datetime(2026, 7, 13, 10, 20, tzinfo=UTC),
+                        duration_sec=1200,
+                        app_name="Firefox",
+                        process_name="firefox",
+                        window_title="GitHub issue",
+                        browser_domain="github.com",
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+                repository.save_session(
+                    ActivitySession(
+                        start_time=datetime(2026, 7, 13, 11, 0, tzinfo=UTC),
+                        end_time=datetime(2026, 7, 13, 11, 10, tzinfo=UTC),
+                        duration_sec=600,
+                        app_name="Slack",
+                        process_name="slack",
+                        window_title="Engineering channel",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+
+                groups = repository.list_tag_review_groups(days=3650)
+                count = repository.count_tag_review_groups(days=3650)
+                repo_sessions = repository.list_tag_review_group_sessions(
+                    group_type="repo",
+                    group_value="workgraph",
+                    days=3650,
+                )
+                updated_count = repository.update_session_tags(
+                    [int(row["id"]) for row in repo_sessions],
+                    "Development",
+                )
+
+        self.assertEqual(count, 3)
+        self.assertEqual(len(groups), 3)
+        self.assertEqual(groups[0]["group_type"], "repo")
+        self.assertEqual(groups[0]["group_value"], "workgraph")
+        self.assertEqual(groups[0]["session_count"], 2)
+        self.assertEqual(len(repo_sessions), 2)
+        self.assertEqual(updated_count, 2)
+
+    def test_repository_groups_browser_sessions_by_browser_context_when_domain_missing(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            with ActivityRepository(db_path) as repository:
+                repository.save_session(
+                    ActivitySession(
+                        start_time=datetime(2026, 7, 13, 12, 0, tzinfo=UTC),
+                        end_time=datetime(2026, 7, 13, 12, 20, tzinfo=UTC),
+                        duration_sec=1200,
+                        app_name="Brave",
+                        process_name="brave",
+                        window_title="Brave - YouTube Music",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+                repository.save_session(
+                    ActivitySession(
+                        start_time=datetime(2026, 7, 13, 12, 30, tzinfo=UTC),
+                        end_time=datetime(2026, 7, 13, 12, 45, tzinfo=UTC),
+                        duration_sec=900,
+                        app_name="Brave",
+                        process_name="brave",
+                        window_title="Brave - New Tab - Brave",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+                repository.save_session(
+                    ActivitySession(
+                        start_time=datetime(2026, 7, 13, 13, 0, tzinfo=UTC),
+                        end_time=datetime(2026, 7, 13, 13, 25, tzinfo=UTC),
+                        duration_sec=1500,
+                        app_name="Brave",
+                        process_name="brave",
+                        window_title="Brave - compare text and find differences online or offline - Diffchecker - Brave",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+
+                groups = repository.list_tag_review_groups(days=3650)
+                new_tab_sessions = repository.list_tag_review_group_sessions(
+                    group_type="browser_context",
+                    group_value="New Tab",
+                    days=3650,
+                )
+
+        group_keys = {(group["group_type"], group["group_value"]) for group in groups}
+        self.assertIn(("browser_context", "YouTube Music"), group_keys)
+        self.assertIn(("browser_context", "New Tab"), group_keys)
+        self.assertIn(("browser_context", "Diffchecker"), group_keys)
+        self.assertEqual(len(new_tab_sessions), 1)
+        self.assertEqual(new_tab_sessions[0]["window_title"], "Brave - New Tab - Brave")
+
+    def test_repository_records_tag_review_action_and_updates_tag_timestamp(
+        self,
+    ) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "activity.db"
             session = ActivitySession(
-                start_time=datetime(2026, 7, 13, 9, 0, tzinfo=timezone.utc),
-                end_time=datetime(2026, 7, 13, 9, 15, tzinfo=timezone.utc),
+                start_time=datetime(2026, 7, 13, 9, 0, tzinfo=UTC),
+                end_time=datetime(2026, 7, 13, 9, 15, tzinfo=UTC),
                 duration_sec=900,
                 app_name="Chrome",
                 process_name="chrome",
@@ -520,13 +702,17 @@ class ActivityRepositoryTests(unittest.TestCase):
             db_path_two = temp / "two.db"
             identity_path = temp / "identity.json"
 
-            with ActivityRepository(db_path_one, identity_path=identity_path) as repository_one:
+            with ActivityRepository(
+                db_path_one, identity_path=identity_path
+            ) as repository_one:
                 state_one = repository_one.get_sync_state()
 
             self.assertTrue(identity_path.exists())
             identity_data = json.loads(identity_path.read_text(encoding="utf-8"))
 
-            with ActivityRepository(db_path_two, identity_path=identity_path) as repository_two:
+            with ActivityRepository(
+                db_path_two, identity_path=identity_path
+            ) as repository_two:
                 state_two = repository_two.get_sync_state()
 
         self.assertIsNotNone(state_one)

@@ -969,6 +969,34 @@ class TagReviewYamlRequest(BaseModel):
     min_repo_hits: int = Field(default=2, ge=1, le=100)
 
 
+class TagReviewGroupAssignRequest(BaseModel):
+    group_type: str = Field(min_length=1, max_length=32)
+    group_value: str = Field(min_length=1, max_length=500)
+    selected_tag: str = Field(min_length=1, max_length=128)
+    reason: str | None = Field(default=None, max_length=500)
+    source_signal: str | None = Field(default=None, max_length=64)
+    days: int = Field(default=7, ge=1, le=3650)
+    only_untagged: bool = True
+
+    @field_validator("group_type")
+    @classmethod
+    def validate_group_type(cls, value: str) -> str:
+        trimmed = value.strip().lower()
+        if trimmed not in {"repo", "domain", "browser_context", "app"}:
+            raise ValueError(
+                "group_type must be one of: repo, domain, browser_context, app"
+            )
+        return trimmed
+
+    @field_validator("group_value", "selected_tag")
+    @classmethod
+    def validate_non_blank(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("value cannot be blank")
+        return trimmed
+
+
 def _decode_metadata(raw_value: str | None) -> dict | None:
     if raw_value is None:
         return None
@@ -3737,25 +3765,22 @@ async def tag_review_page(
     available_tags = get_available_tags()
     sync_health = get_sync_health(db_path) if db_path.exists() else None
 
-    sessions: list[dict] = []
-    candidate_count = 0
+    groups: list[dict[str, object]] = []
+    group_count = 0
     if db_path.exists():
         from db.repository import ActivityRepository
 
         with ActivityRepository(db_path) as repository:
-            sessions = [
-                dict(row)
-                for row in repository.list_tag_review_candidates(
-                    days=days,
-                    only_untagged=only_untagged,
-                    app_name=app_name,
-                    domain=domain,
-                    repo=repo,
-                    limit=limit,
-                    offset=0,
-                )
-            ]
-            candidate_count = repository.count_tag_review_candidates(
+            groups = repository.list_tag_review_groups(
+                days=days,
+                only_untagged=only_untagged,
+                app_name=app_name,
+                domain=domain,
+                repo=repo,
+                limit=limit,
+                offset=0,
+            )
+            group_count = repository.count_tag_review_groups(
                 days=days,
                 only_untagged=only_untagged,
                 app_name=app_name,
@@ -3773,8 +3798,8 @@ async def tag_review_page(
 
     template = jinja_env.get_template("tag_review.html")
     return template.render(
-        sessions=sessions,
-        candidate_count=candidate_count,
+        groups=groups,
+        group_count=group_count,
         days=days,
         only_untagged=only_untagged,
         filter_app_name=app_name,
@@ -3858,6 +3883,165 @@ async def api_tag_review_candidates(
             "limit": limit,
             "offset": offset,
         },
+    }
+
+
+@app.get("/api/tag-review/groups")
+async def api_tag_review_groups(
+    days: int = Query(7, ge=1, le=3650),
+    only_untagged: bool = Query(True),
+    app_name: str | None = Query(None),
+    domain: str | None = Query(None),
+    repo: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+
+    if not db_path.exists():
+        return {
+            "groups": [],
+            "count": 0,
+            "filters": {
+                "days": days,
+                "only_untagged": only_untagged,
+                "app_name": app_name,
+                "domain": domain,
+                "repo": repo,
+                "limit": limit,
+                "offset": offset,
+            },
+        }
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        groups = repository.list_tag_review_groups(
+            days=days,
+            only_untagged=only_untagged,
+            app_name=app_name,
+            domain=domain,
+            repo=repo,
+            limit=limit,
+            offset=offset,
+        )
+        count = repository.count_tag_review_groups(
+            days=days,
+            only_untagged=only_untagged,
+            app_name=app_name,
+            domain=domain,
+            repo=repo,
+        )
+
+    return {
+        "groups": groups,
+        "count": count,
+        "filters": {
+            "days": days,
+            "only_untagged": only_untagged,
+            "app_name": app_name,
+            "domain": domain,
+            "repo": repo,
+            "limit": limit,
+            "offset": offset,
+        },
+    }
+
+
+@app.get("/api/tag-review/groups/{group_type}/{group_value}")
+async def api_tag_review_group_detail(
+    group_type: str,
+    group_value: str,
+    days: int = Query(7, ge=1, le=3650),
+    only_untagged: bool = Query(True),
+    limit: int = Query(100, ge=1, le=500),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {
+            "group_type": group_type,
+            "group_value": group_value,
+            "sessions": [],
+            "count": 0,
+        }
+
+    if group_type not in {"repo", "domain", "browser_context", "app"}:
+        raise HTTPException(status_code=400, detail="Invalid group_type")
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        sessions = [
+            dict(row)
+            for row in repository.list_tag_review_group_sessions(
+                group_type=group_type,
+                group_value=group_value,
+                days=days,
+                only_untagged=only_untagged,
+                limit=limit,
+            )
+        ]
+
+    total_seconds = sum(int(item.get("duration_sec") or 0) for item in sessions)
+    return {
+        "group_type": group_type,
+        "group_value": group_value,
+        "sessions": sessions,
+        "count": len(sessions),
+        "total_seconds": total_seconds,
+    }
+
+
+@app.post("/api/tag-review/assign-group")
+async def api_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail="No activity database found")
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        sessions = repository.list_tag_review_group_sessions(
+            group_type=payload.group_type,
+            group_value=payload.group_value,
+            days=payload.days,
+            only_untagged=payload.only_untagged,
+            limit=5000,
+        )
+        if not sessions:
+            raise HTTPException(
+                status_code=404, detail="No matching sessions found for group"
+            )
+
+        session_ids: list[int] = []
+        for session in sessions:
+            session_ids.append(int(session["id"]))
+            repository.create_tag_review_action(
+                session_id=int(session["id"]),
+                original_tag=session["tag"],
+                selected_tag=payload.selected_tag,
+                reason=payload.reason,
+                source_signal=payload.source_signal or payload.group_type,
+            )
+        affected_count = repository.update_session_tags(
+            session_ids, payload.selected_tag
+        )
+        updated_sessions = [
+            dict(repository.get_session(session_id))
+            for session_id in session_ids[:20]
+            if repository.get_session(session_id) is not None
+        ]
+
+    return {
+        "ok": True,
+        "group_type": payload.group_type,
+        "group_value": payload.group_value,
+        "selected_tag": payload.selected_tag,
+        "affected_count": affected_count,
+        "sessions": updated_sessions,
     }
 
 
