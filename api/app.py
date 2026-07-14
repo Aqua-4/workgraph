@@ -940,21 +940,6 @@ class SyncPullRequest(BaseModel):
     limit: int = Field(default=1000, ge=1, le=5000)
 
 
-class TagReviewAssignRequest(BaseModel):
-    session_id: int = Field(ge=1)
-    selected_tag: str = Field(min_length=1, max_length=128)
-    reason: str | None = Field(default=None, max_length=500)
-    source_signal: str | None = Field(default=None, max_length=64)
-
-    @field_validator("selected_tag")
-    @classmethod
-    def validate_selected_tag(cls, value: str) -> str:
-        trimmed = value.strip()
-        if not trimmed:
-            raise ValueError("selected_tag cannot be blank")
-        return trimmed
-
-
 class TagReviewSuggestionRequest(BaseModel):
     days: int | None = Field(default=None, ge=1, le=3650)
     selected_tag: str | None = Field(default=None, max_length=128)
@@ -3820,72 +3805,6 @@ async def tag_review_page(
     )
 
 
-@app.get("/api/tag-review/candidates")
-async def api_tag_review_candidates(
-    days: int = Query(7, ge=1, le=3650),
-    only_untagged: bool = Query(True),
-    app_name: str | None = Query(None),
-    domain: str | None = Query(None),
-    repo: str | None = Query(None),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
-    _ensure_tag_review_features_enabled()
-    db_path = get_db_path()
-
-    if not db_path.exists():
-        return {
-            "sessions": [],
-            "count": 0,
-            "filters": {
-                "days": days,
-                "only_untagged": only_untagged,
-                "app_name": app_name,
-                "domain": domain,
-                "repo": repo,
-                "limit": limit,
-                "offset": offset,
-            },
-        }
-
-    from db.repository import ActivityRepository
-
-    with ActivityRepository(db_path) as repository:
-        sessions = [
-            dict(row)
-            for row in repository.list_tag_review_candidates(
-                days=days,
-                only_untagged=only_untagged,
-                app_name=app_name,
-                domain=domain,
-                repo=repo,
-                limit=limit,
-                offset=offset,
-            )
-        ]
-        count = repository.count_tag_review_candidates(
-            days=days,
-            only_untagged=only_untagged,
-            app_name=app_name,
-            domain=domain,
-            repo=repo,
-        )
-
-    return {
-        "sessions": sessions,
-        "count": count,
-        "filters": {
-            "days": days,
-            "only_untagged": only_untagged,
-            "app_name": app_name,
-            "domain": domain,
-            "repo": repo,
-            "limit": limit,
-            "offset": offset,
-        },
-    }
-
-
 @app.get("/api/tag-review/groups")
 async def api_tag_review_groups(
     days: int = Query(7, ge=1, le=3650),
@@ -4042,37 +3961,6 @@ async def api_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
         "selected_tag": payload.selected_tag,
         "affected_count": affected_count,
         "sessions": updated_sessions,
-    }
-
-
-@app.post("/api/tag-review/assign")
-async def api_tag_review_assign(payload: TagReviewAssignRequest):
-    _ensure_tag_review_features_enabled()
-    db_path = get_db_path()
-    if not db_path.exists():
-        raise HTTPException(status_code=404, detail="No activity database found")
-
-    from db.repository import ActivityRepository
-
-    with ActivityRepository(db_path) as repository:
-        session = repository.get_session(payload.session_id)
-        if session is None:
-            raise HTTPException(status_code=404, detail="Session not found")
-
-        action_id = repository.create_tag_review_action(
-            session_id=payload.session_id,
-            original_tag=session["tag"],
-            selected_tag=payload.selected_tag,
-            reason=payload.reason,
-            source_signal=payload.source_signal,
-        )
-        repository.update_session_tag(payload.session_id, payload.selected_tag)
-        updated_session = repository.get_session(payload.session_id)
-
-    return {
-        "ok": True,
-        "action_id": action_id,
-        "session": dict(updated_session) if updated_session is not None else None,
     }
 
 

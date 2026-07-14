@@ -429,6 +429,47 @@ class TagReviewApiTests(unittest.TestCase):
         self.assertIn("Grouped Review Queue", response.text)
         self.assertIn("YAML Preview", response.text)
 
+    def test_tag_review_page_renders_inspector_and_group_labels(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 15, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 15, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - YouTube Music",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.get("/tag-review", params={"days": 3650})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Inspect Sessions", response.text)
+        self.assertIn("Browser Context", response.text)
+        self.assertIn("YouTube Music", response.text)
+
+    def test_legacy_per_session_tag_review_routes_are_removed(self) -> None:
+        candidates = self.client.get("/api/tag-review/candidates")
+        assign = self.client.post(
+            "/api/tag-review/assign",
+            json={
+                "session_id": 1,
+                "selected_tag": "Development",
+            },
+        )
+
+        self.assertEqual(candidates.status_code, 404)
+        self.assertEqual(assign.status_code, 404)
+
     def test_sync_server_mode_disables_tag_review_routes(self) -> None:
         with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
             page = self.client.get("/tag-review")

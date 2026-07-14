@@ -594,7 +594,7 @@ Status legend:
 - [x] Tag Review page, grouped APIs, YAML preview/download, and focused tests are implemented.
 - [x] Sync manual-override propagation is covered by a focused sync test.
 - [x] Browser edge-case handling is now implemented with browser_context-aware grouping and focused tests.
-- [~] Legacy per-session tag-review endpoints still coexist with the grouped workflow.
+- [x] Legacy per-session tag-review endpoints have been removed so the grouped workflow is the only supported path.
 
 ### Database and repository
 
@@ -648,8 +648,8 @@ Status legend:
 - [x] Reuse the existing dashboard/timeline card and table styling where practical.
 - [x] Add a filter form with days, only_untagged, app_name, domain, and repo inputs.
 - [x] Add a grouped candidate list region that renders bucket metadata and tag controls.
-- [ ] Add an expandable sample-session region per bucket.
-- [~] Distinguish visually between repo buckets, domain buckets, browser-context buckets, and app fallback buckets.
+- [x] Add an expandable sample-session region per bucket.
+- [x] Distinguish visually between repo buckets, domain buckets, browser-context buckets, and app fallback buckets.
 - [x] Add a suggestion panel that renders grouped repo/domain suggestions by selected tag.
 - [x] Add a YAML preview region and a download button.
 - [x] Use small fetch-based interactions rather than a heavy client-side app.

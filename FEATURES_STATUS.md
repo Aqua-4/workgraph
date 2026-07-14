@@ -75,6 +75,24 @@ Verification basis:
 | Goal alignment analysis | Planned | No goal-vs-target analyzer yet |
 | Team insights | Planned | Depends on future multi-device/team backend |
 
+## Release Notes
+
+### 2026-07-14
+
+- Tag Review API transition: grouped-only workflow is now the only supported contract.
+- Breaking change for external consumers:
+	- Removed legacy per-session endpoints:
+		- `GET /api/tag-review/candidates`
+		- `POST /api/tag-review/assign`
+	- Use grouped endpoints instead:
+		- `GET /api/tag-review/groups`
+		- `GET /api/tag-review/groups/{group_type}/{group_value}`
+		- `POST /api/tag-review/assign-group`
+- Existing suggestion and YAML preview/download endpoints remain unchanged:
+	- `POST /api/tag-review/suggestions`
+	- `GET /api/tag-review/yaml-preview`
+	- `POST /api/tag-review/yaml-download`
+
 ## Notes
 
 - CLI supports collector flags plus `export`, `report weekly`, and `goals analyze` subcommands.
