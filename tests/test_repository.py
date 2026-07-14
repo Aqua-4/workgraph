@@ -413,6 +413,106 @@ class ActivityRepositoryTests(unittest.TestCase):
         self.assertEqual(rows[0]["wins"], "Latest")
         self.assertEqual(rows[0]["uuid"], "44444444-4444-4444-4444-444444444444")
 
+    def test_repository_lists_tag_review_candidates(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            untagged = ActivitySession(
+                start_time=datetime(2026, 7, 13, 10, 0, tzinfo=timezone.utc),
+                end_time=datetime(2026, 7, 13, 10, 30, tzinfo=timezone.utc),
+                duration_sec=1800,
+                app_name="Firefox",
+                process_name="firefox",
+                window_title="GitHub pull request",
+                browser_domain="github.com",
+                is_idle=False,
+                idle_seconds=0,
+                platform="linux",
+                git_repo=None,
+                git_branch=None,
+                context_switches=1,
+                tag=None,
+            )
+            tagged = ActivitySession(
+                start_time=datetime(2026, 7, 13, 11, 0, tzinfo=timezone.utc),
+                end_time=datetime(2026, 7, 13, 11, 20, tzinfo=timezone.utc),
+                duration_sec=1200,
+                app_name="Code",
+                process_name="code",
+                window_title="workgraph",
+                browser_domain=None,
+                is_idle=False,
+                idle_seconds=0,
+                platform="linux",
+                git_repo="workgraph",
+                git_branch="main",
+                context_switches=0,
+                tag="Development",
+            )
+
+            with ActivityRepository(db_path) as repository:
+                repository.save_session(untagged)
+                repository.save_session(tagged)
+                candidates = repository.list_tag_review_candidates(days=3650)
+                count = repository.count_tag_review_candidates(days=3650)
+                filtered = repository.list_tag_review_candidates(
+                    days=3650,
+                    only_untagged=True,
+                    app_name="Firefox",
+                    domain="github.com",
+                    limit=10,
+                )
+
+        self.assertEqual(count, 1)
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]["app_name"], "Firefox")
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["browser_domain"], "github.com")
+
+    def test_repository_records_tag_review_action_and_updates_tag_timestamp(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+            session = ActivitySession(
+                start_time=datetime(2026, 7, 13, 9, 0, tzinfo=timezone.utc),
+                end_time=datetime(2026, 7, 13, 9, 15, tzinfo=timezone.utc),
+                duration_sec=900,
+                app_name="Chrome",
+                process_name="chrome",
+                window_title="TradingView",
+                browser_domain="tradingview.com",
+                is_idle=False,
+                idle_seconds=0,
+                platform="linux",
+                git_repo=None,
+                git_branch=None,
+                context_switches=0,
+                tag=None,
+            )
+
+            with ActivityRepository(db_path) as repository:
+                session_id = repository.save_session(session)
+                original = repository.get_session(session_id)
+                action_id = repository.create_tag_review_action(
+                    session_id=session_id,
+                    original_tag=original["tag"],
+                    selected_tag="Finance",
+                    reason="User reviewed missed browser activity",
+                    source_signal="browser_domain",
+                )
+                repository.update_session_tag(session_id, "Finance")
+                updated = repository.get_session(session_id)
+                review_actions = repository.list_review_actions_for_suggestions(
+                    days=3650,
+                    selected_tag="Finance",
+                )
+
+        self.assertGreater(action_id, 0)
+        self.assertEqual(updated["tag"], "Finance")
+        self.assertNotEqual(updated["updated_at"], original["updated_at"])
+        self.assertEqual(len(review_actions), 1)
+        self.assertEqual(review_actions[0]["browser_domain"], "tradingview.com")
+        self.assertEqual(review_actions[0]["selected_tag"], "Finance")
+
     def test_repository_creates_and_reuses_identity_file(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)

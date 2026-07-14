@@ -51,6 +51,25 @@ CREATE INDEX IF NOT EXISTS idx_git_activity_session_id
 CREATE INDEX IF NOT EXISTS idx_git_activity_repo
     ON git_activity (repo);
 
+CREATE TABLE IF NOT EXISTS tag_review_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    session_uuid TEXT,
+    original_tag TEXT,
+    selected_tag TEXT NOT NULL,
+    reason TEXT,
+    source_signal TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    applied_to_rules INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (session_id) REFERENCES activity_sessions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_tag_review_actions_session_id
+    ON tag_review_actions (session_id);
+
+CREATE INDEX IF NOT EXISTS idx_tag_review_actions_selected_tag_created_at
+    ON tag_review_actions (selected_tag, created_at);
+
 CREATE TABLE IF NOT EXISTS journal_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     uuid TEXT,

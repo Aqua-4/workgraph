@@ -5,7 +5,7 @@ import platform
 import shutil
 import sqlite3
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import NAMESPACE_DNS, uuid4, uuid5
 
@@ -161,6 +161,34 @@ class ActivityRepository:
                 """
                 CREATE INDEX IF NOT EXISTS idx_activity_sessions_user_updated
                     ON activity_sessions (user_id, updated_at)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tag_review_actions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    session_uuid TEXT,
+                    original_tag TEXT,
+                    selected_tag TEXT NOT NULL,
+                    reason TEXT,
+                    source_signal TEXT,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    applied_to_rules INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY (session_id) REFERENCES activity_sessions(id) ON DELETE CASCADE
+                )
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_tag_review_actions_session_id
+                    ON tag_review_actions (session_id)
+                """
+            )
+            self._connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_tag_review_actions_selected_tag_created_at
+                    ON tag_review_actions (selected_tag, created_at)
                 """
             )
             self._connection.execute(
@@ -339,16 +367,191 @@ class ActivityRepository:
         )
         return list(cursor.fetchall())
 
+    def get_session(self, session_id: int) -> sqlite3.Row | None:
+        cursor = self._connection.execute(
+            """
+            SELECT *
+            FROM activity_sessions
+            WHERE id = ?
+            """,
+            (session_id,),
+        )
+        return cursor.fetchone()
+
     def update_session_tag(self, session_id: int, tag: str | None) -> None:
+        current = self.get_session(session_id)
+        now_dt = datetime.now(UTC)
+        if current is not None and current["updated_at"]:
+            current_updated_at = datetime.fromisoformat(current["updated_at"])
+            if _format_datetime(now_dt) <= current["updated_at"]:
+                now_dt = current_updated_at + timedelta(seconds=1)
+        now = _format_datetime(now_dt)
         self._connection.execute(
             """
             UPDATE activity_sessions
-            SET tag = ?
+            SET tag = ?,
+                updated_at = ?
             WHERE id = ?
             """,
-            (tag, session_id),
+            (tag, now, session_id),
         )
         self._connection.commit()
+
+    def list_tag_review_candidates(
+        self,
+        *,
+        days: int = 7,
+        only_untagged: bool = True,
+        app_name: str | None = None,
+        domain: str | None = None,
+        repo: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[sqlite3.Row]:
+        query = """
+            SELECT *
+            FROM activity_sessions
+            WHERE start_time >= ?
+        """
+        params: list[object] = [
+            _format_datetime(datetime.now(UTC) - timedelta(days=days))
+        ]
+
+        if only_untagged:
+            query += " AND COALESCE(tag, '') = ''"
+        if app_name:
+            query += " AND app_name = ?"
+            params.append(app_name)
+        if domain:
+            query += " AND browser_domain = ?"
+            params.append(domain)
+        if repo:
+            query += " AND git_repo = ?"
+            params.append(repo)
+
+        query += " ORDER BY start_time DESC, id DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        cursor = self._connection.execute(query, params)
+        return list(cursor.fetchall())
+
+    def count_tag_review_candidates(
+        self,
+        *,
+        days: int = 7,
+        only_untagged: bool = True,
+        app_name: str | None = None,
+        domain: str | None = None,
+        repo: str | None = None,
+    ) -> int:
+        query = """
+            SELECT COUNT(*) AS total
+            FROM activity_sessions
+            WHERE start_time >= ?
+        """
+        params: list[object] = [
+            _format_datetime(datetime.now(UTC) - timedelta(days=days))
+        ]
+
+        if only_untagged:
+            query += " AND COALESCE(tag, '') = ''"
+        if app_name:
+            query += " AND app_name = ?"
+            params.append(app_name)
+        if domain:
+            query += " AND browser_domain = ?"
+            params.append(domain)
+        if repo:
+            query += " AND git_repo = ?"
+            params.append(repo)
+
+        cursor = self._connection.execute(query, params)
+        row = cursor.fetchone()
+        return int(row["total"] if row is not None else 0)
+
+    def create_tag_review_action(
+        self,
+        *,
+        session_id: int,
+        original_tag: str | None,
+        selected_tag: str,
+        reason: str | None = None,
+        source_signal: str | None = None,
+        applied_to_rules: bool = False,
+    ) -> int:
+        session = self.get_session(session_id)
+        if session is None:
+            raise ValueError(f"Unknown session_id: {session_id}")
+
+        cursor = self._connection.execute(
+            """
+            INSERT INTO tag_review_actions (
+                session_id,
+                session_uuid,
+                original_tag,
+                selected_tag,
+                reason,
+                source_signal,
+                created_at,
+                applied_to_rules
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                session["uuid"],
+                original_tag,
+                selected_tag,
+                reason,
+                source_signal,
+                _format_datetime(datetime.now(UTC)),
+                int(applied_to_rules),
+            ),
+        )
+        self._connection.commit()
+        return int(cursor.lastrowid)
+
+    def list_review_actions_for_suggestions(
+        self,
+        *,
+        days: int | None = None,
+        selected_tag: str | None = None,
+    ) -> list[sqlite3.Row]:
+        query = """
+            SELECT
+                review.id,
+                review.session_id,
+                review.session_uuid,
+                review.original_tag,
+                review.selected_tag,
+                review.reason,
+                review.source_signal,
+                review.created_at,
+                review.applied_to_rules,
+                session.app_name,
+                session.window_title,
+                session.browser_domain,
+                session.git_repo,
+                session.git_branch,
+                session.start_time,
+                session.end_time
+            FROM tag_review_actions AS review
+            INNER JOIN activity_sessions AS session
+                ON session.id = review.session_id
+            WHERE 1=1
+        """
+        params: list[object] = []
+
+        if days is not None:
+            query += " AND review.created_at >= ?"
+            params.append(_format_datetime(datetime.now(UTC) - timedelta(days=days)))
+        if selected_tag:
+            query += " AND review.selected_tag = ?"
+            params.append(selected_tag)
+
+        query += " ORDER BY review.created_at DESC, review.id DESC"
+        cursor = self._connection.execute(query, params)
+        return list(cursor.fetchall())
 
     def save_journal_entry(
         self,
@@ -570,28 +773,36 @@ class ActivityRepository:
         limit: int = 1000,
     ) -> list[sqlite3.Row]:
         table_name = _resolve_entity_table(entity)
-        return self._list_entity_changes(table_name=table_name, cursor=cursor, limit=limit)
+        return self._list_entity_changes(
+            table_name=table_name, cursor=cursor, limit=limit
+        )
 
     def list_session_changes_since(
         self,
         cursor: str | None = None,
         limit: int = 1000,
     ) -> list[sqlite3.Row]:
-        return self._list_entity_changes(table_name="activity_sessions", cursor=cursor, limit=limit)
+        return self._list_entity_changes(
+            table_name="activity_sessions", cursor=cursor, limit=limit
+        )
 
     def list_journal_changes_since(
         self,
         cursor: str | None = None,
         limit: int = 1000,
     ) -> list[sqlite3.Row]:
-        return self._list_entity_changes(table_name="journal_entries", cursor=cursor, limit=limit)
+        return self._list_entity_changes(
+            table_name="journal_entries", cursor=cursor, limit=limit
+        )
 
     def list_reflection_changes_since(
         self,
         cursor: str | None = None,
         limit: int = 1000,
     ) -> list[sqlite3.Row]:
-        return self._list_entity_changes(table_name="daily_reflections", cursor=cursor, limit=limit)
+        return self._list_entity_changes(
+            table_name="daily_reflections", cursor=cursor, limit=limit
+        )
 
     def upsert_session_by_uuid(self, payload: dict) -> None:
         now = _format_datetime(datetime.now(UTC))
@@ -1062,7 +1273,7 @@ class ActivityRepository:
     ) -> None:
         rows = self._connection.execute(
             f"""
-            SELECT id, uuid, user_id, device_id, updated_at, deleted_at, {created_column}{', ' + date_key_column if date_key_column else ''}
+            SELECT id, uuid, user_id, device_id, updated_at, deleted_at, {created_column}{", " + date_key_column if date_key_column else ""}
             FROM {table_name}
             """
         ).fetchall()
@@ -1072,7 +1283,11 @@ class ActivityRepository:
             created_at_value = row[created_column]
             if not created_at_value and date_key_column:
                 created_at_value = f"{row[date_key_column]}T00:00:00+00:00"
-            updated_at_value = row["updated_at"] or created_at_value or _format_datetime(datetime.now(UTC))
+            updated_at_value = (
+                row["updated_at"]
+                or created_at_value
+                or _format_datetime(datetime.now(UTC))
+            )
             self._connection.execute(
                 f"""
                 UPDATE {table_name}
@@ -1196,8 +1411,12 @@ def _load_or_create_identity(identity_path: str | Path | None) -> dict[str, str]
             "user_id": str(loaded.get("user_id") or default_identity["user_id"]),
             "device_id": str(loaded.get("device_id") or default_identity["device_id"]),
             "user_name": str(loaded.get("user_name") or default_identity["user_name"]),
-            "device_name": str(loaded.get("device_name") or default_identity["device_name"]),
-            "device_type": str(loaded.get("device_type") or default_identity["device_type"]),
+            "device_name": str(
+                loaded.get("device_name") or default_identity["device_name"]
+            ),
+            "device_type": str(
+                loaded.get("device_type") or default_identity["device_type"]
+            ),
         }
 
     path.parent.mkdir(parents=True, exist_ok=True)
