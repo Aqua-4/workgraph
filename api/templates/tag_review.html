@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block title %}Tag Review - WorkGraph{% endblock %}
+
+{% block nav_tag_review %}active{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .tag-review-shell {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .tag-review-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+        gap: 1rem;
+    }
+
+    .tag-review-preview {
+        width: 100%;
+        min-height: 280px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85rem;
+    }
+
+    .tag-review-muted {
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+
+    .tag-review-table td,
+    .tag-review-table th {
+        vertical-align: top;
+    }
+
+    @media (max-width: 960px) {
+        .tag-review-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tag-review-shell">
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1">Tag Review</h2>
+            <p class="tag-review-muted mb-0">Review missed entries, keep manual overrides, and export reusable YAML
+                suggestions.</p>
+        </div>
+        <span class="badge text-bg-secondary">{{ candidate_count }} candidates</span>
+    </div>
+
+    {% if sync_health and sync_health.enabled %}
+    <div class="card p-3">
+        <h3 class="mb-1">Sync Health</h3>
+        <div class="d-flex gap-2 flex-wrap">
+            <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
+            <span class="badge text-bg-light border">Synced: {{ sync_health.synced_devices }}</span>
+            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card p-3 p-md-4">
+        <h3 class="mb-3">Filters</h3>
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-12 col-md-2">
+                <label for="days" class="form-label">Past Days</label>
+                <input type="number" class="form-control" id="days" name="days" min="1" max="3650" value="{{ days }}">
+            </div>
+            <div class="col-12 col-md-3">
+                <label for="app_name" class="form-label">App</label>
+                <input type="text" class="form-control" id="app_name" name="app_name"
+                    value="{{ filter_app_name or '' }}">
+            </div>
+            <div class="col-12 col-md-3">
+                <label for="domain" class="form-label">Domain</label>
+                <input type="text" class="form-control" id="domain" name="domain" value="{{ filter_domain or '' }}">
+            </div>
+            <div class="col-12 col-md-2">
+                <label for="repo" class="form-label">Repo</label>
+                <input type="text" class="form-control" id="repo" name="repo" value="{{ filter_repo or '' }}">
+            </div>
+            <div class="col-12 col-md-2">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="only_untagged" name="only_untagged" value="true"
+                        {% if only_untagged %}checked{% endif %}>
+                    <label class="form-check-label" for="only_untagged">Only untagged</label>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Apply</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="tag-review-grid">
+        <div class="card p-3 p-md-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <h3 class="m-0">Missed Entries</h3>
+                <span class="tag-review-muted">Manual assignment updates session tags immediately.</span>
+            </div>
+            <div id="tag-review-feedback" style="display: none;"></div>
+            {% if sessions %}
+            <div class="table-responsive">
+                <table class="table table-sm tag-review-table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Start</th>
+                            <th>App</th>
+                            <th>Domain / Repo</th>
+                            <th>Assign</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for session in sessions %}
+                        <tr data-session-id="{{ session.id }}">
+                            <td class="time-small">{{ session.start_time|human_datetime }}</td>
+                            <td>
+                                <div><strong>{{ session.app_name }}</strong></div>
+                                <div class="tag-review-muted">{{ session.window_title or '-' }}</div>
+                            </td>
+                            <td>
+                                <div>{{ session.browser_domain or '-' }}</div>
+                                <div class="tag-review-muted">{{ session.git_repo or '-' }}</div>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <select class="form-select form-select-sm tag-review-select"
+                                        style="min-width: 180px;">
+                                        <option value="">Choose tag</option>
+                                        {% for tag in available_tags %}
+                                        <option value="{{ tag }}">{{ tag }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="button"
+                                        class="btn btn-sm btn-primary tag-review-assign-btn">Assign</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No matching review candidates in this range.</p>
+            {% endif %}
+        </div>
+
+        <div class="card p-3 p-md-4">
+            <h3 class="mb-2">YAML Preview</h3>
+            <p class="tag-review-muted">Preview only in this phase. Existing keywords stay visible, but new keywords are
+                not generated.</p>
+            {% if warnings %}
+            <div class="error">
+                {% for warning in warnings %}
+                <div>{{ warning.field }} conflict for {{ warning.value }} (owned by {{ warning.owner }})</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <textarea id="tag-review-yaml-preview" class="tag-review-preview form-control"
+                readonly>{{ yaml_preview }}</textarea>
+            <div class="d-flex gap-2 mt-3 flex-wrap">
+                <button id="tag-review-refresh-preview" type="button" class="btn btn-outline-primary">Refresh
+                    Preview</button>
+                <button id="tag-review-download" type="button" class="btn btn-primary">Download YAML</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-3 p-md-4">
+        <h3 class="mb-3">Rule Suggestions</h3>
+        {% if suggestions %}
+        <div class="row g-3">
+            {% for tag_name, suggestion in suggestions.items() %}
+            <div class="col-12 col-lg-6">
+                <div class="border rounded p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+                        <strong>{{ tag_name }}</strong>
+                        <span class="badge text-bg-light border">{{ suggestion.total_reviewed }} reviewed</span>
+                    </div>
+                    <div class="mb-2">
+                        <div class="tag-review-muted">Domains</div>
+                        {% if suggestion.domains %}
+                        <ul class="mb-0">
+                            {% for item in suggestion.domains %}
+                            <li>{{ item.value }} ({{ item.sample_count }}){% if item.conflict_with %} conflict: {{
+                                item.conflict_with }}{% endif %}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="tag-review-muted">No domain suggestions yet.</div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <div class="tag-review-muted">Repos</div>
+                        {% if suggestion.repos %}
+                        <ul class="mb-0">
+                            {% for item in suggestion.repos %}
+                            <li>{{ item.value }} ({{ item.sample_count }}){% if item.conflict_with %} conflict: {{
+                                item.conflict_with }}{% endif %}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="tag-review-muted">No repo suggestions yet.</div>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div class="tag-review-muted">Existing keywords</div>
+                        {% if suggestion.keywords %}
+                        <div>{{ suggestion.keywords|join(', ') }}</div>
+                        {% else %}
+                        <div class="tag-review-muted">No configured keywords.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No reviewed actions yet. Assign a few sessions to start generating reusable
+            suggestions.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    (() => {
+        const feedbackNode = document.getElementById("tag-review-feedback");
+        const previewNode = document.getElementById("tag-review-yaml-preview");
+        const queryString = window.location.search;
+
+        function setFeedback(message, type) {
+            if (!feedbackNode) {
+                return;
+            }
+            feedbackNode.className = type === "error" ? "error" : "success";
+            feedbackNode.textContent = message;
+            feedbackNode.style.display = "block";
+        }
+
+        async function refreshPreview() {
+            const response = await fetch(`/api/tag-review/yaml-preview${queryString}`);
+            if (!response.ok) {
+                setFeedback("Failed to refresh YAML preview.", "error");
+                return;
+            }
+            const payload = await response.json();
+            if (previewNode) {
+                previewNode.value = payload.yaml || "";
+            }
+        }
+
+        document.querySelectorAll(".tag-review-assign-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const row = button.closest("tr");
+                const select = row?.querySelector(".tag-review-select");
+                const sessionId = row?.getAttribute("data-session-id");
+                const selectedTag = select?.value || "";
+                if (!sessionId || !selectedTag) {
+                    setFeedback("Choose a tag before assigning.", "error");
+                    return;
+                }
+
+                const response = await fetch("/api/tag-review/assign", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        session_id: Number(sessionId),
+                        selected_tag: selectedTag,
+                        source_signal: "manual-review",
+                    }),
+                });
+                if (!response.ok) {
+                    setFeedback("Failed to assign tag.", "error");
+                    return;
+                }
+
+                setFeedback(`Assigned ${selectedTag}. Refreshing page...`, "success");
+                window.location.reload();
+            });
+        });
+
+        document.getElementById("tag-review-refresh-preview")?.addEventListener("click", refreshPreview);
+
+        document.getElementById("tag-review-download")?.addEventListener("click", async () => {
+            const response = await fetch("/api/tag-review/yaml-download", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    days: {{ days }}
+                }),
+            });
+    if (!response.ok) {
+        setFeedback("Failed to download YAML.", "error");
+        return;
+    }
+    const blob = await response.blob();
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = "tag-review-preview.yaml";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+    });
+}) ();
+</script>
+{% endblock %}
