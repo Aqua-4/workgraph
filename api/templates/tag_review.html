@@ -210,7 +210,6 @@
     .tag-review-toggle {
         align-self: start;
     }
-
 </style>
 {% endblock %}
 
@@ -270,105 +269,115 @@
     <div class="row g-3">
         <div class="col-12 col-xl-8">
             <div class="card p-3 p-md-4 h-100">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                <h3 class="m-0">Grouped Review Queue</h3>
-                <span class="tag-review-muted">Assigning a tag updates all matching sessions in the bucket immediately.</span>
-            </div>
-            <div id="tag-review-feedback" style="display: none;"></div>
-            {% if groups %}
-            <div class="table-responsive">
-                <table class="table table-sm tag-review-table align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Group</th>
-                            <th>Coverage</th>
-                            <th>Samples</th>
-                            <th>Assign</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for group in groups %}
-                        <tr class="tag-review-row" data-group-type="{{ group.group_type }}" data-group-value="{{ group.group_value }}">
-                            <td>
-                                <div class="tag-review-group-card">
-                                    <span class="tag-review-group-chip">{{ group.group_type.replace('_', ' ')|title }}</span>
-                                    <div class="tag-review-group-value">{{ group.group_value }}</div>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="tag-review-group-card">
-                                    <div class="tag-review-meta-list">
-                                        <span class="tag-review-meta-pill">{{ group.session_count }} sessions</span>
-                                        <span class="tag-review-meta-pill">{{ "%.1f"|format((group.total_seconds / 3600) if group.total_seconds else 0) }}h active</span>
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <h3 class="m-0">Grouped Review Queue</h3>
+                    <span class="tag-review-muted">Assigning a tag updates all matching sessions in the bucket
+                        immediately.</span>
+                </div>
+                <div id="tag-review-feedback" style="display: none;"></div>
+                {% if groups %}
+                <div class="table-responsive">
+                    <table class="table table-sm tag-review-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Group</th>
+                                <th>Coverage</th>
+                                <th>Samples</th>
+                                <th>Assign</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for group in groups %}
+                            <tr class="tag-review-row" data-group-type="{{ group.group_type }}"
+                                data-group-value="{{ group.group_value }}">
+                                <td>
+                                    <div class="tag-review-group-card">
+                                        <span class="tag-review-group-chip">{{ group.group_type.replace('_', ' ')|title
+                                            }}</span>
+                                        <div class="tag-review-group-value">{{ group.group_value }}</div>
                                     </div>
-                                    {% if group.dominant_apps %}
-                                    <div class="tag-review-muted mt-2">Apps: {{ group.dominant_apps|join(', ') }}</div>
-                                    {% endif %}
-                                    {% if group.current_tags %}
-                                    <div class="tag-review-muted mt-1">Current tags: {{ group.current_tags|join(', ') }}</div>
-                                    {% endif %}
-                                </div>
-                            </td>
-                            <td>
-                                {% if group.sample_sessions %}
-                                <ul class="tag-review-samples">
-                                    {% for sample in group.sample_sessions %}
-                                    <li class="tag-review-sample-item">
-                                        <div class="tag-review-sample-title">{{ sample.app_name }}</div>
-                                        {% if sample.window_title %}
-                                        <div class="tag-review-sample-meta">{{ sample.window_title }}</div>
-                                        {% endif %}
-                                        <div class="tag-review-sample-meta">
-                                            {% if sample.browser_domain %}{{ sample.browser_domain }}{% elif sample.git_repo %}{{ sample.git_repo }}{% else %}No domain or repo signal{% endif %}
+                                </td>
+                                <td>
+                                    <div class="tag-review-group-card">
+                                        <div class="tag-review-meta-list">
+                                            <span class="tag-review-meta-pill">{{ group.session_count }} sessions</span>
+                                            <span class="tag-review-meta-pill">{{ "%.1f"|format((group.total_seconds /
+                                                3600) if group.total_seconds else 0) }}h active</span>
                                         </div>
-                                    </li>
-                                    {% endfor %}
-                                </ul>
-                                {% else %}
-                                <span class="tag-review-muted">No sample sessions available.</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="tag-review-actions">
-                                    <button type="button"
-                                        class="btn btn-sm btn-outline-secondary tag-review-toggle"
-                                        aria-expanded="false">Inspect Sessions</button>
-                                    <div class="d-flex gap-2 flex-wrap align-items-start">
-                                        <select class="form-select form-select-sm tag-review-select"
-                                            style="min-width: 180px;">
-                                            <option value="">Choose tag</option>
-                                            {% for tag in available_tags %}
-                                            <option value="{{ tag }}">{{ tag }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        <button type="button"
-                                            class="btn btn-sm btn-primary tag-review-assign-btn">Assign</button>
+                                        {% if group.dominant_apps %}
+                                        <div class="tag-review-muted mt-2">Apps: {{ group.dominant_apps|join(', ') }}
+                                        </div>
+                                        {% endif %}
+                                        {% if group.current_tags %}
+                                        <div class="tag-review-muted mt-1">Current tags: {{ group.current_tags|join(',
+                                            ') }}</div>
+                                        {% endif %}
                                     </div>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr class="tag-review-detail-row" data-detail-for="{{ group.group_type }}::{{ group.group_value }}">
-                            <td colspan="4">
-                                <div class="tag-review-detail-panel">
-                                    <div class="tag-review-detail-status">Expand a bucket to inspect the matching sessions.</div>
-                                    <div class="tag-review-detail-list"></div>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <p class="text-muted mb-0">No matching review groups in this range.</p>
-            {% endif %}
+                                </td>
+                                <td>
+                                    {% if group.sample_sessions %}
+                                    <ul class="tag-review-samples">
+                                        {% for sample in group.sample_sessions %}
+                                        <li class="tag-review-sample-item">
+                                            <div class="tag-review-sample-title">{{ sample.app_name }}</div>
+                                            {% if sample.window_title %}
+                                            <div class="tag-review-sample-meta">{{ sample.window_title }}</div>
+                                            {% endif %}
+                                            <div class="tag-review-sample-meta">
+                                                {% if sample.browser_domain %}{{ sample.browser_domain }}{% elif
+                                                sample.git_repo %}{{ sample.git_repo }}{% else %}No domain or repo
+                                                signal{% endif %}
+                                            </div>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% else %}
+                                    <span class="tag-review-muted">No sample sessions available.</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="tag-review-actions">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary tag-review-toggle"
+                                            aria-expanded="false">Inspect Sessions</button>
+                                        <div class="d-flex gap-2 flex-wrap align-items-start">
+                                            <select class="form-select form-select-sm tag-review-select"
+                                                style="min-width: 180px;">
+                                                <option value="">Choose tag</option>
+                                                {% for tag in available_tags %}
+                                                <option value="{{ tag }}">{{ tag }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="button"
+                                                class="btn btn-sm btn-primary tag-review-assign-btn">Assign</button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr class="tag-review-detail-row"
+                                data-detail-for="{{ group.group_type }}::{{ group.group_value }}">
+                                <td colspan="4">
+                                    <div class="tag-review-detail-panel">
+                                        <div class="tag-review-detail-status">Expand a bucket to inspect the matching
+                                            sessions.</div>
+                                        <div class="tag-review-detail-list"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No matching review groups in this range.</p>
+                {% endif %}
             </div>
         </div>
 
         <div class="col-12 col-xl-4">
             <div class="card p-3 p-md-4 h-100">
                 <h3 class="mb-2">YAML Preview</h3>
-                <p class="tag-review-muted">Preview/download only in this phase. Existing keywords stay visible, but new keywords are
+                <p class="tag-review-muted">Preview/download only in this phase. Existing keywords stay visible, but new
+                    keywords are
                     not generated.</p>
                 {% if warnings %}
                 <div class="error">
@@ -586,31 +595,31 @@
                         days: {{ days }},
                     }),
                 });
-                if (!response.ok) {
-                    setFeedback("Failed to assign tag.", "error");
-                    return;
-                }
+        if (!response.ok) {
+            setFeedback("Failed to assign tag.", "error");
+            return;
+        }
 
-                setFeedback(`Assigned ${selectedTag} to the ${groupType} bucket. Refreshing page...`, "success");
-                window.location.reload();
-            });
+        setFeedback(`Assigned ${selectedTag} to the ${groupType} bucket. Refreshing page...`, "success");
+        window.location.reload();
+    });
         });
 
-        document.querySelectorAll(".tag-review-toggle").forEach((button) => {
-            button.addEventListener("click", async () => {
-                const row = button.closest("tr");
-                await toggleDetails(row, button);
-            });
+    document.querySelectorAll(".tag-review-toggle").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const row = button.closest("tr");
+            await toggleDetails(row, button);
         });
+    });
 
-        document.getElementById("tag-review-refresh-preview")?.addEventListener("click", refreshPreview);
+    document.getElementById("tag-review-refresh-preview")?.addEventListener("click", refreshPreview);
 
-        document.getElementById("tag-review-download")?.addEventListener("click", async () => {
-            const response = await fetch("/api/tag-review/yaml-download", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    days: {{ days }}
+    document.getElementById("tag-review-download")?.addEventListener("click", async () => {
+        const response = await fetch("/api/tag-review/yaml-download", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                days: {{ days }}
                 }),
             });
     if (!response.ok) {

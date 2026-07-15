@@ -313,10 +313,11 @@
                     <td>{{ (e.notes or "")[:140] }}{% if e.notes and e.notes|length > 140 %}...{% endif %}</td>
                     <td>
                         <button class="btn btn-outline-dark btn-sm edit-entry-btn m-1" type="button"
-                            data-journal-id="{{ e.id }}"  >
+                            data-journal-id="{{ e.id }}">
                             Edit
                         </button>
-                        <button class="btn btn-primary btn-sm correlate-btn m-1" type="button" data-journal-id="{{ e.id }}">
+                        <button class="btn btn-primary btn-sm correlate-btn m-1" type="button"
+                            data-journal-id="{{ e.id }}">
                             Correlate
                         </button>
                     </td>
@@ -354,7 +355,7 @@
                     <td>{{ (r.problems or "")[:80] }}{% if r.problems and r.problems|length > 80 %}...{% endif %}</td>
                     <td>
                         <button class="btn btn-outline-dark btn-sm edit-reflection-btn m-1" type="button"
-                            data-reflection-date="{{ r.date }}"  >
+                            data-reflection-date="{{ r.date }}">
                             Edit
                         </button>
                         <button class="btn btn-primary btn-sm correlate-reflection-btn m-1" type="button"
@@ -408,7 +409,7 @@
                     <td>{{ event.project or "-" }}</td>
                     <td>
                         <button class="btn btn-outline-dark btn-sm edit-work-event-btn m-1" type="button"
-                            data-event-id="{{ event.id }}"  >
+                            data-event-id="{{ event.id }}">
                             Edit
                         </button>
                         <button class="btn btn-primary btn-sm correlate-work-event-btn m-1" type="button"

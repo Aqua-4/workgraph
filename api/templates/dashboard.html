@@ -112,17 +112,14 @@
         <form id="device-register-form" class="row g-2">
             {% if dashboard_mode == "sync-client" %}
             <div class="col-12">
-                <input
-                    type="text"
-                    class="form-control"
-                    id="register-sync-base-url"
+                <input type="text" class="form-control" id="register-sync-base-url"
                     value="{{ client_sync.sync_base_url if client_sync else '' }}"
-                    placeholder="sync_base_url (e.g. http://192.168.1.10:8000)"
-                />
+                    placeholder="sync_base_url (e.g. http://192.168.1.10:8000)" />
             </div>
             {% endif %}
             <div class="col-12 col-md-6 col-xl-4">
-                <input type="text" class="form-control" id="register-user-id" placeholder="user_id" value="{{ selected_user_id or '' }}" required />
+                <input type="text" class="form-control" id="register-user-id" placeholder="user_id"
+                    value="{{ selected_user_id or '' }}" required />
             </div>
             <div class="col-12 col-md-6 col-xl-4">
                 <input type="text" class="form-control" id="register-user-name" placeholder="user_name" required />
@@ -134,13 +131,16 @@
                 <input type="text" class="form-control" id="register-device-name" placeholder="device_name" required />
             </div>
             <div class="col-12 col-md-6 col-xl-4">
-                <input type="text" class="form-control" id="register-device-type" placeholder="device_type (work/personal)" required />
+                <input type="text" class="form-control" id="register-device-type"
+                    placeholder="device_type (work/personal)" required />
             </div>
             <div class="col-12 col-md-6 col-xl-4">
-                <input type="text" class="form-control" id="register-device-hostname" placeholder="hostname (optional)" />
+                <input type="text" class="form-control" id="register-device-hostname"
+                    placeholder="hostname (optional)" />
             </div>
             <div class="col-12 col-md-6 col-xl-4">
-                <input type="text" class="form-control" id="register-device-category" placeholder="category/platform (optional)" />
+                <input type="text" class="form-control" id="register-device-category"
+                    placeholder="category/platform (optional)" />
             </div>
             <div class="col-12 d-flex gap-2 align-items-center flex-wrap">
                 <button type="submit" class="btn btn-primary">
@@ -172,11 +172,13 @@
             </div>
             <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Earliest Synced</div>
-                <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.earliest_synced_at|human_datetime }}</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.earliest_synced_at|human_datetime
+                    }}</div>
             </div>
             <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Latest Synced</div>
-                <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.latest_synced_at|human_datetime }}</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.latest_synced_at|human_datetime
+                    }}</div>
             </div>
         </div>
 
@@ -360,7 +362,8 @@
                 <div class="metric-card__value" style="font-size: 1.5rem;">{{ stats.goal_drift.largest_gap.goal }}</div>
                 <div class="metric-card__subtext">
                     {% if stats.goal_drift.largest_gap %}
-                    planned {{ "%.1f"|format(stats.goal_drift.largest_gap.planned_pct) }}%, actual {{ "%.1f"|format(stats.goal_drift.largest_gap.actual_pct) }}%
+                    planned {{ "%.1f"|format(stats.goal_drift.largest_gap.planned_pct) }}%, actual {{
+                    "%.1f"|format(stats.goal_drift.largest_gap.actual_pct) }}%
                     {% endif %}
                 </div>
             </div>
@@ -383,7 +386,8 @@
                         <td>{{ item.goal }}</td>
                         <td>{{ "%.1f"|format(item.planned_pct) }}%</td>
                         <td>{{ "%.1f"|format(item.actual_pct) }}%</td>
-                        <td>{{ "+" if item.delta_pct_points > 0 else "" }}{{ "%.1f"|format(item.delta_pct_points) }} pts</td>
+                        <td>{{ "+" if item.delta_pct_points > 0 else "" }}{{ "%.1f"|format(item.delta_pct_points) }} pts
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -397,12 +401,14 @@
     <div class="card">
         {% if stats.tag_stats %}
         <div class="pie-wrap">
-            <canvas id="tagPie" class="pie-canvas" width="170" height="170" aria-label="Tag activity pie chart"></canvas>
+            <canvas id="tagPie" class="pie-canvas" width="170" height="170"
+                aria-label="Tag activity pie chart"></canvas>
             <ul id="tagPieLegend" class="pie-legend"></ul>
         </div>
         <script id="tagPieData" type="application/json">{{ stats.tag_stats|tojson }}</script>
         {% else %}
-        <p style="color: #999; padding: 20px; text-align: center;">No tagged activities yet. Configure tags in config/tags.yaml</p>
+        <p style="color: #999; padding: 20px; text-align: center;">No tagged activities yet. Configure tags in
+            config/tags.yaml</p>
         {% endif %}
     </div>
 
@@ -410,7 +416,8 @@
     <div class="card">
         {% if stats.app_stats %}
         <div class="pie-wrap">
-            <canvas id="appPie" class="pie-canvas" width="170" height="170" aria-label="Application activity pie chart"></canvas>
+            <canvas id="appPie" class="pie-canvas" width="170" height="170"
+                aria-label="Application activity pie chart"></canvas>
             <ul id="appPieLegend" class="pie-legend"></ul>
         </div>
         <script id="appPieData" type="application/json">{{ stats.app_stats|tojson }}</script>
@@ -423,7 +430,8 @@
     <div class="card">
         {% if stats.repo_stats %}
         <div class="pie-wrap">
-            <canvas id="repoPie" class="pie-canvas" width="170" height="170" aria-label="Repository activity pie chart"></canvas>
+            <canvas id="repoPie" class="pie-canvas" width="170" height="170"
+                aria-label="Repository activity pie chart"></canvas>
             <ul id="repoPieLegend" class="pie-legend"></ul>
         </div>
         <script id="repoPieData" type="application/json">{{ stats.repo_stats|tojson }}</script>
@@ -463,8 +471,10 @@
     <h2>Quick Tips</h2>
     <div class="card">
         <ul style="margin-left: 20px; line-height: 1.8;">
-            <li><strong>Goal Attribution:</strong> Edit <code>config/tags.yaml</code> to tag your projects and goals.</li>
-            <li><strong>Check Timeline:</strong> Visit the <a href="/timeline">Timeline</a> view to see a detailed chronological breakdown.</li>
+            <li><strong>Goal Attribution:</strong> Edit <code>config/tags.yaml</code> to tag your projects and goals.
+            </li>
+            <li><strong>Check Timeline:</strong> Visit the <a href="/timeline">Timeline</a> view to see a detailed
+                chronological breakdown.</li>
             <li><strong>More Data:</strong> Run the collector for a week to see meaningful patterns emerge.</li>
             <li><strong>Meeting Detection:</strong> Version 1.2 will auto-detect Teams, Zoom, and Meet meetings.</li>
         </ul>
@@ -472,164 +482,164 @@
 </div>
 
 <script>
-(() => {
-    const palette = [
-        "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545",
-        "#20c997", "#0dcaf0", "#ffc107", "#6610f2", "#d63384"
-    ];
+    (() => {
+        const palette = [
+            "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545",
+            "#20c997", "#0dcaf0", "#ffc107", "#6610f2", "#d63384"
+        ];
 
-    const renderPieMap = (canvasId, legendId, dataId) => {
-        const canvas = document.getElementById(canvasId);
-        const legend = document.getElementById(legendId);
-        const dataNode = document.getElementById(dataId);
-        if (!canvas || !legend || !dataNode) {
-            return;
-        }
+        const renderPieMap = (canvasId, legendId, dataId) => {
+            const canvas = document.getElementById(canvasId);
+            const legend = document.getElementById(legendId);
+            const dataNode = document.getElementById(dataId);
+            if (!canvas || !legend || !dataNode) {
+                return;
+            }
 
-        let mapData = {};
-        try {
-            mapData = JSON.parse(dataNode.textContent || "{}");
-        } catch (_error) {
-            return;
-        }
+            let mapData = {};
+            try {
+                mapData = JSON.parse(dataNode.textContent || "{}");
+            } catch (_error) {
+                return;
+            }
 
-        const entries = Object.entries(mapData)
-            .map(([name, totalSeconds]) => [String(name), Number(totalSeconds || 0)])
-            .filter((item) => Number.isFinite(item[1]) && item[1] > 0)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10);
+            const entries = Object.entries(mapData)
+                .map(([name, totalSeconds]) => [String(name), Number(totalSeconds || 0)])
+                .filter((item) => Number.isFinite(item[1]) && item[1] > 0)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
 
-        if (!entries.length) {
-            return;
-        }
+            if (!entries.length) {
+                return;
+            }
 
-        const total = entries.reduce((acc, item) => acc + item[1], 0);
-        if (!total) {
-            return;
-        }
+            const total = entries.reduce((acc, item) => acc + item[1], 0);
+            if (!total) {
+                return;
+            }
 
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-            return;
-        }
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                return;
+            }
 
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-        const radius = Math.min(cx, cy) - 2;
-        let startAngle = -Math.PI / 2;
-        legend.innerHTML = "";
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = Math.min(cx, cy) - 2;
+            let startAngle = -Math.PI / 2;
+            legend.innerHTML = "";
 
-        entries.forEach(([label, value], index) => {
-            const angle = (value / total) * Math.PI * 2;
-            const color = palette[index % palette.length];
+            entries.forEach(([label, value], index) => {
+                const angle = (value / total) * Math.PI * 2;
+                const color = palette[index % palette.length];
 
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, radius, startAngle, startAngle + angle);
-            ctx.closePath();
-            ctx.fillStyle = color;
-            ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, radius, startAngle, startAngle + angle);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
 
-            const li = document.createElement("li");
+                const li = document.createElement("li");
 
-            const nameWrap = document.createElement("span");
-            nameWrap.className = "legend-name";
+                const nameWrap = document.createElement("span");
+                nameWrap.className = "legend-name";
 
-            const dot = document.createElement("span");
-            dot.className = "legend-dot";
-            dot.style.background = color;
+                const dot = document.createElement("span");
+                dot.className = "legend-dot";
+                dot.style.background = color;
 
-            const text = document.createElement("span");
-            text.className = "legend-text";
-            text.title = label;
-            text.textContent = label;
+                const text = document.createElement("span");
+                text.className = "legend-text";
+                text.title = label;
+                text.textContent = label;
 
-            nameWrap.appendChild(dot);
-            nameWrap.appendChild(text);
+                nameWrap.appendChild(dot);
+                nameWrap.appendChild(text);
 
-            const stats = document.createElement("span");
-            const pct = ((value / total) * 100).toFixed(1);
-            const hours = (value / 3600).toFixed(1);
-            stats.textContent = `${hours}h (${pct}%)`;
+                const stats = document.createElement("span");
+                const pct = ((value / total) * 100).toFixed(1);
+                const hours = (value / 3600).toFixed(1);
+                stats.textContent = `${hours}h (${pct}%)`;
 
-            li.appendChild(nameWrap);
-            li.appendChild(stats);
-            legend.appendChild(li);
+                li.appendChild(nameWrap);
+                li.appendChild(stats);
+                legend.appendChild(li);
 
-            startAngle += angle;
-        });
-    };
+                startAngle += angle;
+            });
+        };
 
-    renderPieMap("tagPie", "tagPieLegend", "tagPieData");
-    renderPieMap("appPie", "appPieLegend", "appPieData");
-    renderPieMap("repoPie", "repoPieLegend", "repoPieData");
-})();
+        renderPieMap("tagPie", "tagPieLegend", "tagPieData");
+        renderPieMap("appPie", "appPieLegend", "appPieData");
+        renderPieMap("repoPie", "repoPieLegend", "repoPieData");
+    })();
 
 </script>
 
 <script>
-(() => {
-    const form = document.getElementById("device-register-form");
-    if (!form) {
-        return;
-    }
-
-    const resultNode = document.getElementById("register-result");
-    const readValue = (id) => {
-        const node = document.getElementById(id);
-        return node ? (node.value || "").trim() : "";
-    };
-
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        if (resultNode) {
-            resultNode.textContent = "Registering device...";
-            resultNode.style.color = "#374151";
+    (() => {
+        const form = document.getElementById("device-register-form");
+        if (!form) {
+            return;
         }
 
-        const payload = {
-            mode: "{{ dashboard_mode }}",
-            user: {
-                id: readValue("register-user-id"),
-                name: readValue("register-user-name"),
-            },
-            device: {
-                id: readValue("register-device-id"),
-                name: readValue("register-device-name"),
-                type: readValue("register-device-type"),
-                hostname: readValue("register-device-hostname") || null,
-                category: readValue("register-device-category") || null,
-            },
-            sync_base_url: readValue("register-sync-base-url") || null,
+        const resultNode = document.getElementById("register-result");
+        const readValue = (id) => {
+            const node = document.getElementById(id);
+            return node ? (node.value || "").trim() : "";
         };
 
-        try {
-            const response = await fetch("/api/device/register", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify(payload),
-            });
-            const data = await response.json();
-            if (!response.ok) {
-                const detail = data && data.detail ? data.detail : "Registration failed";
-                throw new Error(detail);
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (resultNode) {
+                resultNode.textContent = "Registering device...";
+                resultNode.style.color = "#374151";
             }
 
-            let message = data.message || "Device registered";
-            if (data.device_token) {
-                message += ` device_token=${data.device_token}`;
+            const payload = {
+                mode: "{{ dashboard_mode }}",
+                user: {
+                    id: readValue("register-user-id"),
+                    name: readValue("register-user-name"),
+                },
+                device: {
+                    id: readValue("register-device-id"),
+                    name: readValue("register-device-name"),
+                    type: readValue("register-device-type"),
+                    hostname: readValue("register-device-hostname") || null,
+                    category: readValue("register-device-category") || null,
+                },
+                sync_base_url: readValue("register-sync-base-url") || null,
+            };
+
+            try {
+                const response = await fetch("/api/device/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    const detail = data && data.detail ? data.detail : "Registration failed";
+                    throw new Error(detail);
+                }
+
+                let message = data.message || "Device registered";
+                if (data.device_token) {
+                    message += ` device_token=${data.device_token}`;
+                }
+                if (resultNode) {
+                    resultNode.textContent = message;
+                    resultNode.style.color = "#166534";
+                }
+            } catch (error) {
+                if (resultNode) {
+                    resultNode.textContent = error instanceof Error ? error.message : "Registration failed";
+                    resultNode.style.color = "#b91c1c";
+                }
             }
-            if (resultNode) {
-                resultNode.textContent = message;
-                resultNode.style.color = "#166534";
-            }
-        } catch (error) {
-            if (resultNode) {
-                resultNode.textContent = error instanceof Error ? error.message : "Registration failed";
-                resultNode.style.color = "#b91c1c";
-            }
-        }
-    });
-})();
+        });
+    })();
 </script>
 {% endblock %}

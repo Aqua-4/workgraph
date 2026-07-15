@@ -97,10 +97,10 @@
             <div class="col-12 col-md-3">
                 <label for="days" class="form-label">Past Days</label>
                 <select name="days" id="days" class="form-select">
-                    <option value="1" {% if days == 1 %}selected{% endif %}>1 day</option>
-                    <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
-                    <option value="14" {% if days == 14 %}selected{% endif %}>14 days</option>
-                    <option value="30" {% if days == 30 %}selected{% endif %}>30 days</option>
+                    <option value="1" {% if days==1 %}selected{% endif %}>1 day</option>
+                    <option value="7" {% if days==7 %}selected{% endif %}>7 days</option>
+                    <option value="14" {% if days==14 %}selected{% endif %}>14 days</option>
+                    <option value="30" {% if days==30 %}selected{% endif %}>30 days</option>
                 </select>
             </div>
 
@@ -109,7 +109,7 @@
                 <select name="tag" id="tag" class="form-select">
                     <option value="">All tags</option>
                     {% for item in available_tags %}
-                    <option value="{{ item }}" {% if selected_tag == item %}selected{% endif %}>{{ item }}</option>
+                    <option value="{{ item }}" {% if selected_tag==item %}selected{% endif %}>{{ item }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -119,7 +119,7 @@
                 <select name="app" id="app" class="form-select">
                     <option value="">All apps</option>
                     {% for item in available_apps %}
-                    <option value="{{ item }}" {% if selected_app == item %}selected{% endif %}>{{ item }}</option>
+                    <option value="{{ item }}" {% if selected_app==item %}selected{% endif %}>{{ item }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -153,7 +153,8 @@
     <div class="card">
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
             <h3 class="m-0">Recent Sessions</h3>
-            <span class="timeline-hint">Showing latest {{ sessions|length }} of {{ filtered_count }} matching sessions.</span>
+            <span class="timeline-hint">Showing latest {{ sessions|length }} of {{ filtered_count }} matching
+                sessions.</span>
         </div>
 
         {% if page_context %}
@@ -194,43 +195,38 @@
                         <td><span class="app-badge">{{ session.app_name }}</span></td>
                         <td class="duration">
                             {% set mins = (session.duration_sec / 60)|int %}
-                            {% if mins < 60 %}
-                                {{ mins }}m
-                            {% else %}
-                                {{ "%.1f"|format(mins / 60) }}h
-                            {% endif %}
-                        </td>
+                            {% if mins < 60 %} {{ mins }}m {% else %} {{ "%.1f" |format(mins / 60) }}h {% endif %} </td>
                         <td>
                             {% if session.tag %}
-                                <span class="tag-badge">{{ session.tag }}</span>
+                            <span class="tag-badge">{{ session.tag }}</span>
                             {% else %}
-                                <span style="color: #9ca3af; font-size: 0.85em;">untagged</span>
+                            <span style="color: #9ca3af; font-size: 0.85em;">untagged</span>
                             {% endif %}
                         </td>
                         <td>
                             {% if session.browser_domain %}
-                                <strong>{{ session.browser_domain }}</strong>
+                            <strong>{{ session.browser_domain }}</strong>
                             {% elif session.window_title %}
-                                {{ session.window_title[:50] }}{% if session.window_title|length > 50 %}...{% endif %}
+                            {{ session.window_title[:50] }}{% if session.window_title|length > 50 %}...{% endif %}
                             {% else %}
-                                <em style="color: #ccc;">—</em>
+                            <em style="color: #ccc;">—</em>
                             {% endif %}
                         </td>
                         <td class="time-small">
                             {% if session.git_repo %}
-                                <strong>{{ session.git_repo }}</strong>
-                                {% if session.git_branch %}
-                                <br><em>{{ session.git_branch }}</em>
-                                {% endif %}
+                            <strong>{{ session.git_repo }}</strong>
+                            {% if session.git_branch %}
+                            <br><em>{{ session.git_branch }}</em>
+                            {% endif %}
                             {% else %}
-                                <em style="color: #ccc;">—</em>
+                            <em style="color: #ccc;">—</em>
                             {% endif %}
                         </td>
                         <td>
                             {% if session.is_idle %}
-                                <span style="color: #6b7280; font-size: 0.85em;">idle</span>
+                            <span style="color: #6b7280; font-size: 0.85em;">idle</span>
                             {% else %}
-                                <span style="color: #16a34a; font-size: 0.85em;">●</span>
+                            <span style="color: #16a34a; font-size: 0.85em;">●</span>
                             {% endif %}
                         </td>
                     </tr>
@@ -247,169 +243,169 @@
 {% if chart_sessions %}
 <script id="timelineChartData" type="application/json">{{ chart_sessions | tojson }}</script>
 <script>
-(() => {
-    const dataNode = document.getElementById("timelineChartData");
-    if (!dataNode) {
-        return;
-    }
-    const sessions = JSON.parse(dataNode.textContent || "[]");
-    const svg = document.getElementById("timelineChart");
-    const legend = document.getElementById("timelineLegend");
-    if (!svg || !sessions.length) {
-        return;
-    }
-
-    const parsed = sessions
-        .map((item) => {
-            const start = new Date(item.start_time);
-            const end = new Date(item.end_time);
-            return {
-                ...item,
-                startMs: Number(start),
-                endMs: Number(end),
-                lane: item.app_name || "Unknown",
-                tagKey: item.tag || "Untagged",
-            };
-        })
-        .filter((item) => Number.isFinite(item.startMs) && Number.isFinite(item.endMs) && item.endMs >= item.startMs);
-
-    if (!parsed.length) {
-        return;
-    }
-
-    const laneTotals = new Map();
-    for (const item of parsed) {
-        laneTotals.set(item.lane, (laneTotals.get(item.lane) || 0) + (item.endMs - item.startMs));
-    }
-
-    const lanes = [...laneTotals.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map((entry) => entry[0]);
-
-    const laneSet = new Set(lanes);
-    const visible = parsed.filter((item) => laneSet.has(item.lane));
-    if (!visible.length) {
-        return;
-    }
-
-    const minT = Math.min(...visible.map((item) => item.startMs));
-    const maxT = Math.max(...visible.map((item) => item.endMs));
-    const span = Math.max(maxT - minT, 1);
-
-    const width = 1080;
-    const margin = { top: 26, right: 18, bottom: 34, left: 180 };
-    const laneH = 28;
-    const laneGap = 10;
-    const height = margin.top + margin.bottom + lanes.length * (laneH + laneGap);
-    const innerW = width - margin.left - margin.right;
-
-    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    svg.setAttribute("width", "100%");
-    svg.setAttribute("height", `${height}`);
-
-    const ns = "http://www.w3.org/2000/svg";
-
-    const palette = [
-        "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545", "#20c997", "#d63384", "#0dcaf0", "#6610f2", "#ffc107"
-    ];
-    const tagColors = new Map();
-    let colorIdx = 0;
-    for (const item of visible) {
-        if (!tagColors.has(item.tagKey)) {
-            tagColors.set(item.tagKey, palette[colorIdx % palette.length]);
-            colorIdx += 1;
+    (() => {
+        const dataNode = document.getElementById("timelineChartData");
+        if (!dataNode) {
+            return;
         }
-    }
-
-    const xOf = (ms) => margin.left + ((ms - minT) / span) * innerW;
-    const yOfLane = (laneIndex) => margin.top + laneIndex * (laneH + laneGap);
-
-    const bg = document.createElementNS(ns, "rect");
-    bg.setAttribute("x", "0");
-    bg.setAttribute("y", "0");
-    bg.setAttribute("width", String(width));
-    bg.setAttribute("height", String(height));
-    bg.setAttribute("fill", "#ffffff");
-    svg.appendChild(bg);
-
-    for (let i = 0; i < lanes.length; i += 1) {
-        const y = yOfLane(i);
-
-        const stripe = document.createElementNS(ns, "rect");
-        stripe.setAttribute("x", String(margin.left));
-        stripe.setAttribute("y", String(y));
-        stripe.setAttribute("width", String(innerW));
-        stripe.setAttribute("height", String(laneH));
-        stripe.setAttribute("fill", i % 2 === 0 ? "#f8fafc" : "#f1f5f9");
-        svg.appendChild(stripe);
-
-        const label = document.createElementNS(ns, "text");
-        label.setAttribute("x", String(margin.left - 10));
-        label.setAttribute("y", String(y + laneH / 2 + 4));
-        label.setAttribute("text-anchor", "end");
-        label.setAttribute("class", "timeline-lane-label");
-        label.textContent = lanes[i];
-        svg.appendChild(label);
-    }
-
-    const ticks = 6;
-    for (let i = 0; i <= ticks; i += 1) {
-        const t = minT + (span * i) / ticks;
-        const x = xOf(t);
-
-        const line = document.createElementNS(ns, "line");
-        line.setAttribute("x1", String(x));
-        line.setAttribute("x2", String(x));
-        line.setAttribute("y1", String(margin.top - 6));
-        line.setAttribute("y2", String(height - margin.bottom + 6));
-        line.setAttribute("stroke", "#d1d5db");
-        line.setAttribute("stroke-width", "1");
-        svg.appendChild(line);
-
-        const txt = document.createElementNS(ns, "text");
-        txt.setAttribute("x", String(x));
-        txt.setAttribute("y", String(height - 10));
-        txt.setAttribute("text-anchor", i === 0 ? "start" : i === ticks ? "end" : "middle");
-        txt.setAttribute("class", "timeline-axis");
-        txt.textContent = new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-        svg.appendChild(txt);
-    }
-
-    const laneIndexByName = new Map(lanes.map((lane, idx) => [lane, idx]));
-    for (const item of visible) {
-        const laneIdx = laneIndexByName.get(item.lane);
-        if (laneIdx === undefined) {
-            continue;
+        const sessions = JSON.parse(dataNode.textContent || "[]");
+        const svg = document.getElementById("timelineChart");
+        const legend = document.getElementById("timelineLegend");
+        if (!svg || !sessions.length) {
+            return;
         }
-        const y = yOfLane(laneIdx) + 3;
-        const x = xOf(item.startMs);
-        const endX = xOf(item.endMs);
-        const w = Math.max(endX - x, 1.5);
 
-        const rect = document.createElementNS(ns, "rect");
-        rect.setAttribute("x", String(x));
-        rect.setAttribute("y", String(y));
-        rect.setAttribute("width", String(w));
-        rect.setAttribute("height", String(laneH - 6));
-        rect.setAttribute("rx", "4");
-        rect.setAttribute("fill", tagColors.get(item.tagKey));
-        rect.setAttribute("opacity", item.is_idle ? "0.45" : "0.9");
+        const parsed = sessions
+            .map((item) => {
+                const start = new Date(item.start_time);
+                const end = new Date(item.end_time);
+                return {
+                    ...item,
+                    startMs: Number(start),
+                    endMs: Number(end),
+                    lane: item.app_name || "Unknown",
+                    tagKey: item.tag || "Untagged",
+                };
+            })
+            .filter((item) => Number.isFinite(item.startMs) && Number.isFinite(item.endMs) && item.endMs >= item.startMs);
 
-        const mins = Math.max(Math.round((item.endMs - item.startMs) / 60000), 0);
-        const title = document.createElementNS(ns, "title");
-        title.textContent = `${item.lane} | ${item.tagKey} | ${mins}m`;
-        rect.appendChild(title);
-        svg.appendChild(rect);
-    }
+        if (!parsed.length) {
+            return;
+        }
 
-    for (const [tag, color] of tagColors.entries()) {
-        const chip = document.createElement("span");
-        chip.className = "legend-chip";
-        chip.innerHTML = `<span class="legend-dot" style="background:${color}"></span>${tag}`;
-        legend.appendChild(chip);
-    }
-})();
+        const laneTotals = new Map();
+        for (const item of parsed) {
+            laneTotals.set(item.lane, (laneTotals.get(item.lane) || 0) + (item.endMs - item.startMs));
+        }
+
+        const lanes = [...laneTotals.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map((entry) => entry[0]);
+
+        const laneSet = new Set(lanes);
+        const visible = parsed.filter((item) => laneSet.has(item.lane));
+        if (!visible.length) {
+            return;
+        }
+
+        const minT = Math.min(...visible.map((item) => item.startMs));
+        const maxT = Math.max(...visible.map((item) => item.endMs));
+        const span = Math.max(maxT - minT, 1);
+
+        const width = 1080;
+        const margin = { top: 26, right: 18, bottom: 34, left: 180 };
+        const laneH = 28;
+        const laneGap = 10;
+        const height = margin.top + margin.bottom + lanes.length * (laneH + laneGap);
+        const innerW = width - margin.left - margin.right;
+
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", `${height}`);
+
+        const ns = "http://www.w3.org/2000/svg";
+
+        const palette = [
+            "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545", "#20c997", "#d63384", "#0dcaf0", "#6610f2", "#ffc107"
+        ];
+        const tagColors = new Map();
+        let colorIdx = 0;
+        for (const item of visible) {
+            if (!tagColors.has(item.tagKey)) {
+                tagColors.set(item.tagKey, palette[colorIdx % palette.length]);
+                colorIdx += 1;
+            }
+        }
+
+        const xOf = (ms) => margin.left + ((ms - minT) / span) * innerW;
+        const yOfLane = (laneIndex) => margin.top + laneIndex * (laneH + laneGap);
+
+        const bg = document.createElementNS(ns, "rect");
+        bg.setAttribute("x", "0");
+        bg.setAttribute("y", "0");
+        bg.setAttribute("width", String(width));
+        bg.setAttribute("height", String(height));
+        bg.setAttribute("fill", "#ffffff");
+        svg.appendChild(bg);
+
+        for (let i = 0; i < lanes.length; i += 1) {
+            const y = yOfLane(i);
+
+            const stripe = document.createElementNS(ns, "rect");
+            stripe.setAttribute("x", String(margin.left));
+            stripe.setAttribute("y", String(y));
+            stripe.setAttribute("width", String(innerW));
+            stripe.setAttribute("height", String(laneH));
+            stripe.setAttribute("fill", i % 2 === 0 ? "#f8fafc" : "#f1f5f9");
+            svg.appendChild(stripe);
+
+            const label = document.createElementNS(ns, "text");
+            label.setAttribute("x", String(margin.left - 10));
+            label.setAttribute("y", String(y + laneH / 2 + 4));
+            label.setAttribute("text-anchor", "end");
+            label.setAttribute("class", "timeline-lane-label");
+            label.textContent = lanes[i];
+            svg.appendChild(label);
+        }
+
+        const ticks = 6;
+        for (let i = 0; i <= ticks; i += 1) {
+            const t = minT + (span * i) / ticks;
+            const x = xOf(t);
+
+            const line = document.createElementNS(ns, "line");
+            line.setAttribute("x1", String(x));
+            line.setAttribute("x2", String(x));
+            line.setAttribute("y1", String(margin.top - 6));
+            line.setAttribute("y2", String(height - margin.bottom + 6));
+            line.setAttribute("stroke", "#d1d5db");
+            line.setAttribute("stroke-width", "1");
+            svg.appendChild(line);
+
+            const txt = document.createElementNS(ns, "text");
+            txt.setAttribute("x", String(x));
+            txt.setAttribute("y", String(height - 10));
+            txt.setAttribute("text-anchor", i === 0 ? "start" : i === ticks ? "end" : "middle");
+            txt.setAttribute("class", "timeline-axis");
+            txt.textContent = new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+            svg.appendChild(txt);
+        }
+
+        const laneIndexByName = new Map(lanes.map((lane, idx) => [lane, idx]));
+        for (const item of visible) {
+            const laneIdx = laneIndexByName.get(item.lane);
+            if (laneIdx === undefined) {
+                continue;
+            }
+            const y = yOfLane(laneIdx) + 3;
+            const x = xOf(item.startMs);
+            const endX = xOf(item.endMs);
+            const w = Math.max(endX - x, 1.5);
+
+            const rect = document.createElementNS(ns, "rect");
+            rect.setAttribute("x", String(x));
+            rect.setAttribute("y", String(y));
+            rect.setAttribute("width", String(w));
+            rect.setAttribute("height", String(laneH - 6));
+            rect.setAttribute("rx", "4");
+            rect.setAttribute("fill", tagColors.get(item.tagKey));
+            rect.setAttribute("opacity", item.is_idle ? "0.45" : "0.9");
+
+            const mins = Math.max(Math.round((item.endMs - item.startMs) / 60000), 0);
+            const title = document.createElementNS(ns, "title");
+            title.textContent = `${item.lane} | ${item.tagKey} | ${mins}m`;
+            rect.appendChild(title);
+            svg.appendChild(rect);
+        }
+
+        for (const [tag, color] of tagColors.entries()) {
+            const chip = document.createElement("span");
+            chip.className = "legend-chip";
+            chip.innerHTML = `<span class="legend-dot" style="background:${color}"></span>${tag}`;
+            legend.appendChild(chip);
+        }
+    })();
 </script>
 {% endif %}
 {% endblock %}

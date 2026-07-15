@@ -103,10 +103,10 @@
             <div class="col-12 col-md-2">
                 <label for="days" class="form-label">Past Days</label>
                 <select name="days" id="days" class="form-select">
-                    <option value="1" {% if days == 1 %}selected{% endif %}>1 day</option>
-                    <option value="7" {% if days == 7 %}selected{% endif %}>7 days</option>
-                    <option value="14" {% if days == 14 %}selected{% endif %}>14 days</option>
-                    <option value="30" {% if days == 30 %}selected{% endif %}>30 days</option>
+                    <option value="1" {% if days==1 %}selected{% endif %}>1 day</option>
+                    <option value="7" {% if days==7 %}selected{% endif %}>7 days</option>
+                    <option value="14" {% if days==14 %}selected{% endif %}>14 days</option>
+                    <option value="30" {% if days==30 %}selected{% endif %}>30 days</option>
                 </select>
             </div>
 
@@ -115,7 +115,8 @@
                 <select name="user_id" id="user_id" class="form-select">
                     <option value="">All users</option>
                     {% for user in server_users %}
-                    <option value="{{ user.id }}" {% if selected_user_id == user.id %}selected{% endif %}>{{ user.name or user.id }}</option>
+                    <option value="{{ user.id }}" {% if selected_user_id==user.id %}selected{% endif %}>{{ user.name or
+                        user.id }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -125,7 +126,8 @@
                 <select name="device_id" id="device_id" class="form-select">
                     <option value="">All devices</option>
                     {% for device in server_devices %}
-                    <option value="{{ device.id }}" {% if selected_device_id == device.id %}selected{% endif %}>{{ device.name or device.id }}</option>
+                    <option value="{{ device.id }}" {% if selected_device_id==device.id %}selected{% endif %}>{{
+                        device.name or device.id }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -135,7 +137,7 @@
                 <select name="tag" id="tag" class="form-select">
                     <option value="">All tags</option>
                     {% for item in available_tags %}
-                    <option value="{{ item }}" {% if selected_tag == item %}selected{% endif %}>{{ item }}</option>
+                    <option value="{{ item }}" {% if selected_tag==item %}selected{% endif %}>{{ item }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -145,7 +147,7 @@
                 <select name="app" id="app" class="form-select">
                     <option value="">All apps</option>
                     {% for item in available_apps %}
-                    <option value="{{ item }}" {% if selected_app == item %}selected{% endif %}>{{ item }}</option>
+                    <option value="{{ item }}" {% if selected_app==item %}selected{% endif %}>{{ item }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -165,7 +167,8 @@
             </div>
             {% if device_activity %}
             <div class="pie-wrap">
-                <canvas id="devicePie" class="pie-canvas" width="160" height="160" aria-label="Device activity pie chart"></canvas>
+                <canvas id="devicePie" class="pie-canvas" width="160" height="160"
+                    aria-label="Device activity pie chart"></canvas>
                 <ul id="devicePieLegend" class="pie-legend"></ul>
             </div>
             <script id="devicePieData" type="application/json">{{ device_activity|tojson }}</script>
@@ -181,7 +184,8 @@
             </div>
             {% if app_activity %}
             <div class="pie-wrap">
-                <canvas id="appPie" class="pie-canvas" width="160" height="160" aria-label="Application activity pie chart"></canvas>
+                <canvas id="appPie" class="pie-canvas" width="160" height="160"
+                    aria-label="Application activity pie chart"></canvas>
                 <ul id="appPieLegend" class="pie-legend"></ul>
             </div>
             <script id="appPieData" type="application/json">{{ app_activity|tojson }}</script>
@@ -194,7 +198,8 @@
     <div class="card">
         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
             <h3 class="m-0">Activity Timeline</h3>
-            <span class="timeline-hint">Showing latest {{ sessions|length }} of {{ filtered_count }} matching sessions.</span>
+            <span class="timeline-hint">Showing latest {{ sessions|length }} of {{ filtered_count }} matching
+                sessions.</span>
         </div>
 
         {% if sessions %}
@@ -221,16 +226,12 @@
                         <td class="time-small">{{ end_value|human_datetime }}</td>
                         <td class="time-small">{{ session.user_id or selected_user_id or '-' }}</td>
                         {% set device_id_value = session.device_id or selected_device_id %}
-                        <td class="time-small">{{ device_name_map.get(device_id_value, device_id_value) if device_id_value else '-' }}</td>
+                        <td class="time-small">{{ device_name_map.get(device_id_value, device_id_value) if
+                            device_id_value else '-' }}</td>
                         <td><span class="app-badge">{{ session.app_name or 'Unknown' }}</span></td>
                         <td class="duration">
                             {% set mins = ((session.duration_sec or 0) / 60)|int %}
-                            {% if mins < 60 %}
-                                {{ mins }}m
-                            {% else %}
-                                {{ "%.1f"|format(mins / 60) }}h
-                            {% endif %}
-                        </td>
+                            {% if mins < 60 %} {{ mins }}m {% else %} {{ "%.1f" |format(mins / 60) }}h {% endif %} </td>
                         <td>
                             {% if session.tag %}
                             <span class="tag-badge">{{ session.tag }}</span>
@@ -258,94 +259,94 @@
     </div>
 </div>
 <script>
-(() => {
-    const palette = [
-        "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545",
-        "#20c997", "#0dcaf0", "#ffc107", "#6610f2", "#d63384"
-    ];
+    (() => {
+        const palette = [
+            "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545",
+            "#20c997", "#0dcaf0", "#ffc107", "#6610f2", "#d63384"
+        ];
 
-    const renderPie = (canvasId, legendId, dataId, labelKey, detailFn) => {
-        const canvas = document.getElementById(canvasId);
-        const legend = document.getElementById(legendId);
-        const dataNode = document.getElementById(dataId);
-        if (!canvas || !legend || !dataNode) {
-            return;
-        }
+        const renderPie = (canvasId, legendId, dataId, labelKey, detailFn) => {
+            const canvas = document.getElementById(canvasId);
+            const legend = document.getElementById(legendId);
+            const dataNode = document.getElementById(dataId);
+            if (!canvas || !legend || !dataNode) {
+                return;
+            }
 
-        let items = [];
-        try {
-            items = JSON.parse(dataNode.textContent || "[]");
-        } catch (_error) {
-            return;
-        }
-        if (!Array.isArray(items) || items.length === 0) {
-            return;
-        }
+            let items = [];
+            try {
+                items = JSON.parse(dataNode.textContent || "[]");
+            } catch (_error) {
+                return;
+            }
+            if (!Array.isArray(items) || items.length === 0) {
+                return;
+            }
 
-        const total = items.reduce((acc, item) => acc + Number(item.total_seconds || 0), 0);
-        if (!total) {
-            return;
-        }
+            const total = items.reduce((acc, item) => acc + Number(item.total_seconds || 0), 0);
+            if (!total) {
+                return;
+            }
 
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-            return;
-        }
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                return;
+            }
 
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
-        const radius = Math.min(cx, cy) - 2;
-        let startAngle = -Math.PI / 2;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = Math.min(cx, cy) - 2;
+            let startAngle = -Math.PI / 2;
 
-        legend.innerHTML = "";
+            legend.innerHTML = "";
 
-        items.forEach((item, index) => {
-            const value = Number(item.total_seconds || 0);
-            const angle = (value / total) * Math.PI * 2;
-            const color = palette[index % palette.length];
+            items.forEach((item, index) => {
+                const value = Number(item.total_seconds || 0);
+                const angle = (value / total) * Math.PI * 2;
+                const color = palette[index % palette.length];
 
-            ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.arc(cx, cy, radius, startAngle, startAngle + angle);
-            ctx.closePath();
-            ctx.fillStyle = color;
-            ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, radius, startAngle, startAngle + angle);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
 
-            const pct = ((value / total) * 100).toFixed(1);
-            const hours = (value / 3600).toFixed(1);
-            const label = String(item[labelKey] || "Unknown");
+                const pct = ((value / total) * 100).toFixed(1);
+                const hours = (value / 3600).toFixed(1);
+                const label = String(item[labelKey] || "Unknown");
 
-            const li = document.createElement("li");
+                const li = document.createElement("li");
 
-            const nameWrap = document.createElement("span");
-            nameWrap.className = "legend-name";
+                const nameWrap = document.createElement("span");
+                nameWrap.className = "legend-name";
 
-            const dot = document.createElement("span");
-            dot.className = "legend-dot";
-            dot.style.background = color;
+                const dot = document.createElement("span");
+                dot.className = "legend-dot";
+                dot.style.background = color;
 
-            const text = document.createElement("span");
-            text.className = "legend-text";
-            text.title = label;
-            text.textContent = label;
+                const text = document.createElement("span");
+                text.className = "legend-text";
+                text.title = label;
+                text.textContent = label;
 
-            nameWrap.appendChild(dot);
-            nameWrap.appendChild(text);
+                nameWrap.appendChild(dot);
+                nameWrap.appendChild(text);
 
-            const stats = document.createElement("span");
-            const detail = String(detailFn(item) || "").trim();
-            stats.textContent = detail ? `${hours}h (${pct}%) ${detail}` : `${hours}h (${pct}%)`;
+                const stats = document.createElement("span");
+                const detail = String(detailFn(item) || "").trim();
+                stats.textContent = detail ? `${hours}h (${pct}%) ${detail}` : `${hours}h (${pct}%)`;
 
-            li.appendChild(nameWrap);
-            li.appendChild(stats);
-            legend.appendChild(li);
+                li.appendChild(nameWrap);
+                li.appendChild(stats);
+                legend.appendChild(li);
 
-            startAngle += angle;
-        });
-    };
+                startAngle += angle;
+            });
+        };
 
-    renderPie("devicePie", "devicePieLegend", "devicePieData", "device_name", (item) => `${item.session_count || 0} sessions`);
-    renderPie("appPie", "appPieLegend", "appPieData", "app_name", () => "");
-})();
+        renderPie("devicePie", "devicePieLegend", "devicePieData", "device_name", (item) => `${item.session_count || 0} sessions`);
+        renderPie("appPie", "appPieLegend", "appPieData", "app_name", () => "");
+    })();
 </script>
 {% endblock %}

@@ -16,25 +16,13 @@
             </div>
             <div class="col-12 col-md-6">
                 <label for="sync-dashboard-user-id" class="form-label">User</label>
-                <input
-                    type="text"
-                    class="form-control"
-                    id="sync-dashboard-user-id"
-                    name="user_id"
-                    value="{{ overview.selected_user_id or '' }}"
-                    placeholder="user_id (optional: blank = all users)"
-                />
+                <input type="text" class="form-control" id="sync-dashboard-user-id" name="user_id"
+                    value="{{ overview.selected_user_id or '' }}" placeholder="user_id (optional: blank = all users)" />
             </div>
             <div class="col-12 col-md-4">
                 <label for="sync-dashboard-device-id" class="form-label">Device</label>
-                <input
-                    type="text"
-                    class="form-control"
-                    id="sync-dashboard-device-id"
-                    name="device_id"
-                    value="{{ overview.selected_device_id or '' }}"
-                    placeholder="device_id (optional)"
-                />
+                <input type="text" class="form-control" id="sync-dashboard-device-id" name="device_id"
+                    value="{{ overview.selected_device_id or '' }}" placeholder="device_id (optional)" />
             </div>
             <div class="col-12 col-md-2 d-grid">
                 <button type="submit" class="btn btn-primary">Apply</button>
@@ -81,7 +69,8 @@
             </div>
             <div class="col-12 col-sm-6 col-xl-4 metric-card">
                 <div class="metric-card__label">Last Sync</div>
-                <div class="metric-card__value" style="font-size: 1.4rem;">{{ sync_health.last_sync_at|human_datetime }}</div>
+                <div class="metric-card__value" style="font-size: 1.4rem;">{{ sync_health.last_sync_at|human_datetime }}
+                </div>
                 <div class="metric-card__subtext">latest checkpoint update</div>
             </div>
             <div class="col-12 col-sm-6 col-xl-4 metric-card">
@@ -96,7 +85,8 @@
             </div>
         </div>
         <div style="margin-top: 10px; color: #4b5563; font-size: 0.9em;">
-            Pending pull queue: sessions {{ sync_health.pending_sessions }}, journals {{ sync_health.pending_journal_entries }}, reflections {{ sync_health.pending_reflections }}.
+            Pending pull queue: sessions {{ sync_health.pending_sessions }}, journals {{
+            sync_health.pending_journal_entries }}, reflections {{ sync_health.pending_reflections }}.
         </div>
     </div>
 
@@ -119,7 +109,8 @@
                         <td>{{ item.device_name or item.device_id }}</td>
                         <td><span class="tag-badge" style="text-transform: none;">{{ item.status }}</span></td>
                         <td>{{ item.last_sync_at|human_datetime }}</td>
-                        <td>s:{{ item.pending_sessions }} j:{{ item.pending_journal_entries }} r:{{ item.pending_reflections }}</td>
+                        <td>s:{{ item.pending_sessions }} j:{{ item.pending_journal_entries }} r:{{
+                            item.pending_reflections }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -184,7 +175,8 @@
         <div class="row g-3" style="margin-top: 16px; margin-bottom: 0;">
             <div class="col-12 col-md-4 metric-card">
                 <div class="metric-card__label">Goal Drift</div>
-                <div class="metric-card__value">{{ "%.1f"|format(overview.user_stats.goal_drift.goal_drift_score_pct_points) }}%</div>
+                <div class="metric-card__value">{{
+                    "%.1f"|format(overview.user_stats.goal_drift.goal_drift_score_pct_points) }}%</div>
                 <div class="metric-card__subtext">allocation mismatch across goals</div>
             </div>
             <div class="col-12 col-md-4 metric-card">
@@ -194,7 +186,8 @@
             </div>
             <div class="col-12 col-md-4 metric-card">
                 <div class="metric-card__label">Largest Gap</div>
-                <div class="metric-card__value" style="font-size: 1.5rem;">{{ overview.user_stats.goal_drift.largest_gap.goal }}</div>
+                <div class="metric-card__value" style="font-size: 1.5rem;">{{
+                    overview.user_stats.goal_drift.largest_gap.goal }}</div>
                 <div class="metric-card__subtext">
                     planned {{ "%.1f"|format(overview.user_stats.goal_drift.largest_gap.planned_pct) }}%,
                     actual {{ "%.1f"|format(overview.user_stats.goal_drift.largest_gap.actual_pct) }}%
@@ -262,28 +255,30 @@
                         </td>
                         <td>{{ device.type }}</td>
                         <td>
-                            {% set health_item = (sync_health.device_statuses | selectattr('device_id', 'equalto', device.id) | list | first) %}
+                            {% set health_item = (sync_health.device_statuses | selectattr('device_id', 'equalto',
+                            device.id) | list | first) %}
                             {% if health_item %}
-                                <span class="tag-badge" style="text-transform: none;">{{ health_item.status }}</span>
+                            <span class="tag-badge" style="text-transform: none;">{{ health_item.status }}</span>
                             {% else %}
-                                <span style="color: #6b7280;">unknown</span>
+                            <span style="color: #6b7280;">unknown</span>
                             {% endif %}
                         </td>
                         <td>
                             {% if health_item %}
-                                {{ health_item.last_sync_at|human_datetime }}
+                            {{ health_item.last_sync_at|human_datetime }}
                             {% else %}
-                                -
+                            -
                             {% endif %}
                         </td>
                         <td>
                             {% if health_item %}
-                                {{ health_item.pending_pull_rows }}
-                                <div style="color: #6b7280; font-size: 0.8em;">
-                                    s:{{ health_item.pending_sessions }} j:{{ health_item.pending_journal_entries }} r:{{ health_item.pending_reflections }}
-                                </div>
+                            {{ health_item.pending_pull_rows }}
+                            <div style="color: #6b7280; font-size: 0.8em;">
+                                s:{{ health_item.pending_sessions }} j:{{ health_item.pending_journal_entries }} r:{{
+                                health_item.pending_reflections }}
+                            </div>
                             {% else %}
-                                -
+                            -
                             {% endif %}
                         </td>
                         <td>{{ device.last_seen_at|human_datetime }}</td>
