@@ -62,7 +62,7 @@ Sections:
 - Groups manual assignments into candidate rule snippets:
   - domains
   - repos
-  - keywords
+  - keywords (existing keywords plus explicit app-bucket assignments)
 - Shows confidence and estimated impact, for example: affects 23 historical sessions.
 
 4. YAML Update Actions
@@ -274,11 +274,9 @@ Browser context fallback:
 
 App-only fallback:
 
-- Do not write app_name into YAML rules by default.
-- Use app-only grouping only to help users find missed work faster.
-- Use browser_context grouping in the same way: useful for bulk review, but not a direct rule source in MVP.
-- If an app-only bucket is reviewed, rely on the sessions inside it to derive repo/domain rules when possible.
-- If no repo/domain signal exists, keep the manual session tags but do not generate a new reusable rule in MVP.
+- Keep browser_context grouping as review-only in MVP and do not generate rules from raw browser titles.
+- For app-only buckets, include explicit app assignments as keyword candidates in YAML preview/download.
+- Continue to prefer repo/domain signals for reusable structural rules.
 
 3. Keyword suggestions
 
@@ -289,8 +287,9 @@ App-only fallback:
 
 MVP constraint:
 
-- Do not generate new keyword suggestions yet.
-- Only surface existing keywords already present in config/my-tags.yaml for the selected tag, so the review flow stays low-noise.
+- Keep keyword generation conservative.
+- Surface existing keywords from config/my-tags.yaml and merge explicit app-bucket assignments as keyword candidates.
+- Do not generate keywords from raw browser_context titles in MVP.
 
 4. Collision checks
 
@@ -362,7 +361,7 @@ Implementation note:
 
 - Tag Review page with grouped untagged buckets.
 - Group assign action updates matching session tags + review table.
-- Suggestion generator for domains/repos from reviewed groups.
+- Suggestion generator for domains/repos from reviewed groups, plus keyword enrichment from explicit app-bucket assignments.
 - Browser-aware grouping that can split browser activity by domain or title-derived browser context.
 - YAML preview + download only.
 
@@ -406,7 +405,7 @@ Implementation note:
 ## Resolved Decisions
 
 1. Manual assignment should immediately update activity_sessions.tag after explicit user action.
-2. Keywords stay conservative in MVP: only surface keywords already present in config/my-tags.yaml for the selected tag.
+2. Keywords stay conservative in MVP: surface existing keywords and merge explicit app-bucket assignments; do not generate title-derived browser_context keywords.
 3. Strict comment preservation is not required when rewriting config/my-tags.yaml.
 4. In sync-client mode, manual reviewed session assignments should sync as session data, but YAML rule changes remain local-only.
 
@@ -463,10 +462,10 @@ Work:
 
 Notes:
 
-- Keep keyword handling read-only in MVP.
+- Keep keyword handling conservative in MVP.
 - If a selected tag already exists in my-tags.yaml, merge into that block.
-- If a selected tag is new, create an empty tag block and populate only reviewed repo/domain suggestions.
-- If a reviewed group is app-only and has no repo/domain signal, do not generate a new reusable rule in MVP.
+- If a selected tag is new, create an empty tag block and populate reviewed repo/domain suggestions plus explicit app-bucket keyword assignments.
+- If a reviewed group is app-only and has no repo/domain signal, keep the manual tag update and include the app name as a keyword candidate.
 - If a reviewed group is browser_context-only and has no repo/domain signal, use it for bulk tagging only and do not generate a reusable YAML rule in MVP.
 
 ### Step 3: API endpoints and route wiring
@@ -618,6 +617,7 @@ Status legend:
 - [x] Add a helper such as derive_browser_context(window_title, app_name) that extracts meaningful browser review buckets from titles like Diffchecker or YouTube Music.
 - [x] Add a helper such as load_custom_tag_rules(config_path=None) for config/my-tags.yaml access.
 - [x] Add a helper such as build_tag_review_suggestions(review_actions, existing_rules) returning grouped repo/domain suggestions.
+- [x] Include explicit app-bucket assignments as keyword candidates in build_tag_review_suggestions output.
 - [x] Add a helper such as build_yaml_preview(existing_rules, selected_suggestions) returning preview text and warning metadata.
 - [x] Add a helper such as find_rule_conflicts(existing_rules, candidate_rules) to flag collisions across tags.
 - [x] Keep keyword output read-only by exposing only existing keywords for the selected tag.
@@ -668,7 +668,7 @@ Status legend:
 - [x] Browser rows such as Diffchecker, New Tab, and YouTube Music fall into sensible separate review buckets.
 - [x] Assigning a tag to a bucket updates dashboard-visible data immediately.
 - [x] Suggestions are generated only from reviewed actions.
-- [x] Existing keywords from config/my-tags.yaml remain visible, but new keyword suggestions are not generated.
+- [x] Existing keywords from config/my-tags.yaml remain visible, and explicit app-bucket assignments appear as keyword candidates in YAML preview/download.
 - [x] YAML preview is deterministic and case-insensitive dedupe works.
 - [x] YAML download returns valid YAML without mutating config/my-tags.yaml.
 - [x] Sync-server mode returns a clear unsupported response for page and API routes.
@@ -678,7 +678,7 @@ Status legend:
 Start with a low-risk first slice:
 
 - Add Tag Review page in standalone and sync-client.
-- Support grouped tagging by repo, domain, and app, with reusable suggestions generated from repo/domain only.
+- Support grouped tagging by repo, domain, and app, with reusable suggestions generated from repo/domain and explicit app assignments merged as keywords.
 - Include browser-aware grouping so mixed browser usage is split by domain or title-derived browser context rather than collapsing into one browser-app bucket.
 - Provide YAML preview and download.
 - Defer direct YAML file mutation until after user validates quality.
@@ -707,7 +707,7 @@ Suggested browser_context examples:
 Practical rule:
 
 - browser_context is a review aid, not a new YAML rule source in MVP.
-- Only repo/domain-derived signals should become reusable YAML suggestions by default.
+- Repo/domain-derived signals should remain the primary reusable rule source, while explicit app-bucket assignments can be merged into keywords.
 
 This keeps the review page useful for bulk cleanup without polluting my-tags.yaml with fragile title-based rules.
 

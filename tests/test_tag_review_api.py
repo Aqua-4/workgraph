@@ -421,6 +421,83 @@ class TagReviewApiTests(unittest.TestCase):
         )
         self.assertIn("Development", response.text)
 
+    def test_app_group_assignment_surfaces_in_yaml_preview_and_download(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 16, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 16, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Obsidian",
+                    process_name="obsidian",
+                    window_title="main.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 16, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 16, 50, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Obsidian",
+                    process_name="obsidian",
+                    window_title="api/app.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        assign_response = self.client.post(
+            "/api/tag-review/assign-group",
+            json={
+                "group_type": "app",
+                "group_value": "Obsidian",
+                "selected_tag": "Development",
+                "source_signal": "app",
+                "days": 3650,
+            },
+        )
+        self.assertEqual(assign_response.status_code, 200)
+
+        preview_response = self.client.get(
+            "/api/tag-review/yaml-preview",
+            params={
+                "days": 3650,
+                "selected_tag": "Development",
+                "min_domain_hits": 2,
+                "min_repo_hits": 2,
+            },
+        )
+        self.assertEqual(preview_response.status_code, 200)
+        self.assertIn("keywords:", preview_response.json()["yaml"])
+        self.assertIn("Obsidian", preview_response.json()["yaml"])
+
+        download_response = self.client.post(
+            "/api/tag-review/yaml-download",
+            json={
+                "days": 3650,
+                "selected_tag": "Development",
+                "min_domain_hits": 2,
+                "min_repo_hits": 2,
+            },
+        )
+        self.assertEqual(download_response.status_code, 200)
+        self.assertIn("keywords:", download_response.text)
+        self.assertIn("Obsidian", download_response.text)
+
     def test_tag_review_page_renders_in_standalone_mode(self) -> None:
         response = self.client.get("/tag-review")
 

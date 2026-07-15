@@ -100,6 +100,42 @@ tags:
         self.assertEqual(suggestions["Development"]["domains"][0]["sample_count"], 2)
         self.assertEqual(suggestions["Development"]["repos"][0]["value"], "workgraph")
 
+    def test_build_tag_review_suggestions_adds_app_assignments_to_keywords(
+        self,
+    ) -> None:
+        existing_rules = {
+            "Development": {
+                "repos": [],
+                "domains": [],
+                "keywords": ["code"],
+            }
+        }
+        review_actions = [
+            {
+                "selected_tag": "Development",
+                "source_signal": "app",
+                "app_name": "Obsidian",
+                "browser_domain": None,
+                "git_repo": None,
+            },
+            {
+                "selected_tag": "Development",
+                "source_signal": "app",
+                "app_name": "Obsidian",
+                "browser_domain": None,
+                "git_repo": None,
+            },
+        ]
+
+        suggestions = build_tag_review_suggestions(
+            review_actions,
+            existing_rules,
+            min_domain_hits=2,
+            min_repo_hits=2,
+        )
+
+        self.assertEqual(suggestions["Development"]["keywords"], ["code", "Obsidian"])
+
     def test_derive_browser_context_extracts_known_browser_titles(self) -> None:
         self.assertEqual(
             derive_browser_context(

@@ -187,6 +187,7 @@ def build_tag_review_suggestions(
 ) -> dict[str, dict[str, object]]:
     grouped_domains: dict[str, Counter[str]] = defaultdict(Counter)
     grouped_repos: dict[str, Counter[str]] = defaultdict(Counter)
+    grouped_keywords: dict[str, Counter[str]] = defaultdict(Counter)
     reviewed_counts: Counter[str] = Counter()
 
     for action in review_actions:
@@ -205,6 +206,11 @@ def build_tag_review_suggestions(
         repo = normalize_repo_candidate(_as_optional_string(action.get("git_repo")))
         if repo:
             grouped_repos[selected_tag][repo] += 1
+
+        source_signal = str(action.get("source_signal") or "").strip().casefold()
+        app_name = _as_optional_string(action.get("app_name"))
+        if source_signal == "app" and app_name:
+            grouped_keywords[selected_tag][app_name] += 1
 
     conflicts = find_rule_conflicts(
         existing_rules,
@@ -248,7 +254,10 @@ def build_tag_review_suggestions(
             "repos": sorted(
                 repo_items, key=lambda item: (-item["sample_count"], item["value"])
             ),
-            "keywords": list(existing_rules.get(tag_name, {}).get("keywords", [])),
+            "keywords": _merge_unique(
+                existing_rules.get(tag_name, {}).get("keywords", []),
+                list(grouped_keywords.get(tag_name, Counter()).keys()),
+            ),
             "total_reviewed": reviewed_counts.get(tag_name, 0),
         }
 
