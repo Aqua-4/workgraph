@@ -6,67 +6,67 @@
 
 {% block extra_styles %}
 <style>
-.journal-shell {
-    display: grid;
-    gap: 1rem;
-}
+    .journal-shell {
+        display: grid;
+        gap: 1rem;
+    }
 
-.journal-card {
-    border: 1px solid #e6e9ef;
-    border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
-}
+    .journal-card {
+        border: 1px solid #e6e9ef;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+    }
 
-.tag-panel {
-    border: 1px solid #d8e1ec;
-    border-radius: 10px;
-    background: #f8fbff;
-    padding: 12px;
-}
+    .tag-panel {
+        border: 1px solid #d8e1ec;
+        border-radius: 10px;
+        background: #f8fbff;
+        padding: 12px;
+    }
 
-.tag-dropdown-menu {
-    width: min(100%, 560px);
-    padding: 0;
-    border-radius: 10px;
-    border: 1px solid #d7dfea;
-    overflow: hidden;
-}
+    .tag-dropdown-menu {
+        width: min(100%, 560px);
+        padding: 0;
+        border-radius: 10px;
+        border: 1px solid #d7dfea;
+        overflow: hidden;
+    }
 
-.tag-dropdown-header {
-    border-bottom: 1px solid #e8edf3;
-    background: #f8fbff;
-    padding: 10px;
-}
+    .tag-dropdown-header {
+        border-bottom: 1px solid #e8edf3;
+        background: #f8fbff;
+        padding: 10px;
+    }
 
-.tag-dropdown-body {
-    max-height: 260px;
-    overflow-y: auto;
-    padding: 8px 10px;
-    overflow-x: hidden;
-}
+    .tag-dropdown-body {
+        max-height: 260px;
+        overflow-y: auto;
+        padding: 8px 10px;
+        overflow-x: hidden;
+    }
 
-.journal-tag-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.92em;
-    color: #26313f;
-    padding: 6px 4px;
-}
+    .journal-tag-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.92em;
+        color: #26313f;
+        padding: 6px 4px;
+    }
 
-.journal-tag-row input[type="checkbox"] {
-    width: 1rem;
-    height: 1rem;
-    min-width: 1rem;
-    padding: 0;
-    margin: 0;
-    border-radius: 0.2rem;
-    flex: 0 0 auto;
-}
+    .journal-tag-row input[type="checkbox"] {
+        width: 1rem;
+        height: 1rem;
+        min-width: 1rem;
+        padding: 0;
+        margin: 0;
+        border-radius: 0.2rem;
+        flex: 0 0 auto;
+    }
 
-#selected-tags-preview {
-    min-height: 28px;
-}
+    #selected-tags-preview {
+        min-height: 28px;
+    }
 </style>
 {% endblock %}
 
@@ -135,11 +135,13 @@
             </div>
             <div class="field col-12">
                 <label for="journal-title">Title</label>
-                <input type="text" id="journal-title" maxlength="200" placeholder="Example: Spent afternoon handling client-site delay" required>
+                <input type="text" id="journal-title" maxlength="200"
+                    placeholder="Example: Spent afternoon handling client-site delay" required>
             </div>
             <div class="field col-12">
                 <label for="journal-notes">Notes</label>
-                <textarea id="journal-notes" rows="5" placeholder="Add details, emotions, context, blockers, learnings, or anything important."></textarea>
+                <textarea id="journal-notes" rows="5"
+                    placeholder="Add details, emotions, context, blockers, learnings, or anything important."></textarea>
             </div>
             <div class="field col-12">
                 <label for="journal-labels">Optional Labels (comma-separated)</label>
@@ -148,50 +150,45 @@
             <div class="field col-12">
                 <label class="mb-1" for="journal-tags">Tag Assignment</label>
                 <div class="tag-panel">
-                <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-                    <div class="dropdown">
-                        <button
-                            class="btn btn-outline-primary dropdown-toggle"
-                            type="button"
-                            id="tag-dropdown-toggle"
-                            data-bs-toggle="dropdown"
-                            data-bs-auto-close="outside"
-                            aria-expanded="false"
-                        >
-                            Choose Tags
-                        </button>
-                        <div class="dropdown-menu tag-dropdown-menu" aria-labelledby="tag-dropdown-toggle">
-                            <div class="tag-dropdown-header">
-                                <input
-                                    type="text"
-                                    id="journal-tags-search"
-                                    placeholder="Search tags..."
-                                    class="form-control form-control-sm mb-2"
-                                >
-                                <div class="d-flex gap-2 flex-wrap">
-                                    <button class="btn btn-outline-primary btn-sm" id="tags-select-all" type="button">Select All</button>
-                                    <button class="btn btn-outline-danger btn-sm" id="tags-clear-all" type="button">Clear</button>
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                        <div class="dropdown">
+                            <button class="btn btn-outline-primary dropdown-toggle" type="button"
+                                id="tag-dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                                aria-expanded="false">
+                                Choose Tags
+                            </button>
+                            <div class="dropdown-menu tag-dropdown-menu" aria-labelledby="tag-dropdown-toggle">
+                                <div class="tag-dropdown-header">
+                                    <input type="text" id="journal-tags-search" placeholder="Search tags..."
+                                        class="form-control form-control-sm mb-2">
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button class="btn btn-outline-primary btn-sm" id="tags-select-all"
+                                            type="button">Select All</button>
+                                        <button class="btn btn-outline-danger btn-sm" id="tags-clear-all"
+                                            type="button">Clear</button>
+                                    </div>
+                                </div>
+                                <div class="tag-dropdown-body" id="journal-tags">
+                                    {% for tag in available_tags %}
+                                    <label class="journal-tag-row" data-tag-name="{{ tag|lower }}">
+                                        <input type="checkbox" class="form-check-input mt-0 journal-tag-option"
+                                            value="{{ tag }}">
+                                        <span>{{ tag }}</span>
+                                    </label>
+                                    {% endfor %}
                                 </div>
                             </div>
-                            <div class="tag-dropdown-body" id="journal-tags">
-                                {% for tag in available_tags %}
-                                <label class="journal-tag-row" data-tag-name="{{ tag|lower }}">
-                                    <input type="checkbox" class="form-check-input mt-0 journal-tag-option" value="{{ tag }}">
-                                    <span>{{ tag }}</span>
-                                </label>
-                                {% endfor %}
-                            </div>
                         </div>
+                        <span class="badge text-bg-light border" id="selected-tags-count">0 selected</span>
                     </div>
-                    <span class="badge text-bg-light border" id="selected-tags-count">0 selected</span>
-                </div>
-                <div id="selected-tags-preview" class="d-flex gap-1 flex-wrap"></div>
+                    <div id="selected-tags-preview" class="d-flex gap-1 flex-wrap"></div>
                 </div>
                 <p class="muted">Pick one or more configured tags to associate with this entry.</p>
             </div>
             <div class="col-12 d-flex gap-2 flex-wrap">
                 <button class="btn btn-primary" id="journal-submit" type="submit">Save Journal Entry</button>
-                <button class="btn btn-outline-secondary" id="journal-cancel" type="button" style="display: none;">Cancel Edit</button>
+                <button class="btn btn-outline-secondary" id="journal-cancel" type="button"
+                    style="display: none;">Cancel Edit</button>
             </div>
         </form>
     </div>
@@ -228,7 +225,8 @@
             </div>
             <div class="col-12 d-flex gap-2 flex-wrap">
                 <button class="btn btn-primary" id="reflection-submit" type="submit">Save Reflection</button>
-                <button class="btn btn-outline-secondary" id="reflection-cancel" type="button" style="display: none;">Cancel Edit</button>
+                <button class="btn btn-outline-secondary" id="reflection-cancel" type="button"
+                    style="display: none;">Cancel Edit</button>
             </div>
         </form>
     </div>
@@ -266,7 +264,8 @@
             </div>
             <div class="field col-12">
                 <label for="work-event-title">Title</label>
-                <input type="text" id="work-event-title" maxlength="200" placeholder="Example: Demo failed due to auth outage" required>
+                <input type="text" id="work-event-title" maxlength="200"
+                    placeholder="Example: Demo failed due to auth outage" required>
             </div>
             <div class="field col-12 col-md-6">
                 <label for="work-event-project">Project (optional)</label>
@@ -274,7 +273,8 @@
             </div>
             <div class="field col-12">
                 <label for="work-event-notes">Notes</label>
-                <textarea id="work-event-notes" rows="3" placeholder="Impact, context, decision made, follow-up owner."></textarea>
+                <textarea id="work-event-notes" rows="3"
+                    placeholder="Impact, context, decision made, follow-up owner."></textarea>
             </div>
             <div class="field col-12">
                 <label for="work-event-labels">Labels (comma-separated)</label>
@@ -282,7 +282,8 @@
             </div>
             <div class="col-12 d-flex gap-2 flex-wrap">
                 <button class="btn btn-primary" id="work-event-submit" type="submit">Save Work Event</button>
-                <button class="btn btn-outline-secondary" id="work-event-cancel" type="button" style="display: none;">Cancel Edit</button>
+                <button class="btn btn-outline-secondary" id="work-event-cancel" type="button"
+                    style="display: none;">Cancel Edit</button>
             </div>
         </form>
     </div>
@@ -311,19 +312,11 @@
                     <td><strong>{{ e.title }}</strong></td>
                     <td>{{ (e.notes or "")[:140] }}{% if e.notes and e.notes|length > 140 %}...{% endif %}</td>
                     <td>
-                        <button
-                            class="btn btn-outline-dark btn-sm edit-entry-btn"
-                            type="button"
-                            data-journal-id="{{ e.id }}"
-                            style="margin-right: 6px;"
-                        >
+                        <button class="btn btn-outline-dark btn-sm edit-entry-btn m-1" type="button"
+                            data-journal-id="{{ e.id }}"  >
                             Edit
                         </button>
-                        <button
-                            class="btn btn-primary btn-sm correlate-btn"
-                            type="button"
-                            data-journal-id="{{ e.id }}"
-                        >
+                        <button class="btn btn-primary btn-sm correlate-btn m-1" type="button" data-journal-id="{{ e.id }}">
                             Correlate
                         </button>
                     </td>
@@ -360,19 +353,12 @@
                     <td>{{ (r.wins or "")[:80] }}{% if r.wins and r.wins|length > 80 %}...{% endif %}</td>
                     <td>{{ (r.problems or "")[:80] }}{% if r.problems and r.problems|length > 80 %}...{% endif %}</td>
                     <td>
-                        <button
-                            class="btn btn-outline-dark btn-sm edit-reflection-btn"
-                            type="button"
-                            data-reflection-date="{{ r.date }}"
-                            style="margin-right: 6px;"
-                        >
+                        <button class="btn btn-outline-dark btn-sm edit-reflection-btn m-1" type="button"
+                            data-reflection-date="{{ r.date }}"  >
                             Edit
                         </button>
-                        <button
-                            class="btn btn-primary btn-sm correlate-reflection-btn"
-                            type="button"
-                            data-reflection-date="{{ r.date }}"
-                        >
+                        <button class="btn btn-primary btn-sm correlate-reflection-btn m-1" type="button"
+                            data-reflection-date="{{ r.date }}">
                             Correlate
                         </button>
                     </td>
@@ -415,24 +401,18 @@
                     <td>
                         <strong>{{ event.title }}</strong>
                         {% if event.notes %}
-                        <br><span class="muted">{{ event.notes[:100] }}{% if event.notes|length > 100 %}...{% endif %}</span>
+                        <br><span class="muted">{{ event.notes[:100] }}{% if event.notes|length > 100 %}...{% endif
+                            %}</span>
                         {% endif %}
                     </td>
                     <td>{{ event.project or "-" }}</td>
                     <td>
-                        <button
-                            class="btn btn-outline-dark btn-sm edit-work-event-btn"
-                            type="button"
-                            data-event-id="{{ event.id }}"
-                            style="margin-right: 6px;"
-                        >
+                        <button class="btn btn-outline-dark btn-sm edit-work-event-btn m-1" type="button"
+                            data-event-id="{{ event.id }}"  >
                             Edit
                         </button>
-                        <button
-                            class="btn btn-primary btn-sm correlate-work-event-btn"
-                            type="button"
-                            data-event-id="{{ event.id }}"
-                        >
+                        <button class="btn btn-primary btn-sm correlate-work-event-btn m-1" type="button"
+                            data-event-id="{{ event.id }}">
                             Correlate
                         </button>
                     </td>
@@ -448,131 +428,131 @@
 </div>
 
 <script>
-(function() {
-    const now = new Date();
-    const dateValue = now.toISOString().slice(0, 10);
+    (function () {
+        const now = new Date();
+        const dateValue = now.toISOString().slice(0, 10);
 
-    const dateInput = document.getElementById("journal-date");
-    const reflectionDate = document.getElementById("reflection-date");
-    const reflectionEditDate = document.getElementById("reflection-edit-date");
-    const journalIdInput = document.getElementById("journal-id");
-    const journalSubmitButton = document.getElementById("journal-submit");
-    const journalCancelButton = document.getElementById("journal-cancel");
-    const journalFormTitle = document.getElementById("journal-form-title");
-    const reflectionFormTitle = document.getElementById("reflection-form-title");
-    const reflectionSubmitButton = document.getElementById("reflection-submit");
-    const reflectionCancelButton = document.getElementById("reflection-cancel");
-    const workEventFormTitle = document.getElementById("work-event-form-title");
-    const workEventIdInput = document.getElementById("work-event-id");
-    const workEventSubmitButton = document.getElementById("work-event-submit");
-    const workEventCancelButton = document.getElementById("work-event-cancel");
-    const tagsSearchInput = document.getElementById("journal-tags-search");
-    const tagsSelectAllButton = document.getElementById("tags-select-all");
-    const tagsClearAllButton = document.getElementById("tags-clear-all");
-    const selectedTagsCount = document.getElementById("selected-tags-count");
-    const selectedTagsPreview = document.getElementById("selected-tags-preview");
-    const tagDropdownToggle = document.getElementById("tag-dropdown-toggle");
-    const journalFeedback = document.getElementById("journal-feedback");
-    const reflectionFeedback = document.getElementById("reflection-feedback");
-    const workEventFeedback = document.getElementById("work-event-feedback");
-    const correlationPanel = document.getElementById("correlation-panel");
-    const reflectionCorrelationPanel = document.getElementById("reflection-correlation-panel");
-    const workEventCorrelationPanel = document.getElementById("work-event-correlation-panel");
-    dateInput.value = dateValue;
-    reflectionDate.value = dateValue;
-    const workEventDate = document.getElementById("work-event-date");
-    if (workEventDate) {
-        workEventDate.value = dateValue;
-    }
-
-    function setFeedback(element, kind, message) {
-        if (!element) {
-            return;
-        }
-        element.className = kind === "error" ? "error" : "success";
-        element.textContent = message;
-        element.style.display = "block";
-    }
-
-    function clearFeedback(element) {
-        if (!element) {
-            return;
-        }
-        element.className = "";
-        element.textContent = "";
-        element.style.display = "none";
-    }
-
-    function toMinutes(timeValue) {
-        if (!timeValue) {
-            return null;
-        }
-        const parts = timeValue.split(":");
-        return (Number(parts[0]) * 60) + Number(parts[1]);
-    }
-
-    function buildDateTime(date, time) {
-        if (!time) {
-            return null;
-        }
-        return `${date}T${time}`;
-    }
-
-    function resetJournalForm() {
-        journalIdInput.value = "";
-        journalFormTitle.textContent = "Add Journal Entry";
-        journalSubmitButton.textContent = "Save Journal Entry";
-        journalCancelButton.style.display = "none";
-
+        const dateInput = document.getElementById("journal-date");
+        const reflectionDate = document.getElementById("reflection-date");
+        const reflectionEditDate = document.getElementById("reflection-edit-date");
+        const journalIdInput = document.getElementById("journal-id");
+        const journalSubmitButton = document.getElementById("journal-submit");
+        const journalCancelButton = document.getElementById("journal-cancel");
+        const journalFormTitle = document.getElementById("journal-form-title");
+        const reflectionFormTitle = document.getElementById("reflection-form-title");
+        const reflectionSubmitButton = document.getElementById("reflection-submit");
+        const reflectionCancelButton = document.getElementById("reflection-cancel");
+        const workEventFormTitle = document.getElementById("work-event-form-title");
+        const workEventIdInput = document.getElementById("work-event-id");
+        const workEventSubmitButton = document.getElementById("work-event-submit");
+        const workEventCancelButton = document.getElementById("work-event-cancel");
+        const tagsSearchInput = document.getElementById("journal-tags-search");
+        const tagsSelectAllButton = document.getElementById("tags-select-all");
+        const tagsClearAllButton = document.getElementById("tags-clear-all");
+        const selectedTagsCount = document.getElementById("selected-tags-count");
+        const selectedTagsPreview = document.getElementById("selected-tags-preview");
+        const tagDropdownToggle = document.getElementById("tag-dropdown-toggle");
+        const journalFeedback = document.getElementById("journal-feedback");
+        const reflectionFeedback = document.getElementById("reflection-feedback");
+        const workEventFeedback = document.getElementById("work-event-feedback");
+        const correlationPanel = document.getElementById("correlation-panel");
+        const reflectionCorrelationPanel = document.getElementById("reflection-correlation-panel");
+        const workEventCorrelationPanel = document.getElementById("work-event-correlation-panel");
         dateInput.value = dateValue;
-        document.getElementById("journal-start").value = "";
-        document.getElementById("journal-end").value = "";
-        document.getElementById("journal-title").value = "";
-        document.getElementById("journal-notes").value = "";
-        document.getElementById("journal-labels").value = "";
-        Array.from(document.querySelectorAll(".journal-tag-option")).forEach((opt) => {
-            opt.checked = false;
-        });
-        refreshSelectedTagsUi();
-    }
-
-    function resetReflectionForm() {
-        reflectionEditDate.value = "";
-        reflectionFormTitle.textContent = "Daily Reflection + Energy";
-        reflectionSubmitButton.textContent = "Save Reflection";
-        reflectionCancelButton.style.display = "none";
-        reflectionDate.disabled = false;
-
         reflectionDate.value = dateValue;
-        document.getElementById("energy").value = "";
-        document.getElementById("stress").value = "";
-        document.getElementById("wins").value = "";
-        document.getElementById("problems").value = "";
-        document.getElementById("tomorrow").value = "";
-    }
+        const workEventDate = document.getElementById("work-event-date");
+        if (workEventDate) {
+            workEventDate.value = dateValue;
+        }
 
-    function resetWorkEventForm() {
-        workEventIdInput.value = "";
-        workEventFormTitle.textContent = "Structured Work Events";
-        workEventSubmitButton.textContent = "Save Work Event";
-        workEventCancelButton.style.display = "none";
+        function setFeedback(element, kind, message) {
+            if (!element) {
+                return;
+            }
+            element.className = kind === "error" ? "error" : "success";
+            element.textContent = message;
+            element.style.display = "block";
+        }
 
-        document.getElementById("work-event-date").value = dateValue;
-        document.getElementById("work-event-time").value = "";
-        document.getElementById("work-event-type").selectedIndex = 0;
-        document.getElementById("work-event-impact").value = "";
-        document.getElementById("work-event-title").value = "";
-        document.getElementById("work-event-project").value = "";
-        document.getElementById("work-event-notes").value = "";
-        document.getElementById("work-event-labels").value = "";
-    }
+        function clearFeedback(element) {
+            if (!element) {
+                return;
+            }
+            element.className = "";
+            element.textContent = "";
+            element.style.display = "none";
+        }
 
-    function renderCorrelation(panel, data) {
-        const summary = data.summary || {};
-        const apps = (summary.apps || []).join(", ") || "-";
-        const repos = (summary.repos || []).join(", ") || "-";
+        function toMinutes(timeValue) {
+            if (!timeValue) {
+                return null;
+            }
+            const parts = timeValue.split(":");
+            return (Number(parts[0]) * 60) + Number(parts[1]);
+        }
 
-        panel.innerHTML = `
+        function buildDateTime(date, time) {
+            if (!time) {
+                return null;
+            }
+            return `${date}T${time}`;
+        }
+
+        function resetJournalForm() {
+            journalIdInput.value = "";
+            journalFormTitle.textContent = "Add Journal Entry";
+            journalSubmitButton.textContent = "Save Journal Entry";
+            journalCancelButton.style.display = "none";
+
+            dateInput.value = dateValue;
+            document.getElementById("journal-start").value = "";
+            document.getElementById("journal-end").value = "";
+            document.getElementById("journal-title").value = "";
+            document.getElementById("journal-notes").value = "";
+            document.getElementById("journal-labels").value = "";
+            Array.from(document.querySelectorAll(".journal-tag-option")).forEach((opt) => {
+                opt.checked = false;
+            });
+            refreshSelectedTagsUi();
+        }
+
+        function resetReflectionForm() {
+            reflectionEditDate.value = "";
+            reflectionFormTitle.textContent = "Daily Reflection + Energy";
+            reflectionSubmitButton.textContent = "Save Reflection";
+            reflectionCancelButton.style.display = "none";
+            reflectionDate.disabled = false;
+
+            reflectionDate.value = dateValue;
+            document.getElementById("energy").value = "";
+            document.getElementById("stress").value = "";
+            document.getElementById("wins").value = "";
+            document.getElementById("problems").value = "";
+            document.getElementById("tomorrow").value = "";
+        }
+
+        function resetWorkEventForm() {
+            workEventIdInput.value = "";
+            workEventFormTitle.textContent = "Structured Work Events";
+            workEventSubmitButton.textContent = "Save Work Event";
+            workEventCancelButton.style.display = "none";
+
+            document.getElementById("work-event-date").value = dateValue;
+            document.getElementById("work-event-time").value = "";
+            document.getElementById("work-event-type").selectedIndex = 0;
+            document.getElementById("work-event-impact").value = "";
+            document.getElementById("work-event-title").value = "";
+            document.getElementById("work-event-project").value = "";
+            document.getElementById("work-event-notes").value = "";
+            document.getElementById("work-event-labels").value = "";
+        }
+
+        function renderCorrelation(panel, data) {
+            const summary = data.summary || {};
+            const apps = (summary.apps || []).join(", ") || "-";
+            const repos = (summary.repos || []).join(", ") || "-";
+
+            panel.innerHTML = `
             <h3 style="margin-bottom: 10px;">Correlation Summary</h3>
             <p class="muted" style="margin-bottom: 12px;">Range: ${data.range.start_time} to ${data.range.end_time}</p>
             <div class="stats-grid" style="margin-bottom: 12px;">
@@ -592,447 +572,447 @@
             <p><strong>Apps:</strong> ${apps}</p>
             <p><strong>Repos:</strong> ${repos}</p>
         `;
-    }
-
-    async function loadCorrelation(url, panel) {
-        if (!panel) {
-            return;
-        }
-        panel.style.display = "block";
-        panel.innerHTML = "<p class=\"muted\">Loading correlation...</p>";
-
-        const response = await fetch(url);
-        if (!response.ok) {
-            let detail = "Unable to load correlation.";
-            try {
-                const errorPayload = await response.json();
-                detail = errorPayload.detail || detail;
-            } catch (_err) {
-                // ignore JSON parse errors and show default detail.
-            }
-            panel.innerHTML = `<div class="error">${detail}</div>`;
-            return;
         }
 
-        const data = await response.json();
-        renderCorrelation(panel, data);
-    }
-
-    function getSelectedTags() {
-        return Array.from(document.querySelectorAll(".journal-tag-option:checked")).map((opt) => opt.value);
-    }
-
-    function refreshSelectedTagsUi() {
-        const selected = getSelectedTags();
-        selectedTagsCount.textContent = `${selected.length} selected`;
-
-        if (selected.length === 0) {
-            selectedTagsPreview.innerHTML = '<span class="text-muted small">No tags selected</span>';
-            tagDropdownToggle.textContent = "Choose Tags";
-            return;
-        }
-
-        const previewTags = selected.slice(0, 5);
-        const chips = previewTags
-            .map((tag) => `<span class="badge text-bg-primary">${tag}</span>`)
-            .join("");
-        const overflow = selected.length - previewTags.length;
-        const more = overflow > 0
-            ? `<span class="badge text-bg-light border">+${overflow} more</span>`
-            : "";
-
-        selectedTagsPreview.innerHTML = chips + more;
-        tagDropdownToggle.textContent = `Choose Tags (${selected.length})`;
-    }
-
-    function setSelectedTags(tags) {
-        const selected = new Set(tags || []);
-        Array.from(document.querySelectorAll(".journal-tag-option")).forEach((opt) => {
-            opt.checked = selected.has(opt.value);
-        });
-        refreshSelectedTagsUi();
-    }
-
-    function filterTags(searchTerm) {
-        const normalized = (searchTerm || "").trim().toLowerCase();
-        Array.from(document.querySelectorAll(".journal-tag-row")).forEach((row) => {
-            const tagName = row.getAttribute("data-tag-name") || "";
-            const visible = !normalized || tagName.includes(normalized);
-            row.style.display = visible ? "flex" : "none";
-        });
-    }
-
-    function setTagsChecked(checked) {
-        Array.from(document.querySelectorAll(".journal-tag-row")).forEach((row) => {
-            const checkbox = row.querySelector(".journal-tag-option");
-            if (checkbox) {
-                checkbox.checked = checked;
-            }
-        });
-        refreshSelectedTagsUi();
-    }
-
-    function splitIsoForInputs(isoValue) {
-        if (!isoValue) {
-            return { date: "", time: "" };
-        }
-        const dateObj = new Date(isoValue);
-        if (Number.isNaN(dateObj.getTime())) {
-            return { date: "", time: "" };
-        }
-        const localDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
-        const localTime = `${String(dateObj.getHours()).padStart(2, "0")}:${String(dateObj.getMinutes()).padStart(2, "0")}`;
-        return { date: localDate, time: localTime };
-    }
-
-    document.getElementById("journal-form").addEventListener("submit", async (event) => {
-        event.preventDefault();
-        clearFeedback(journalFeedback);
-
-        const startTime = document.getElementById("journal-start").value;
-        const endTime = document.getElementById("journal-end").value;
-        const title = document.getElementById("journal-title").value.trim();
-
-        if (!title) {
-            setFeedback(journalFeedback, "error", "Title is required.");
-            return;
-        }
-        if (title.length > 200) {
-            setFeedback(journalFeedback, "error", "Title must be 200 characters or fewer.");
-            return;
-        }
-
-        const startMinutes = toMinutes(startTime);
-        const endMinutes = toMinutes(endTime);
-        if (startMinutes !== null && endMinutes !== null && endMinutes < startMinutes) {
-            setFeedback(journalFeedback, "error", "End time must be after start time.");
-            return;
-        }
-
-        const payload = {
-            start_time: buildDateTime(dateInput.value, startTime),
-            end_time: buildDateTime(dateInput.value, endTime),
-            title,
-            notes: document.getElementById("journal-notes").value,
-            metadata: {
-                tags: getSelectedTags(),
-                labels: document.getElementById("journal-labels").value
-                    .split(",")
-                    .map((v) => v.trim())
-                    .filter((v) => v.length > 0)
-            }
-        };
-
-        const editingId = journalIdInput.value;
-        const method = editingId ? "PUT" : "POST";
-        const url = editingId ? `/api/journal/${editingId}` : "/api/journal";
-
-        const response = await fetch(url, {
-            method,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            let detail = "Unable to save journal entry.";
-            try {
-                const errorPayload = await response.json();
-                detail = errorPayload.detail || detail;
-            } catch (_err) {
-                // ignore JSON parse errors and show default detail.
-            }
-            setFeedback(journalFeedback, "error", detail);
-            return;
-        }
-
-        if (editingId) {
-            setFeedback(journalFeedback, "success", "Journal entry updated.");
-            window.location.href = "/journal?saved=entry";
-            return;
-        }
-
-        setFeedback(journalFeedback, "success", "Journal entry saved.");
-        window.location.href = "/journal?saved=entry";
-    });
-
-    document.getElementById("reflection-form").addEventListener("submit", async (event) => {
-        event.preventDefault();
-        clearFeedback(reflectionFeedback);
-
-        const date = document.getElementById("reflection-date").value;
-        const editingDate = reflectionEditDate.value;
-        const energyValue = document.getElementById("energy").value;
-        const stressValue = document.getElementById("stress").value;
-        const energy = energyValue ? Number(energyValue) : null;
-        const stress = stressValue ? Number(stressValue) : null;
-
-        if (energy !== null && (energy < 1 || energy > 10)) {
-            setFeedback(reflectionFeedback, "error", "Energy must be between 1 and 10.");
-            return;
-        }
-        if (stress !== null && (stress < 1 || stress > 10)) {
-            setFeedback(reflectionFeedback, "error", "Stress must be between 1 and 10.");
-            return;
-        }
-
-        const payload = {
-            wins: document.getElementById("wins").value,
-            problems: document.getElementById("problems").value,
-            tomorrow: document.getElementById("tomorrow").value,
-            energy,
-            stress
-        };
-
-        const targetDate = editingDate || date;
-        const response = await fetch(`/api/reflections/${targetDate}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            let detail = "Unable to save reflection.";
-            try {
-                const errorPayload = await response.json();
-                detail = errorPayload.detail || detail;
-            } catch (_err) {
-                // ignore JSON parse errors and show default detail.
-            }
-            setFeedback(reflectionFeedback, "error", detail);
-            return;
-        }
-
-        setFeedback(reflectionFeedback, "success", editingDate ? "Reflection updated." : "Reflection saved.");
-        window.location.href = "/journal?saved=reflection";
-    });
-
-    document.getElementById("work-event-form").addEventListener("submit", async (event) => {
-        event.preventDefault();
-        clearFeedback(workEventFeedback);
-
-        const title = document.getElementById("work-event-title").value.trim();
-        if (!title) {
-            setFeedback(workEventFeedback, "error", "Work event title is required.");
-            return;
-        }
-
-        const payload = {
-            event_time: buildDateTime(
-                document.getElementById("work-event-date").value,
-                document.getElementById("work-event-time").value
-            ),
-            event_type: document.getElementById("work-event-type").value,
-            impact: document.getElementById("work-event-impact").value || null,
-            title,
-            project: document.getElementById("work-event-project").value.trim() || null,
-            notes: document.getElementById("work-event-notes").value,
-            metadata: {
-                labels: document.getElementById("work-event-labels").value
-                    .split(",")
-                    .map((v) => v.trim())
-                    .filter((v) => v.length > 0)
-            }
-        };
-
-        const editingId = workEventIdInput.value;
-        const method = editingId ? "PUT" : "POST";
-        const url = editingId ? `/api/work-events/${editingId}` : "/api/work-events";
-
-        const response = await fetch(url, {
-            method,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            let detail = "Unable to save work event.";
-            try {
-                const errorPayload = await response.json();
-                detail = errorPayload.detail || detail;
-            } catch (_err) {
-                // ignore JSON parse errors and show default detail.
-            }
-            setFeedback(workEventFeedback, "error", detail);
-            return;
-        }
-
-        setFeedback(workEventFeedback, "success", editingId ? "Work event updated." : "Work event saved.");
-        window.location.href = "/journal?saved=work-event";
-    });
-
-    document.querySelectorAll(".correlate-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            const journalId = button.getAttribute("data-journal-id");
-            if (!journalId || !correlationPanel) {
+        async function loadCorrelation(url, panel) {
+            if (!panel) {
                 return;
             }
-            loadCorrelation(`/api/journal/${journalId}/correlated-sessions`, correlationPanel);
-        });
-    });
+            panel.style.display = "block";
+            panel.innerHTML = "<p class=\"muted\">Loading correlation...</p>";
 
-    document.querySelectorAll(".correlate-reflection-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            const reflectionDateValue = button.getAttribute("data-reflection-date");
-            if (!reflectionDateValue || !reflectionCorrelationPanel) {
-                return;
-            }
-            loadCorrelation(`/api/reflections/${reflectionDateValue}/correlated-sessions`, reflectionCorrelationPanel);
-        });
-    });
-
-    document.querySelectorAll(".correlate-work-event-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            const eventId = button.getAttribute("data-event-id");
-            if (!eventId || !workEventCorrelationPanel) {
-                return;
-            }
-            loadCorrelation(`/api/work-events/${eventId}/correlated-sessions`, workEventCorrelationPanel);
-        });
-    });
-
-    document.querySelectorAll(".edit-entry-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            clearFeedback(journalFeedback);
-            const journalId = button.getAttribute("data-journal-id");
-            if (!journalId) {
-                return;
-            }
-
-            const response = await fetch(`/api/journal/${journalId}`);
+            const response = await fetch(url);
             if (!response.ok) {
-                setFeedback(journalFeedback, "error", "Unable to load journal entry for editing.");
+                let detail = "Unable to load correlation.";
+                try {
+                    const errorPayload = await response.json();
+                    detail = errorPayload.detail || detail;
+                } catch (_err) {
+                    // ignore JSON parse errors and show default detail.
+                }
+                panel.innerHTML = `<div class="error">${detail}</div>`;
                 return;
             }
 
-            const payload = await response.json();
-            const entry = payload.entry || {};
-            const metadata = entry.metadata || {};
+            const data = await response.json();
+            renderCorrelation(panel, data);
+        }
 
-            const startParts = splitIsoForInputs(entry.start_time);
-            const endParts = splitIsoForInputs(entry.end_time);
+        function getSelectedTags() {
+            return Array.from(document.querySelectorAll(".journal-tag-option:checked")).map((opt) => opt.value);
+        }
 
-            journalIdInput.value = String(entry.id || "");
-            journalFormTitle.textContent = "Edit Journal Entry";
-            journalSubmitButton.textContent = "Update Journal Entry";
-            journalCancelButton.style.display = "inline-block";
+        function refreshSelectedTagsUi() {
+            const selected = getSelectedTags();
+            selectedTagsCount.textContent = `${selected.length} selected`;
 
-            dateInput.value = startParts.date || dateValue;
-            document.getElementById("journal-start").value = startParts.time;
-            document.getElementById("journal-end").value = endParts.time;
-            document.getElementById("journal-title").value = entry.title || "";
-            document.getElementById("journal-notes").value = entry.notes || "";
-            document.getElementById("journal-labels").value = (metadata.labels || []).join(", ");
-            setSelectedTags(metadata.tags || []);
-
-            document.getElementById("journal-form-title").scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-    });
-
-    journalCancelButton.addEventListener("click", () => {
-        clearFeedback(journalFeedback);
-        resetJournalForm();
-    });
-
-    document.querySelectorAll(".edit-reflection-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            clearFeedback(reflectionFeedback);
-            const reflectionDateValue = button.getAttribute("data-reflection-date");
-            if (!reflectionDateValue) {
+            if (selected.length === 0) {
+                selectedTagsPreview.innerHTML = '<span class="text-muted small">No tags selected</span>';
+                tagDropdownToggle.textContent = "Choose Tags";
                 return;
             }
 
-            const response = await fetch(`/api/reflections/${reflectionDateValue}`);
-            if (!response.ok) {
-                setFeedback(reflectionFeedback, "error", "Unable to load reflection for editing.");
-                return;
-            }
+            const previewTags = selected.slice(0, 5);
+            const chips = previewTags
+                .map((tag) => `<span class="badge text-bg-primary">${tag}</span>`)
+                .join("");
+            const overflow = selected.length - previewTags.length;
+            const more = overflow > 0
+                ? `<span class="badge text-bg-light border">+${overflow} more</span>`
+                : "";
 
-            const payload = await response.json();
-            const reflection = payload.reflection || {};
+            selectedTagsPreview.innerHTML = chips + more;
+            tagDropdownToggle.textContent = `Choose Tags (${selected.length})`;
+        }
 
-            reflectionEditDate.value = String(reflection.date || "");
-            reflectionFormTitle.textContent = "Edit Daily Reflection + Energy";
-            reflectionSubmitButton.textContent = "Update Reflection";
-            reflectionCancelButton.style.display = "inline-block";
-
-            reflectionDate.value = reflection.date || dateValue;
-            reflectionDate.disabled = true;
-            document.getElementById("energy").value = reflection.energy ?? "";
-            document.getElementById("stress").value = reflection.stress ?? "";
-            document.getElementById("wins").value = reflection.wins || "";
-            document.getElementById("problems").value = reflection.problems || "";
-            document.getElementById("tomorrow").value = reflection.tomorrow || "";
-
-            reflectionFormTitle.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-    });
-
-    reflectionCancelButton.addEventListener("click", () => {
-        clearFeedback(reflectionFeedback);
-        resetReflectionForm();
-    });
-
-    document.querySelectorAll(".edit-work-event-btn").forEach((button) => {
-        button.addEventListener("click", async () => {
-            clearFeedback(workEventFeedback);
-            const eventId = button.getAttribute("data-event-id");
-            if (!eventId) {
-                return;
-            }
-
-            const response = await fetch(`/api/work-events/${eventId}`);
-            if (!response.ok) {
-                setFeedback(workEventFeedback, "error", "Unable to load work event for editing.");
-                return;
-            }
-
-            const payload = await response.json();
-            const eventItem = payload.event || {};
-            const metadata = eventItem.metadata || {};
-            const eventParts = splitIsoForInputs(eventItem.event_time || eventItem.created_at);
-
-            workEventIdInput.value = String(eventItem.id || "");
-            workEventFormTitle.textContent = "Edit Structured Work Event";
-            workEventSubmitButton.textContent = "Update Work Event";
-            workEventCancelButton.style.display = "inline-block";
-
-            document.getElementById("work-event-date").value = eventParts.date || dateValue;
-            document.getElementById("work-event-time").value = eventParts.time;
-            document.getElementById("work-event-type").value = eventItem.event_type || "";
-            document.getElementById("work-event-impact").value = eventItem.impact || "";
-            document.getElementById("work-event-title").value = eventItem.title || "";
-            document.getElementById("work-event-project").value = eventItem.project || "";
-            document.getElementById("work-event-notes").value = eventItem.notes || "";
-            document.getElementById("work-event-labels").value = (metadata.labels || []).join(", ");
-
-            workEventFormTitle.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-    });
-
-    workEventCancelButton.addEventListener("click", () => {
-        clearFeedback(workEventFeedback);
-        resetWorkEventForm();
-    });
-
-    tagsSearchInput.addEventListener("input", () => {
-        filterTags(tagsSearchInput.value);
-    });
-
-    tagsSelectAllButton.addEventListener("click", () => {
-        setTagsChecked(true);
-    });
-
-    tagsClearAllButton.addEventListener("click", () => {
-        setTagsChecked(false);
-    });
-
-    document.querySelectorAll(".journal-tag-option").forEach((checkbox) => {
-        checkbox.addEventListener("change", () => {
+        function setSelectedTags(tags) {
+            const selected = new Set(tags || []);
+            Array.from(document.querySelectorAll(".journal-tag-option")).forEach((opt) => {
+                opt.checked = selected.has(opt.value);
+            });
             refreshSelectedTagsUi();
-        });
-    });
+        }
 
-    refreshSelectedTagsUi();
-})();
+        function filterTags(searchTerm) {
+            const normalized = (searchTerm || "").trim().toLowerCase();
+            Array.from(document.querySelectorAll(".journal-tag-row")).forEach((row) => {
+                const tagName = row.getAttribute("data-tag-name") || "";
+                const visible = !normalized || tagName.includes(normalized);
+                row.style.display = visible ? "flex" : "none";
+            });
+        }
+
+        function setTagsChecked(checked) {
+            Array.from(document.querySelectorAll(".journal-tag-row")).forEach((row) => {
+                const checkbox = row.querySelector(".journal-tag-option");
+                if (checkbox) {
+                    checkbox.checked = checked;
+                }
+            });
+            refreshSelectedTagsUi();
+        }
+
+        function splitIsoForInputs(isoValue) {
+            if (!isoValue) {
+                return { date: "", time: "" };
+            }
+            const dateObj = new Date(isoValue);
+            if (Number.isNaN(dateObj.getTime())) {
+                return { date: "", time: "" };
+            }
+            const localDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
+            const localTime = `${String(dateObj.getHours()).padStart(2, "0")}:${String(dateObj.getMinutes()).padStart(2, "0")}`;
+            return { date: localDate, time: localTime };
+        }
+
+        document.getElementById("journal-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            clearFeedback(journalFeedback);
+
+            const startTime = document.getElementById("journal-start").value;
+            const endTime = document.getElementById("journal-end").value;
+            const title = document.getElementById("journal-title").value.trim();
+
+            if (!title) {
+                setFeedback(journalFeedback, "error", "Title is required.");
+                return;
+            }
+            if (title.length > 200) {
+                setFeedback(journalFeedback, "error", "Title must be 200 characters or fewer.");
+                return;
+            }
+
+            const startMinutes = toMinutes(startTime);
+            const endMinutes = toMinutes(endTime);
+            if (startMinutes !== null && endMinutes !== null && endMinutes < startMinutes) {
+                setFeedback(journalFeedback, "error", "End time must be after start time.");
+                return;
+            }
+
+            const payload = {
+                start_time: buildDateTime(dateInput.value, startTime),
+                end_time: buildDateTime(dateInput.value, endTime),
+                title,
+                notes: document.getElementById("journal-notes").value,
+                metadata: {
+                    tags: getSelectedTags(),
+                    labels: document.getElementById("journal-labels").value
+                        .split(",")
+                        .map((v) => v.trim())
+                        .filter((v) => v.length > 0)
+                }
+            };
+
+            const editingId = journalIdInput.value;
+            const method = editingId ? "PUT" : "POST";
+            const url = editingId ? `/api/journal/${editingId}` : "/api/journal";
+
+            const response = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                let detail = "Unable to save journal entry.";
+                try {
+                    const errorPayload = await response.json();
+                    detail = errorPayload.detail || detail;
+                } catch (_err) {
+                    // ignore JSON parse errors and show default detail.
+                }
+                setFeedback(journalFeedback, "error", detail);
+                return;
+            }
+
+            if (editingId) {
+                setFeedback(journalFeedback, "success", "Journal entry updated.");
+                window.location.href = "/journal?saved=entry";
+                return;
+            }
+
+            setFeedback(journalFeedback, "success", "Journal entry saved.");
+            window.location.href = "/journal?saved=entry";
+        });
+
+        document.getElementById("reflection-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            clearFeedback(reflectionFeedback);
+
+            const date = document.getElementById("reflection-date").value;
+            const editingDate = reflectionEditDate.value;
+            const energyValue = document.getElementById("energy").value;
+            const stressValue = document.getElementById("stress").value;
+            const energy = energyValue ? Number(energyValue) : null;
+            const stress = stressValue ? Number(stressValue) : null;
+
+            if (energy !== null && (energy < 1 || energy > 10)) {
+                setFeedback(reflectionFeedback, "error", "Energy must be between 1 and 10.");
+                return;
+            }
+            if (stress !== null && (stress < 1 || stress > 10)) {
+                setFeedback(reflectionFeedback, "error", "Stress must be between 1 and 10.");
+                return;
+            }
+
+            const payload = {
+                wins: document.getElementById("wins").value,
+                problems: document.getElementById("problems").value,
+                tomorrow: document.getElementById("tomorrow").value,
+                energy,
+                stress
+            };
+
+            const targetDate = editingDate || date;
+            const response = await fetch(`/api/reflections/${targetDate}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                let detail = "Unable to save reflection.";
+                try {
+                    const errorPayload = await response.json();
+                    detail = errorPayload.detail || detail;
+                } catch (_err) {
+                    // ignore JSON parse errors and show default detail.
+                }
+                setFeedback(reflectionFeedback, "error", detail);
+                return;
+            }
+
+            setFeedback(reflectionFeedback, "success", editingDate ? "Reflection updated." : "Reflection saved.");
+            window.location.href = "/journal?saved=reflection";
+        });
+
+        document.getElementById("work-event-form").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            clearFeedback(workEventFeedback);
+
+            const title = document.getElementById("work-event-title").value.trim();
+            if (!title) {
+                setFeedback(workEventFeedback, "error", "Work event title is required.");
+                return;
+            }
+
+            const payload = {
+                event_time: buildDateTime(
+                    document.getElementById("work-event-date").value,
+                    document.getElementById("work-event-time").value
+                ),
+                event_type: document.getElementById("work-event-type").value,
+                impact: document.getElementById("work-event-impact").value || null,
+                title,
+                project: document.getElementById("work-event-project").value.trim() || null,
+                notes: document.getElementById("work-event-notes").value,
+                metadata: {
+                    labels: document.getElementById("work-event-labels").value
+                        .split(",")
+                        .map((v) => v.trim())
+                        .filter((v) => v.length > 0)
+                }
+            };
+
+            const editingId = workEventIdInput.value;
+            const method = editingId ? "PUT" : "POST";
+            const url = editingId ? `/api/work-events/${editingId}` : "/api/work-events";
+
+            const response = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                let detail = "Unable to save work event.";
+                try {
+                    const errorPayload = await response.json();
+                    detail = errorPayload.detail || detail;
+                } catch (_err) {
+                    // ignore JSON parse errors and show default detail.
+                }
+                setFeedback(workEventFeedback, "error", detail);
+                return;
+            }
+
+            setFeedback(workEventFeedback, "success", editingId ? "Work event updated." : "Work event saved.");
+            window.location.href = "/journal?saved=work-event";
+        });
+
+        document.querySelectorAll(".correlate-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const journalId = button.getAttribute("data-journal-id");
+                if (!journalId || !correlationPanel) {
+                    return;
+                }
+                loadCorrelation(`/api/journal/${journalId}/correlated-sessions`, correlationPanel);
+            });
+        });
+
+        document.querySelectorAll(".correlate-reflection-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const reflectionDateValue = button.getAttribute("data-reflection-date");
+                if (!reflectionDateValue || !reflectionCorrelationPanel) {
+                    return;
+                }
+                loadCorrelation(`/api/reflections/${reflectionDateValue}/correlated-sessions`, reflectionCorrelationPanel);
+            });
+        });
+
+        document.querySelectorAll(".correlate-work-event-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const eventId = button.getAttribute("data-event-id");
+                if (!eventId || !workEventCorrelationPanel) {
+                    return;
+                }
+                loadCorrelation(`/api/work-events/${eventId}/correlated-sessions`, workEventCorrelationPanel);
+            });
+        });
+
+        document.querySelectorAll(".edit-entry-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                clearFeedback(journalFeedback);
+                const journalId = button.getAttribute("data-journal-id");
+                if (!journalId) {
+                    return;
+                }
+
+                const response = await fetch(`/api/journal/${journalId}`);
+                if (!response.ok) {
+                    setFeedback(journalFeedback, "error", "Unable to load journal entry for editing.");
+                    return;
+                }
+
+                const payload = await response.json();
+                const entry = payload.entry || {};
+                const metadata = entry.metadata || {};
+
+                const startParts = splitIsoForInputs(entry.start_time);
+                const endParts = splitIsoForInputs(entry.end_time);
+
+                journalIdInput.value = String(entry.id || "");
+                journalFormTitle.textContent = "Edit Journal Entry";
+                journalSubmitButton.textContent = "Update Journal Entry";
+                journalCancelButton.style.display = "inline-block";
+
+                dateInput.value = startParts.date || dateValue;
+                document.getElementById("journal-start").value = startParts.time;
+                document.getElementById("journal-end").value = endParts.time;
+                document.getElementById("journal-title").value = entry.title || "";
+                document.getElementById("journal-notes").value = entry.notes || "";
+                document.getElementById("journal-labels").value = (metadata.labels || []).join(", ");
+                setSelectedTags(metadata.tags || []);
+
+                document.getElementById("journal-form-title").scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+        });
+
+        journalCancelButton.addEventListener("click", () => {
+            clearFeedback(journalFeedback);
+            resetJournalForm();
+        });
+
+        document.querySelectorAll(".edit-reflection-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                clearFeedback(reflectionFeedback);
+                const reflectionDateValue = button.getAttribute("data-reflection-date");
+                if (!reflectionDateValue) {
+                    return;
+                }
+
+                const response = await fetch(`/api/reflections/${reflectionDateValue}`);
+                if (!response.ok) {
+                    setFeedback(reflectionFeedback, "error", "Unable to load reflection for editing.");
+                    return;
+                }
+
+                const payload = await response.json();
+                const reflection = payload.reflection || {};
+
+                reflectionEditDate.value = String(reflection.date || "");
+                reflectionFormTitle.textContent = "Edit Daily Reflection + Energy";
+                reflectionSubmitButton.textContent = "Update Reflection";
+                reflectionCancelButton.style.display = "inline-block";
+
+                reflectionDate.value = reflection.date || dateValue;
+                reflectionDate.disabled = true;
+                document.getElementById("energy").value = reflection.energy ?? "";
+                document.getElementById("stress").value = reflection.stress ?? "";
+                document.getElementById("wins").value = reflection.wins || "";
+                document.getElementById("problems").value = reflection.problems || "";
+                document.getElementById("tomorrow").value = reflection.tomorrow || "";
+
+                reflectionFormTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+        });
+
+        reflectionCancelButton.addEventListener("click", () => {
+            clearFeedback(reflectionFeedback);
+            resetReflectionForm();
+        });
+
+        document.querySelectorAll(".edit-work-event-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                clearFeedback(workEventFeedback);
+                const eventId = button.getAttribute("data-event-id");
+                if (!eventId) {
+                    return;
+                }
+
+                const response = await fetch(`/api/work-events/${eventId}`);
+                if (!response.ok) {
+                    setFeedback(workEventFeedback, "error", "Unable to load work event for editing.");
+                    return;
+                }
+
+                const payload = await response.json();
+                const eventItem = payload.event || {};
+                const metadata = eventItem.metadata || {};
+                const eventParts = splitIsoForInputs(eventItem.event_time || eventItem.created_at);
+
+                workEventIdInput.value = String(eventItem.id || "");
+                workEventFormTitle.textContent = "Edit Structured Work Event";
+                workEventSubmitButton.textContent = "Update Work Event";
+                workEventCancelButton.style.display = "inline-block";
+
+                document.getElementById("work-event-date").value = eventParts.date || dateValue;
+                document.getElementById("work-event-time").value = eventParts.time;
+                document.getElementById("work-event-type").value = eventItem.event_type || "";
+                document.getElementById("work-event-impact").value = eventItem.impact || "";
+                document.getElementById("work-event-title").value = eventItem.title || "";
+                document.getElementById("work-event-project").value = eventItem.project || "";
+                document.getElementById("work-event-notes").value = eventItem.notes || "";
+                document.getElementById("work-event-labels").value = (metadata.labels || []).join(", ");
+
+                workEventFormTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+        });
+
+        workEventCancelButton.addEventListener("click", () => {
+            clearFeedback(workEventFeedback);
+            resetWorkEventForm();
+        });
+
+        tagsSearchInput.addEventListener("input", () => {
+            filterTags(tagsSearchInput.value);
+        });
+
+        tagsSelectAllButton.addEventListener("click", () => {
+            setTagsChecked(true);
+        });
+
+        tagsClearAllButton.addEventListener("click", () => {
+            setTagsChecked(false);
+        });
+
+        document.querySelectorAll(".journal-tag-option").forEach((checkbox) => {
+            checkbox.addEventListener("change", () => {
+                refreshSelectedTagsUi();
+            });
+        });
+
+        refreshSelectedTagsUi();
+    })();
 </script>
 {% endblock %}
