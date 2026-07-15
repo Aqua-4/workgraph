@@ -24,7 +24,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1240px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -150,9 +150,6 @@
         }
 
         .page-context {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 10px;
             margin-top: 18px;
             padding: 16px 18px;
             border-radius: 14px;
@@ -378,7 +375,7 @@
     <header>
         <div class="container">
             <h1>📊 WorkGraph Dashboard</h1>
-            <nav>
+            <nav class="d-flex flex-wrap gap-2 mt-2">
                 <a href="/" class="{% block nav_dashboard %}{% endblock %}">Dashboard</a>
                 <a href="/timeline" class="{% block nav_timeline %}{% endblock %}">Timeline</a>
                 {% if dashboard_mode != "sync-server" %}
@@ -388,25 +385,27 @@
             </nav>
             {% if page_context %}
             <div class="page-context">
-                <div class="page-context__item">
-                    <span class="page-context__label">Mode</span>
-                    <span class="page-context__value">{{ page_context.mode }}</span>
-                </div>
-                <div class="page-context__item">
-                    <span class="page-context__label">Source</span>
-                    <span class="page-context__value">{{ page_context.source }}</span>
-                </div>
-                <div class="page-context__item">
-                    <span class="page-context__label">User</span>
-                    <span class="page-context__value">{{ page_context.user }}</span>
-                </div>
-                <div class="page-context__item">
-                    <span class="page-context__label">Device</span>
-                    <span class="page-context__value">{{ page_context.device }}</span>
-                </div>
-                <div class="page-context__item">
-                    <span class="page-context__label">Time Range</span>
-                    <span class="page-context__value">{{ page_context.time_range }}</span>
+                <div class="row g-2">
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">Mode</span>
+                        <span class="page-context__value">{{ page_context.mode }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">Source</span>
+                        <span class="page-context__value">{{ page_context.source }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">User</span>
+                        <span class="page-context__value">{{ page_context.user }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">Device</span>
+                        <span class="page-context__value">{{ page_context.device }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">Time Range</span>
+                        <span class="page-context__value">{{ page_context.time_range }}</span>
+                    </div>
                 </div>
             </div>
             {% endif %}

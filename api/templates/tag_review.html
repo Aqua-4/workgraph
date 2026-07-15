@@ -18,12 +18,6 @@
         gap: 1rem;
     }
 
-    .tag-review-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
-        gap: 1rem;
-    }
-
     .tag-review-preview {
         width: 100%;
         min-height: 460px;
@@ -216,11 +210,6 @@
         align-self: start;
     }
 
-    @media (max-width: 960px) {
-        .tag-review-grid {
-            grid-template-columns: 1fr;
-        }
-    }
 </style>
 {% endblock %}
 
@@ -277,8 +266,9 @@
         </form>
     </div>
 
-    <div class="tag-review-grid">
-        <div class="card p-3 p-md-4">
+    <div class="row g-3">
+        <div class="col-12 col-xl-8">
+            <div class="card p-3 p-md-4 h-100">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                 <h3 class="m-0">Grouped Review Queue</h3>
                 <span class="tag-review-muted">Assigning a tag updates all matching sessions in the bucket immediately.</span>
@@ -371,25 +361,28 @@
             {% else %}
             <p class="text-muted mb-0">No matching review groups in this range.</p>
             {% endif %}
+            </div>
         </div>
 
-        <div class="card p-3 p-md-4">
-            <h3 class="mb-2">YAML Preview</h3>
-            <p class="tag-review-muted">Preview/download only in this phase. Existing keywords stay visible, but new keywords are
-                not generated.</p>
-            {% if warnings %}
-            <div class="error">
-                {% for warning in warnings %}
-                <div>{{ warning.field }} conflict for {{ warning.value }} (owned by {{ warning.owner }})</div>
-                {% endfor %}
-            </div>
-            {% endif %}
-            <textarea id="tag-review-yaml-preview" class="tag-review-preview form-control"
-                readonly>{{ yaml_preview }}</textarea>
-            <div class="d-flex gap-2 mt-3 flex-wrap">
-                <button id="tag-review-refresh-preview" type="button" class="btn btn-outline-primary">Refresh
-                    Preview</button>
-                <button id="tag-review-download" type="button" class="btn btn-primary">Download YAML</button>
+        <div class="col-12 col-xl-4">
+            <div class="card p-3 p-md-4 h-100">
+                <h3 class="mb-2">YAML Preview</h3>
+                <p class="tag-review-muted">Preview/download only in this phase. Existing keywords stay visible, but new keywords are
+                    not generated.</p>
+                {% if warnings %}
+                <div class="error">
+                    {% for warning in warnings %}
+                    <div>{{ warning.field }} conflict for {{ warning.value }} (owned by {{ warning.owner }})</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <textarea id="tag-review-yaml-preview" class="tag-review-preview form-control"
+                    readonly>{{ yaml_preview }}</textarea>
+                <div class="d-flex gap-2 mt-3 flex-wrap">
+                    <button id="tag-review-refresh-preview" type="button" class="btn btn-outline-primary">Refresh
+                        Preview</button>
+                    <button id="tag-review-download" type="button" class="btn btn-primary">Download YAML</button>
+                </div>
             </div>
         </div>
     </div>

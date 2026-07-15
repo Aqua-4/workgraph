@@ -119,33 +119,33 @@
         <p class="muted mb-3">Capture context around your day, including historical events.</p>
         <div id="journal-feedback" style="display: none;"></div>
 
-        <form id="journal-form" class="form-grid">
+        <form id="journal-form" class="row g-3">
             <input type="hidden" id="journal-id">
-            <div class="field">
+            <div class="field col-12 col-md-4">
                 <label for="journal-date">Date</label>
                 <input type="date" id="journal-date" required>
             </div>
-            <div class="field">
+            <div class="field col-12 col-md-4">
                 <label for="journal-start">Start Time (optional)</label>
                 <input type="time" id="journal-start">
             </div>
-            <div class="field">
+            <div class="field col-12 col-md-4">
                 <label for="journal-end">End Time (optional)</label>
                 <input type="time" id="journal-end">
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="journal-title">Title</label>
                 <input type="text" id="journal-title" maxlength="200" placeholder="Example: Spent afternoon handling client-site delay" required>
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="journal-notes">Notes</label>
                 <textarea id="journal-notes" rows="5" placeholder="Add details, emotions, context, blockers, learnings, or anything important."></textarea>
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="journal-labels">Optional Labels (comma-separated)</label>
                 <input type="text" id="journal-labels" placeholder="incident, travel, personal, learning">
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label class="mb-1" for="journal-tags">Tag Assignment</label>
                 <div class="tag-panel">
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -189,7 +189,7 @@
                 </div>
                 <p class="muted">Pick one or more configured tags to associate with this entry.</p>
             </div>
-            <div class="d-flex gap-2" style="grid-column: 1 / -1;">
+            <div class="col-12 d-flex gap-2 flex-wrap">
                 <button class="btn btn-primary" id="journal-submit" type="submit">Save Journal Entry</button>
                 <button class="btn btn-outline-secondary" id="journal-cancel" type="button" style="display: none;">Cancel Edit</button>
             </div>
@@ -200,33 +200,33 @@
         <h3 id="reflection-form-title" class="mb-1">Daily Reflection + Energy</h3>
         <p class="muted mb-3">Track wins, setbacks, and your energy/stress for trend analysis.</p>
         <div id="reflection-feedback" style="display: none;"></div>
-        <form id="reflection-form" class="form-grid">
+        <form id="reflection-form" class="row g-3">
             <input type="hidden" id="reflection-edit-date">
-            <div class="field">
+            <div class="field col-12 col-md-4">
                 <label for="reflection-date">Date</label>
                 <input type="date" id="reflection-date" required>
             </div>
-            <div class="field">
+            <div class="field col-12 col-md-4">
                 <label for="energy">Energy (1-10)</label>
                 <input type="number" id="energy" min="1" max="10" placeholder="7">
             </div>
-            <div class="field">
+            <div class="field col-12 col-md-4">
                 <label for="stress">Stress (1-10)</label>
                 <input type="number" id="stress" min="1" max="10" placeholder="4">
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="wins">What went well?</label>
                 <textarea id="wins" rows="3"></textarea>
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="problems">What went poorly?</label>
                 <textarea id="problems" rows="3"></textarea>
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="tomorrow">What should I do tomorrow?</label>
                 <textarea id="tomorrow" rows="3"></textarea>
             </div>
-            <div style="grid-column: 1 / -1;" class="d-flex gap-2">
+            <div class="col-12 d-flex gap-2 flex-wrap">
                 <button class="btn btn-primary" id="reflection-submit" type="submit">Save Reflection</button>
                 <button class="btn btn-outline-secondary" id="reflection-cancel" type="button" style="display: none;">Cancel Edit</button>
             </div>
@@ -237,17 +237,17 @@
         <h3 id="work-event-form-title" class="mb-1">Structured Work Events</h3>
         <p class="muted mb-3">Capture high-signal milestones like incidents, decisions, blockers, and releases.</p>
         <div id="work-event-feedback" style="display: none;"></div>
-        <form id="work-event-form" class="form-grid">
+        <form id="work-event-form" class="row g-3">
             <input type="hidden" id="work-event-id">
-            <div class="field">
+            <div class="field col-12 col-md-6 col-lg-3">
                 <label for="work-event-date">Date</label>
                 <input type="date" id="work-event-date" required>
             </div>
-            <div class="field">
+            <div class="field col-12 col-md-6 col-lg-3">
                 <label for="work-event-time">Time (optional)</label>
                 <input type="time" id="work-event-time">
             </div>
-            <div class="field">
+            <div class="field col-12 col-md-6 col-lg-3">
                 <label for="work-event-type">Event Type</label>
                 <select id="work-event-type" required>
                     {% for event_type in work_event_types %}
@@ -255,7 +255,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="field">
+            <div class="field col-12 col-md-6 col-lg-3">
                 <label for="work-event-impact">Impact</label>
                 <select id="work-event-impact">
                     <option value="">Not set</option>
@@ -264,23 +264,23 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="work-event-title">Title</label>
                 <input type="text" id="work-event-title" maxlength="200" placeholder="Example: Demo failed due to auth outage" required>
             </div>
-            <div class="field">
+            <div class="field col-12 col-md-6">
                 <label for="work-event-project">Project (optional)</label>
                 <input type="text" id="work-event-project" maxlength="200" placeholder="Example: MCP Platform">
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="work-event-notes">Notes</label>
                 <textarea id="work-event-notes" rows="3" placeholder="Impact, context, decision made, follow-up owner."></textarea>
             </div>
-            <div class="field" style="grid-column: 1 / -1;">
+            <div class="field col-12">
                 <label for="work-event-labels">Labels (comma-separated)</label>
                 <input type="text" id="work-event-labels" placeholder="customer-facing,auth,postmortem">
             </div>
-            <div style="grid-column: 1 / -1;" class="d-flex gap-2">
+            <div class="col-12 d-flex gap-2 flex-wrap">
                 <button class="btn btn-primary" id="work-event-submit" type="submit">Save Work Event</button>
                 <button class="btn btn-outline-secondary" id="work-event-cancel" type="button" style="display: none;">Cancel Edit</button>
             </div>
