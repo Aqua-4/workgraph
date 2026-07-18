@@ -1,13 +1,17 @@
+import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 
 from db.repository import ActivityRepository
 from services.sync_worker import SyncWorker, SyncWorkerSettings
+from workgraph.models import ActivitySession
 
 
 class FakeSyncClient:
-    def __init__(self, *, push_responses: list[dict], pull_responses: list[dict]) -> None:
+    def __init__(
+        self, *, push_responses: list[dict], pull_responses: list[dict]
+    ) -> None:
         self._push_responses = list(push_responses)
         self._pull_responses = list(pull_responses)
         self.push_payloads: list[dict] = []
@@ -71,7 +75,9 @@ class SyncWorkerTests(unittest.TestCase):
                 worker = SyncWorker(
                     repository,
                     client,
-                    SyncWorkerSettings(batch_size=1000, pull_limit=1000, max_pull_pages=5),
+                    SyncWorkerSettings(
+                        batch_size=1000, pull_limit=1000, max_pull_pages=5
+                    ),
                 )
                 summary = worker.run_once()
                 state = repository.get_sync_state()
@@ -133,6 +139,64 @@ class SyncWorkerTests(unittest.TestCase):
         self.assertEqual(row["deleted_at"], "2026-07-11T12:00:00+00:00")
         self.assertEqual(state["last_push_cursor"], "push-cursor-2")
         self.assertEqual(state["last_pull_cursor"], "pull-cursor-2")
+
+    def test_sync_worker_pushes_manual_session_tag_override_on_next_run(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+            identity_path = Path(temp_dir) / "identity.json"
+
+            with ActivityRepository(db_path, identity_path=identity_path) as repository:
+                session_id = repository.save_session(
+                    ActivitySession(
+                        start_time=datetime(2026, 7, 11, 9, 0, tzinfo=UTC),
+                        end_time=datetime(2026, 7, 11, 9, 20, tzinfo=UTC),
+                        duration_sec=1200,
+                        app_name="Chrome",
+                        process_name="chrome",
+                        window_title="TradingView",
+                        browser_domain="tradingview.com",
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+
+                client = FakeSyncClient(
+                    push_responses=[{}, {}],
+                    pull_responses=[
+                        {
+                            "changes": {},
+                            "next_cursor": "pull-cursor-1",
+                            "has_more": False,
+                        },
+                        {
+                            "changes": {},
+                            "next_cursor": "pull-cursor-1",
+                            "has_more": False,
+                        },
+                    ],
+                )
+
+                worker = SyncWorker(repository, client)
+                first_summary = worker.run_once()
+
+                repository.update_session_tag(session_id, "Finance")
+
+                second_summary = worker.run_once()
+                state = repository.get_sync_state()
+
+        self.assertEqual(first_summary["push"]["sessions"], 1)
+        self.assertEqual(second_summary["push"]["sessions"], 1)
+        self.assertEqual(len(client.push_payloads), 2)
+        self.assertEqual(
+            client.push_payloads[1]["changes"]["sessions"][0]["tag"],
+            "Finance",
+        )
+        self.assertIsNotNone(state["last_push_cursor"])
 
 
 if __name__ == "__main__":

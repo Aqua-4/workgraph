@@ -3,13 +3,18 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import sqlite3
 import unittest
 
+from api.app import _ensure_sync_tables
 from db.repository import ActivityRepository
 from services.reporting import (
     analyze_goal_allocation,
     default_goals_path,
     export_activity_sessions,
+    generate_goals_report_markdown,
+    generate_monthly_report_markdown,
+    generate_sync_report_markdown,
     generate_weekly_report_markdown,
 )
 from workgraph.models import ActivitySession
@@ -127,6 +132,125 @@ goals:
         nz_items = [item for item in drift if item.goal == "NZ Migration"]
         self.assertEqual(len(nz_items), 1)
         self.assertLess(nz_items[0].actual_pct, nz_items[0].planned_pct)
+
+    def test_monthly_report_uses_longer_window(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            db_path = temp / "activity.db"
+            goals_path = temp / "goals.yaml"
+            goals_path.write_text(
+                """
+goals:
+  Client Delivery: 70
+  Learning: 10
+  NZ Migration: 10
+  Personal Projects: 10
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            self._seed_sessions(db_path)
+
+            report = generate_monthly_report_markdown(
+                db_path=db_path,
+                days=30,
+                goals_path=goals_path,
+                now=datetime(2026, 7, 11, 0, 0, tzinfo=UTC),
+            )
+
+        self.assertIn("# Month Summary", report)
+        self.assertIn("Goal Allocation Drift", report)
+
+    def test_goals_report_surfaces_drift_summary(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            db_path = temp / "activity.db"
+            goals_path = temp / "goals.yaml"
+            goals_path.write_text(
+                """
+goals:
+  Client Delivery: 70
+  Learning: 10
+  NZ Migration: 10
+  Personal Projects: 10
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            self._seed_sessions(db_path)
+
+            report = generate_goals_report_markdown(
+                db_path=db_path,
+                days=7,
+                goals_path=goals_path,
+                now=datetime(2026, 7, 11, 0, 0, tzinfo=UTC),
+            )
+
+        self.assertIn("# Goals Report", report)
+        self.assertIn("Goal Allocation Drift", report)
+
+    def test_sync_report_summarizes_device_health(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            db_path = temp / "activity.db"
+
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                _ensure_sync_tables(conn)
+                conn.execute(
+                    "INSERT INTO sync_users (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)",
+                    ("user-1", "Parashar", "2026-07-11T00:00:00+00:00", "2026-07-11T00:00:00+00:00"),
+                )
+                conn.execute(
+                    "INSERT INTO sync_devices (id, user_id, name, type, created_at, updated_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        "device-1",
+                        "user-1",
+                        "Office Laptop",
+                        "work",
+                        "2026-07-11T00:00:00+00:00",
+                        "2026-07-11T01:00:00+00:00",
+                        "2026-07-11T01:00:00+00:00",
+                    ),
+                )
+                conn.execute(
+                    "INSERT INTO sync_tokens (token, device_id, user_id, created_at, revoked_at) VALUES (?, ?, ?, ?, ?)",
+                    ("token-1", "device-1", "user-1", "2026-07-11T00:00:00+00:00", None),
+                )
+                conn.execute(
+                    "INSERT INTO sync_checkpoints (device_id, user_id, last_push_cursor, last_pull_cursor, updated_at) VALUES (?, ?, ?, ?, ?)",
+                    (
+                        "device-1",
+                        "user-1",
+                        "2026-07-11T01:00:00+00:00|sess-1",
+                        "2026-07-11T01:00:00+00:00|sess-1",
+                        "2026-07-11T01:00:00+00:00",
+                    ),
+                )
+                conn.execute(
+                    "INSERT INTO sync_error_logs (endpoint, error_type, message, retry_count, status, status_code, device_id, user_id, batch_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        "/api/sync/v1/push",
+                        "ConflictError",
+                        "Replay detected",
+                        1,
+                        "open",
+                        409,
+                        "device-1",
+                        "user-1",
+                        "batch-1",
+                        "2026-07-11T01:05:00+00:00",
+                        "2026-07-11T01:05:00+00:00",
+                    ),
+                )
+                conn.commit()
+
+            report = generate_sync_report_markdown(db_path=db_path)
+
+        self.assertIn("# Sync Status Report", report)
+        self.assertIn("Registered Devices: 1", report)
+        self.assertIn("Pending Pull Rows:", report)
+        self.assertIn("Recent Sync Errors", report)
 
     def _seed_sessions(self, db_path: Path) -> None:
         sessions = [

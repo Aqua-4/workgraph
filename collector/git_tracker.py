@@ -4,6 +4,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+import psutil
+
 
 @dataclass(frozen=True)
 class GitActivity:
@@ -19,9 +21,95 @@ class GitTracker:
     def __init__(self, cwd: Path | None = None) -> None:
         self.cwd = cwd or Path.cwd()
 
-    def get_activity(self) -> GitActivity:
-        """Detect current git repo and activity."""
-        repo_path = self._find_repo_root()
+    @staticmethod
+    def _cwd_for_pid(pid: int | None) -> Path | None:
+        """Return the working directory of a process, or None if unavailable."""
+        if not pid:
+            return None
+        try:
+            return Path(psutil.Process(pid).cwd())
+        except (psutil.Error, OSError):
+            return None
+
+    @staticmethod
+    def _extract_editor_project_name(window_title: str) -> str | None:
+        """Extract the project/folder name from an IDE window title.
+
+        Handles titles like:
+          'file.py - projectname - Visual Studio Code'
+          '● file.py - projectname - Visual Studio Code'
+          'projectname - Visual Studio Code'
+        """
+        # Strip leading modified indicator (●, *, etc.)
+        title = window_title.strip().lstrip("●* ").strip()
+        parts = [p.strip() for p in title.split(" - ")]
+        # Drop the last part if it names the IDE
+        ide_suffixes = {
+            "visual studio code",
+            "code",
+            "pycharm",
+            "intellij idea",
+            "sublime text",
+            "vim",
+            "nvim",
+        }
+        if parts and parts[-1].lower() in ide_suffixes:
+            parts = parts[:-1]
+        if not parts:
+            return None
+        # The last remaining segment is the project/folder name
+        return parts[-1]
+
+    @staticmethod
+    def _find_project_cwd_by_name(project_name: str) -> Path | None:
+        """Search all Code.exe (and similar) child processes for one whose cwd
+        directory name matches *project_name* (case-insensitive)."""
+        for proc in psutil.process_iter(["name", "cwd"]):
+            try:
+                name = proc.info["name"] or ""
+                if "code" not in name.lower():
+                    continue
+                cwd = proc.info["cwd"]
+                if cwd and Path(cwd).name.lower() == project_name.lower():
+                    return Path(cwd)
+            except (psutil.Error, OSError):
+                pass
+        return None
+
+    def _resolve_cwd(
+        self,
+        pid: int | None,
+        app_name: str | None,
+        window_title: str | None,
+    ) -> Path:
+        """Best-effort resolution of the project directory for a given window."""
+        # For VS Code (and similar Electron editors), the foreground window process
+        # always has cwd = the VS Code installation directory, not the project.
+        # Rely on the window title to extract the project name, then find a
+        # language-server child process that has the real project cwd.
+        is_editor = app_name and any(
+            kw in app_name.lower()
+            for kw in ("code", "pycharm", "idea", "sublime", "vim")
+        )
+        if is_editor and window_title:
+            project_name = self._extract_editor_project_name(window_title)
+            if project_name:
+                cwd = self._find_project_cwd_by_name(project_name)
+                if cwd:
+                    return cwd
+
+        # Fallback: use the process's own cwd (works for terminal apps, etc.)
+        return self._cwd_for_pid(pid) or self.cwd
+
+    def get_activity(
+        self,
+        pid: int | None = None,
+        app_name: str | None = None,
+        window_title: str | None = None,
+    ) -> GitActivity:
+        """Detect current git repo and activity for the given window."""
+        cwd = self._resolve_cwd(pid, app_name, window_title)
+        repo_path = self._find_repo_root(cwd)
         if not repo_path:
             return GitActivity(None, None, None, [])
 
@@ -37,9 +125,9 @@ class GitTracker:
             modified_files=modified_files,
         )
 
-    def _find_repo_root(self) -> Path | None:
+    def _find_repo_root(self, cwd: Path) -> Path | None:
         """Find the root of a git repository by walking up from cwd."""
-        current = self.cwd
+        current = cwd
         for _ in range(20):  # limit to 20 levels up
             if (current / ".git").exists():
                 return current

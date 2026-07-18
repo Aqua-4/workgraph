@@ -394,6 +394,9 @@ class JournalApiTests(unittest.TestCase):
         stats = get_summary_stats(self.db_path, days=7)
         self.assertEqual(stats["total_switches"], 2)
         self.assertAlmostEqual(stats["switch_rate_per_hour"], 1.33, places=2)
+        self.assertIsNotNone(stats["goal_drift"])
+        self.assertGreater(stats["goal_drift"]["goal_drift_score_pct_points"], 0)
+        self.assertGreater(stats["goal_drift"]["unmapped_pct"], 0)
 
     def test_summary_stats_merges_short_active_sessions_into_focus_blocks(self) -> None:
         with ActivityRepository(self.db_path) as repository:
@@ -504,11 +507,68 @@ class JournalApiTests(unittest.TestCase):
         self.assertIn("Sync Health", journal_response.text)
         self.assertIn("registered, not synced yet", journal_response.text)
 
-    def test_dashboard_shows_sync_health_even_without_registered_devices(self) -> None:
+    def test_dashboard_hides_sync_health_in_standalone_mode(self) -> None:
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Sync Health", response.text)
-        self.assertIn("No devices registered yet.", response.text)
+        self.assertNotIn("Sync Health", response.text)
+        self.assertNotIn("No devices registered yet.", response.text)
+
+    def test_timeline_shows_user_and_device_context_in_standalone_mode(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository._connection.execute(
+                """
+                INSERT INTO activity_sessions (
+                    uuid,
+                    user_id,
+                    device_id,
+                    start_time,
+                    end_time,
+                    duration_sec,
+                    app_name,
+                    process_name,
+                    window_title,
+                    browser_domain,
+                    is_idle,
+                    idle_seconds,
+                    git_repo,
+                    git_branch,
+                    context_switches,
+                    tag,
+                    platform,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "timeline-user-device-1",
+                    "user-standalone",
+                    "device-standalone",
+                    datetime(2026, 7, 10, 14, 0, tzinfo=timezone.utc).isoformat(),
+                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
+                    1800,
+                    "Code",
+                    "Code",
+                    "main.py",
+                    None,
+                    0,
+                    0,
+                    "workgraph",
+                    "main",
+                    1,
+                    "Client Delivery",
+                    "linux",
+                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
+                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
+                ),
+            )
+            repository._connection.commit()
+
+        response = self.client.get("/timeline")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("User", response.text)
+        self.assertIn("Device", response.text)
+        self.assertIn("user-standalone", response.text)
+        self.assertIn("device-standalone", response.text)
 
 
 if __name__ == "__main__":

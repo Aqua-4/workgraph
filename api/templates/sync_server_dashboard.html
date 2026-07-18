@@ -9,26 +9,38 @@
     <h2>Sync Server Dashboard</h2>
 
     <div class="card" style="margin-bottom: 12px;">
-        <form method="get" action="/" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-            <span class="stat-label" style="margin: 0;">Configured Mode</span>
-            <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
-            <input
-                type="text"
-                name="user_id"
-                value="{{ overview.selected_user_id or '' }}"
-                placeholder="user_id (optional: blank = all users)"
-                style="min-width: 260px;"
-            />
-            <input
-                type="text"
-                name="device_id"
-                value="{{ overview.selected_device_id or '' }}"
-                placeholder="device_id (optional)"
-                style="min-width: 220px;"
-            />
-            <button type="submit">Apply</button>
+        <form method="get" action="/" class="row g-3 align-items-end">
+            <div class="col-12 d-flex gap-2 flex-wrap align-items-center">
+                <span class="stat-label" style="margin: 0;">Configured Mode</span>
+                <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
+            </div>
+            <div class="col-12 col-md-6">
+                <label for="sync-dashboard-user-id" class="form-label">User</label>
+                <input type="text" class="form-control" id="sync-dashboard-user-id" name="user_id"
+                    value="{{ overview.selected_user_id or '' }}" placeholder="user_id (optional: blank = all users)" />
+            </div>
+            <div class="col-12 col-md-4">
+                <label for="sync-dashboard-device-id" class="form-label">Device</label>
+                <input type="text" class="form-control" id="sync-dashboard-device-id" name="device_id"
+                    value="{{ overview.selected_device_id or '' }}" placeholder="device_id (optional)" />
+            </div>
+            <div class="col-12 col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary">Apply</button>
+            </div>
         </form>
     </div>
+
+    {% if page_context %}
+    <div class="card" style="margin-bottom: 12px;">
+        <h3 style="margin-top: 0;">Scope</h3>
+        <div style="font-size: 0.95em; color: #4b5563; line-height: 1.6;">
+            <div><strong>Mode:</strong> {{ page_context.mode }}</div>
+            <div><strong>User:</strong> {{ page_context.user }}</div>
+            <div><strong>Device:</strong> {{ page_context.device }}</div>
+            <div><strong>Time Range:</strong> {{ page_context.time_range }}</div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="card" style="margin-bottom: 12px;">
         <h3 style="margin-top: 0;">Server Aggregation Scope</h3>
@@ -39,91 +51,176 @@
 
     <h2>Sync Health</h2>
     <div class="card">
-        <div class="stats-grid" style="margin-bottom: 0;">
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                <div class="stat-label">Registered Devices</div>
-                <div class="stat-value">{{ sync_health.registered_devices }}</div>
+        <div class="row g-3" style="margin-bottom: 0;">
+            <div class="col-12 col-sm-6 col-xl-4 metric-card">
+                <div class="metric-card__label">Registered Devices</div>
+                <div class="metric-card__value">{{ sync_health.registered_devices }}</div>
+                <div class="metric-card__subtext">active sync clients</div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                <div class="stat-label">Synced Devices</div>
-                <div class="stat-value">{{ sync_health.synced_devices }}</div>
+            <div class="col-12 col-sm-6 col-xl-4 metric-card">
+                <div class="metric-card__label">Synced Devices</div>
+                <div class="metric-card__value">{{ sync_health.synced_devices }}</div>
+                <div class="metric-card__subtext">devices with a completed sync</div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                <div class="stat-label">Active Tokens</div>
-                <div class="stat-value">{{ sync_health.active_tokens }}</div>
+            <div class="col-12 col-sm-6 col-xl-4 metric-card">
+                <div class="metric-card__label">Active Tokens</div>
+                <div class="metric-card__value">{{ sync_health.active_tokens }}</div>
+                <div class="metric-card__subtext">valid device auth tokens</div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                <div class="stat-label">Last Sync</div>
-                <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at|human_datetime }}</div>
+            <div class="col-12 col-sm-6 col-xl-4 metric-card">
+                <div class="metric-card__label">Last Sync</div>
+                <div class="metric-card__value" style="font-size: 1.4rem;">{{ sync_health.last_sync_at|human_datetime }}
+                </div>
+                <div class="metric-card__subtext">latest checkpoint update</div>
             </div>
+            <div class="col-12 col-sm-6 col-xl-4 metric-card">
+                <div class="metric-card__label">Pending Pull Rows</div>
+                <div class="metric-card__value">{{ sync_health.pending_pull_rows }}</div>
+                <div class="metric-card__subtext">sessions, journals, and reflections waiting to pull</div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-4 metric-card">
+                <div class="metric-card__label">Open Sync Failures</div>
+                <div class="metric-card__value">{{ sync_health.sync_failures }}</div>
+                <div class="metric-card__subtext">unresolved upload or pull errors</div>
+            </div>
+        </div>
+        <div style="margin-top: 10px; color: #4b5563; font-size: 0.9em;">
+            Pending pull queue: sessions {{ sync_health.pending_sessions }}, journals {{
+            sync_health.pending_journal_entries }}, reflections {{ sync_health.pending_reflections }}.
         </div>
     </div>
 
+    <h2>Device Health</h2>
+    <div class="card">
+        {% if sync_health.device_statuses %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Device</th>
+                        <th>Status</th>
+                        <th>Last Sync</th>
+                        <th>Pending Pull</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sync_health.device_statuses %}
+                    <tr>
+                        <td>{{ item.device_name or item.device_id }}</td>
+                        <td><span class="tag-badge" style="text-transform: none;">{{ item.status }}</span></td>
+                        <td>{{ item.last_sync_at|human_datetime }}</td>
+                        <td>s:{{ item.pending_sessions }} j:{{ item.pending_journal_entries }} r:{{
+                            item.pending_reflections }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: #999;">No device health records available yet.</p>
+        {% endif %}
+    </div>
+
     <h2>Aggregated Metrics (7 Days)</h2>
-    <div class="stats-grid">
-        <div class="stat-box">
-            <div class="stat-label">Total Active Time</div>
-            <div class="stat-value">{{ "%.1f"|format(overview.global_stats.total_hours) }}h</div>
+    <div class="row g-3">
+        <div class="col-12 col-sm-6 col-xl-3 metric-card">
+            <div class="metric-card__label">Total Active Time</div>
+            <div class="metric-card__value">{{ "%.1f"|format(overview.global_stats.total_hours) }}h</div>
+            <div class="metric-card__subtext">across the current server filter</div>
         </div>
-        <div class="stat-box">
-            <div class="stat-label">Focus Time</div>
-            <div class="stat-value">{{ "%.1f"|format(overview.global_stats.focus_hours) }}h</div>
+        <div class="col-12 col-sm-6 col-xl-3 metric-card">
+            <div class="metric-card__label">Focus Time</div>
+            <div class="metric-card__value">{{ "%.1f"|format(overview.global_stats.focus_hours) }}h</div>
+            <div class="metric-card__subtext">work captured outside meetings</div>
         </div>
-        <div class="stat-box">
-            <div class="stat-label">Meeting Time (Proxy)</div>
-            <div class="stat-value">{{ "%.1f"|format(overview.global_stats.meeting_hours) }}h</div>
+        <div class="col-12 col-sm-6 col-xl-3 metric-card">
+            <div class="metric-card__label">Meeting Time (Proxy)</div>
+            <div class="metric-card__value">{{ "%.1f"|format(overview.global_stats.meeting_hours) }}h</div>
+            <div class="metric-card__subtext">estimated from meeting-like activity</div>
         </div>
-        <div class="stat-box">
-            <div class="stat-label">Context Switches</div>
-            <div class="stat-value">{{ overview.global_stats.total_switches }}</div>
+        <div class="col-12 col-sm-6 col-xl-3 metric-card">
+            <div class="metric-card__label">Context Switches</div>
+            <div class="metric-card__value">{{ overview.global_stats.total_switches }}</div>
+            <div class="metric-card__subtext">transitions within the selected scope</div>
         </div>
     </div>
 
     {% if overview.user_stats %}
     <h2>Selected User Breakdown</h2>
     <div class="card">
-        <div class="stats-grid" style="margin-bottom: 0;">
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                <div class="stat-label">Active Hours</div>
-                <div class="stat-value">{{ "%.1f"|format(overview.user_stats.total_hours) }}h</div>
+        <div class="row g-3" style="margin-bottom: 0;">
+            <div class="col-12 col-sm-6 col-xl-3 metric-card">
+                <div class="metric-card__label">Active Hours</div>
+                <div class="metric-card__value">{{ "%.1f"|format(overview.user_stats.total_hours) }}h</div>
+                <div class="metric-card__subtext">user-scoped active time</div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                <div class="stat-label">Tagged Coverage</div>
-                <div class="stat-value">{{ "%.0f"|format(overview.user_stats.tagged_ratio * 100) }}%</div>
+            <div class="col-12 col-sm-6 col-xl-3 metric-card">
+                <div class="metric-card__label">Tagged Coverage</div>
+                <div class="metric-card__value">{{ "%.0f"|format(overview.user_stats.tagged_ratio * 100) }}%</div>
+                <div class="metric-card__subtext">time attributed to configured goals</div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                <div class="stat-label">Apps Used</div>
-                <div class="stat-value">{{ overview.user_stats.app_stats|length }}</div>
+            <div class="col-12 col-sm-6 col-xl-3 metric-card">
+                <div class="metric-card__label">Apps Used</div>
+                <div class="metric-card__value">{{ overview.user_stats.app_stats|length }}</div>
+                <div class="metric-card__subtext">distinct applications in scope</div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
-                <div class="stat-label">Repos Active</div>
-                <div class="stat-value">{{ overview.user_stats.repo_stats|length }}</div>
+            <div class="col-12 col-sm-6 col-xl-3 metric-card">
+                <div class="metric-card__label">Repos Active</div>
+                <div class="metric-card__value">{{ overview.user_stats.repo_stats|length }}</div>
+                <div class="metric-card__subtext">repositories touched in scope</div>
             </div>
         </div>
+
+        {% if overview.user_stats.goal_drift %}
+        <div class="row g-3" style="margin-top: 16px; margin-bottom: 0;">
+            <div class="col-12 col-md-4 metric-card">
+                <div class="metric-card__label">Goal Drift</div>
+                <div class="metric-card__value">{{
+                    "%.1f"|format(overview.user_stats.goal_drift.goal_drift_score_pct_points) }}%</div>
+                <div class="metric-card__subtext">allocation mismatch across goals</div>
+            </div>
+            <div class="col-12 col-md-4 metric-card">
+                <div class="metric-card__label">Unmapped</div>
+                <div class="metric-card__value">{{ "%.1f"|format(overview.user_stats.goal_drift.unmapped_pct) }}%</div>
+                <div class="metric-card__subtext">time with no configured goal tag</div>
+            </div>
+            <div class="col-12 col-md-4 metric-card">
+                <div class="metric-card__label">Largest Gap</div>
+                <div class="metric-card__value" style="font-size: 1.5rem;">{{
+                    overview.user_stats.goal_drift.largest_gap.goal }}</div>
+                <div class="metric-card__subtext">
+                    planned {{ "%.1f"|format(overview.user_stats.goal_drift.largest_gap.planned_pct) }}%,
+                    actual {{ "%.1f"|format(overview.user_stats.goal_drift.largest_gap.actual_pct) }}%
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     {% endif %}
 
     <h2>Registered Users</h2>
     <div class="card">
         {% if overview.users %}
-        <table>
-            <thead>
-                <tr>
-                    <th>User ID</th>
-                    <th>Name</th>
-                    <th>Updated</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for user in overview.users %}
-                <tr>
-                    <td>{{ user.id }}</td>
-                    <td>{{ user.name }}</td>
-                    <td>{{ user.updated_at|human_datetime }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>User ID</th>
+                        <th>Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in overview.users %}
+                    <tr>
+                        <td>{{ user.name or user.id }}</td>
+                        <td><span style="color: #6b7280; font-size: 0.85em;">{{ user.id }}</span></td>
+                        <td>{{ user.updated_at|human_datetime }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
         <p style="color: #999;">No users registered yet.</p>
         {% endif %}
@@ -132,30 +229,101 @@
     <h2>Registered Devices</h2>
     <div class="card">
         {% if overview.devices %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Device ID</th>
-                    <th>Name</th>
-                    <th>User</th>
-                    <th>Type</th>
-                    <th>Last Seen</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for device in overview.devices %}
-                <tr>
-                    <td>{{ device.id }}</td>
-                    <td>{{ device.name }}</td>
-                    <td>{{ device.user_id }}</td>
-                    <td>{{ device.type }}</td>
-                    <td>{{ device.last_seen_at|human_datetime }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Device</th>
+                        <th>User</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Last Sync</th>
+                        <th>Pending Pull</th>
+                        <th>Last Seen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for device in overview.devices %}
+                    <tr>
+                        <td>
+                            <div>{{ device.name or device.id }}</div>
+                            <div style="color: #6b7280; font-size: 0.85em;">{{ device.id }}</div>
+                        </td>
+                        <td>
+                            <div>{{ device.user_name or device.user_id }}</div>
+                            <div style="color: #6b7280; font-size: 0.85em;">{{ device.user_id }}</div>
+                        </td>
+                        <td>{{ device.type }}</td>
+                        <td>
+                            {% set health_item = (sync_health.device_statuses | selectattr('device_id', 'equalto',
+                            device.id) | list | first) %}
+                            {% if health_item %}
+                            <span class="tag-badge" style="text-transform: none;">{{ health_item.status }}</span>
+                            {% else %}
+                            <span style="color: #6b7280;">unknown</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if health_item %}
+                            {{ health_item.last_sync_at|human_datetime }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if health_item %}
+                            {{ health_item.pending_pull_rows }}
+                            <div style="color: #6b7280; font-size: 0.8em;">
+                                s:{{ health_item.pending_sessions }} j:{{ health_item.pending_journal_entries }} r:{{
+                                health_item.pending_reflections }}
+                            </div>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>{{ device.last_seen_at|human_datetime }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
         {% else %}
         <p style="color: #999;">No devices registered for the current filter.</p>
+        {% endif %}
+    </div>
+
+    <h2>Recent Sync Errors</h2>
+    <div class="card">
+        {% if sync_health.recent_errors %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Endpoint</th>
+                        <th>Status</th>
+                        <th>Error</th>
+                        <th>Device</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in sync_health.recent_errors %}
+                    <tr>
+                        <td>{{ item.created_at|human_datetime }}</td>
+                        <td>{{ item.endpoint }}</td>
+                        <td>{{ item.status_code or '-' }}</td>
+                        <td>
+                            <div>{{ item.error_type }}</div>
+                            <div style="color: #6b7280; font-size: 0.85em;">{{ item.message }}</div>
+                        </td>
+                        <td>{{ item.device_id or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color: #999;">No sync failures recorded.</p>
         {% endif %}
     </div>
 
@@ -187,7 +355,7 @@
             </table>
         </div>
         {% else %}
-        <p style="color: #999;">No aggregated sync trend data yet.</p>
+        <p style="color: #999;">Not enough aggregated data yet.</p>
         {% endif %}
     </div>
 </div>

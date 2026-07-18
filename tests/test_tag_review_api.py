@@ -1,0 +1,571 @@
+import unittest
+from datetime import UTC, datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from fastapi.testclient import TestClient
+
+from api.app import app
+from db.repository import ActivityRepository
+from workgraph.models import ActivitySession
+
+
+class TagReviewApiTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = TemporaryDirectory()
+        self.db_path = Path(self.temp_dir.name) / "activity.db"
+
+        with ActivityRepository(self.db_path):
+            pass
+
+        self.db_patcher = patch("api.app.get_db_path", return_value=self.db_path)
+        self.mode_patcher = patch(
+            "api.app._configured_dashboard_mode", return_value="standalone"
+        )
+        self.db_patcher.start()
+        self.mode_patcher.start()
+        self.client = TestClient(app)
+
+    def tearDown(self) -> None:
+        self.mode_patcher.stop()
+        self.db_patcher.stop()
+        self.temp_dir.cleanup()
+
+    def test_tag_review_groups_lists_grouped_untagged_buckets_by_default(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 10, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 10, 30, tzinfo=UTC),
+                    duration_sec=1800,
+                    app_name="Firefox",
+                    process_name="firefox",
+                    window_title="GitHub issue",
+                    browser_domain="github.com",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=1,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 10, 40, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 11, 0, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Firefox",
+                    process_name="firefox",
+                    window_title="Another GitHub issue",
+                    browser_domain="github.com",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=1,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 11, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 11, 30, tzinfo=UTC),
+                    duration_sec=1800,
+                    app_name="Code",
+                    process_name="code",
+                    window_title="main.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="workgraph",
+                    git_branch="main",
+                    context_switches=0,
+                    tag="Development",
+                )
+            )
+
+        response = self.client.get("/api/tag-review/groups", params={"days": 3650})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(len(payload["groups"]), 1)
+        self.assertEqual(payload["groups"][0]["group_type"], "domain")
+        self.assertEqual(payload["groups"][0]["group_value"], "github.com")
+        self.assertEqual(payload["groups"][0]["session_count"], 2)
+
+    def test_tag_review_assign_group_updates_sessions_and_records_actions(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 9, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 9, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Chrome",
+                    process_name="chrome",
+                    window_title="TradingView",
+                    browser_domain="tradingview.com",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 9, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 9, 50, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Chrome",
+                    process_name="chrome",
+                    window_title="TradingView chart",
+                    browser_domain="tradingview.com",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.post(
+            "/api/tag-review/assign-group",
+            json={
+                "group_type": "domain",
+                "group_value": "tradingview.com",
+                "selected_tag": "Finance",
+                "reason": "Reviewed missed browser activity",
+                "source_signal": "browser_domain",
+                "days": 3650,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["affected_count"], 2)
+        self.assertEqual(payload["sessions"][0]["tag"], "Finance")
+
+        with ActivityRepository(self.db_path) as repository:
+            review_actions = repository.list_review_actions_for_suggestions(
+                days=3650,
+                selected_tag="Finance",
+            )
+            grouped_sessions = repository.list_tag_review_group_sessions(
+                group_type="domain",
+                group_value="tradingview.com",
+                days=3650,
+                only_untagged=False,
+            )
+
+        self.assertEqual(len(grouped_sessions), 2)
+        self.assertTrue(all(row["tag"] == "Finance" for row in grouped_sessions))
+        self.assertEqual(len(review_actions), 2)
+        self.assertEqual(review_actions[0]["source_signal"], "browser_domain")
+
+    def test_tag_review_group_detail_returns_matching_sessions(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 8, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 8, 15, tzinfo=UTC),
+                    duration_sec=900,
+                    app_name="Code",
+                    process_name="code",
+                    window_title="main.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="/tmp/workgraph",
+                    git_branch="main",
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.get(
+            "/api/tag-review/groups/repo/workgraph", params={"days": 3650}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["group_type"], "repo")
+        self.assertEqual(payload["group_value"], "workgraph")
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["sessions"][0]["app_name"], "Code")
+
+    def test_tag_review_groups_use_browser_context_for_browser_titles_without_domain(
+        self,
+    ) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 12, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 12, 15, tzinfo=UTC),
+                    duration_sec=900,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - YouTube Music",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 12, 20, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 12, 35, tzinfo=UTC),
+                    duration_sec=900,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - New Tab - Brave",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.get("/api/tag-review/groups", params={"days": 3650})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        group_keys = {
+            (group["group_type"], group["group_value"]) for group in payload["groups"]
+        }
+        self.assertIn(("browser_context", "YouTube Music"), group_keys)
+        self.assertIn(("browser_context", "New Tab"), group_keys)
+
+    def test_tag_review_browser_context_group_detail_and_assignment(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 14, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 14, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - YouTube Music",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        detail_response = self.client.get(
+            "/api/tag-review/groups/browser_context/YouTube Music",
+            params={"days": 3650},
+        )
+        assign_response = self.client.post(
+            "/api/tag-review/assign-group",
+            json={
+                "group_type": "browser_context",
+                "group_value": "YouTube Music",
+                "selected_tag": "Music",
+                "source_signal": "browser_context",
+                "days": 3650,
+            },
+        )
+
+        self.assertEqual(detail_response.status_code, 200)
+        detail_payload = detail_response.json()
+        self.assertEqual(detail_payload["group_type"], "browser_context")
+        self.assertEqual(detail_payload["group_value"], "YouTube Music")
+        self.assertEqual(detail_payload["count"], 1)
+
+        self.assertEqual(assign_response.status_code, 200)
+        assign_payload = assign_response.json()
+        self.assertEqual(assign_payload["affected_count"], 1)
+        self.assertEqual(assign_payload["sessions"][0]["tag"], "Music")
+
+    def test_tag_review_suggestions_and_yaml_preview_use_reviewed_actions(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            first_id = repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 8, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 8, 30, tzinfo=UTC),
+                    duration_sec=1800,
+                    app_name="Chrome",
+                    process_name="chrome",
+                    window_title="GitHub",
+                    browser_domain="github.com",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="/tmp/workgraph",
+                    git_branch="main",
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+            second_id = repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 9, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 9, 25, tzinfo=UTC),
+                    duration_sec=1500,
+                    app_name="Chrome",
+                    process_name="chrome",
+                    window_title="GitHub PR",
+                    browser_domain="github.com",
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo="/tmp/workgraph/.git",
+                    git_branch="main",
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+            repository.create_tag_review_action(
+                session_id=first_id,
+                original_tag=None,
+                selected_tag="Development",
+                source_signal="browser_domain",
+            )
+            repository.create_tag_review_action(
+                session_id=second_id,
+                original_tag=None,
+                selected_tag="Development",
+                source_signal="git_repo",
+            )
+
+        custom_rules = {
+            "Development": {
+                "repos": ["workgraph"],
+                "domains": ["github.com"],
+                "keywords": ["code", "debug"],
+            }
+        }
+
+        with patch("api.app.load_custom_tag_rules", return_value=custom_rules):
+            suggestions_response = self.client.post(
+                "/api/tag-review/suggestions",
+                json={
+                    "days": 3650,
+                    "selected_tag": "Development",
+                    "min_domain_hits": 2,
+                    "min_repo_hits": 2,
+                },
+            )
+            preview_response = self.client.get(
+                "/api/tag-review/yaml-preview",
+                params={
+                    "days": 3650,
+                    "selected_tag": "Development",
+                    "min_domain_hits": 2,
+                    "min_repo_hits": 2,
+                },
+            )
+
+        self.assertEqual(suggestions_response.status_code, 200)
+        suggestions = suggestions_response.json()["suggestions"]["Development"]
+        self.assertEqual(suggestions["domains"][0]["value"], "github.com")
+        self.assertEqual(suggestions["repos"][0]["value"], "workgraph")
+        self.assertEqual(suggestions["keywords"], ["code", "debug"])
+
+        self.assertEqual(preview_response.status_code, 200)
+        preview_payload = preview_response.json()
+        self.assertIn("Development:", preview_payload["yaml"])
+        self.assertIn("github.com", preview_payload["yaml"])
+
+    def test_tag_review_yaml_download_returns_attachment(self) -> None:
+        with patch(
+            "api.app._build_tag_review_payload",
+            return_value=(
+                {
+                    "Development": {
+                        "repos": [],
+                        "domains": [],
+                        "keywords": [],
+                        "total_reviewed": 0,
+                    }
+                },
+                "tags:\n  Development: {}\n",
+                [],
+            ),
+        ):
+            response = self.client.post(
+                "/api/tag-review/yaml-download", json={"days": 30}
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/x-yaml")
+        self.assertIn(
+            'attachment; filename="tag-review-preview.yaml"',
+            response.headers["content-disposition"],
+        )
+        self.assertIn("Development", response.text)
+
+    def test_app_group_assignment_surfaces_in_yaml_preview_and_download(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 16, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 16, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Obsidian",
+                    process_name="obsidian",
+                    window_title="main.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 16, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 16, 50, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Obsidian",
+                    process_name="obsidian",
+                    window_title="api/app.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        assign_response = self.client.post(
+            "/api/tag-review/assign-group",
+            json={
+                "group_type": "app",
+                "group_value": "Obsidian",
+                "selected_tag": "Development",
+                "source_signal": "app",
+                "days": 3650,
+            },
+        )
+        self.assertEqual(assign_response.status_code, 200)
+
+        preview_response = self.client.get(
+            "/api/tag-review/yaml-preview",
+            params={
+                "days": 3650,
+                "selected_tag": "Development",
+                "min_domain_hits": 2,
+                "min_repo_hits": 2,
+            },
+        )
+        self.assertEqual(preview_response.status_code, 200)
+        self.assertIn("keywords:", preview_response.json()["yaml"])
+        self.assertIn("Obsidian", preview_response.json()["yaml"])
+
+        download_response = self.client.post(
+            "/api/tag-review/yaml-download",
+            json={
+                "days": 3650,
+                "selected_tag": "Development",
+                "min_domain_hits": 2,
+                "min_repo_hits": 2,
+            },
+        )
+        self.assertEqual(download_response.status_code, 200)
+        self.assertIn("keywords:", download_response.text)
+        self.assertIn("Obsidian", download_response.text)
+
+    def test_tag_review_page_renders_in_standalone_mode(self) -> None:
+        response = self.client.get("/tag-review")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Tag Review", response.text)
+        self.assertIn("Grouped Review Queue", response.text)
+        self.assertIn("YAML Preview", response.text)
+
+    def test_tag_review_page_renders_inspector_and_group_labels(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 15, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 15, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - YouTube Music",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.get("/tag-review", params={"days": 3650})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Inspect Sessions", response.text)
+        self.assertIn("Browser Context", response.text)
+        self.assertIn("YouTube Music", response.text)
+
+    def test_legacy_per_session_tag_review_routes_are_removed(self) -> None:
+        candidates = self.client.get("/api/tag-review/candidates")
+        assign = self.client.post(
+            "/api/tag-review/assign",
+            json={
+                "session_id": 1,
+                "selected_tag": "Development",
+            },
+        )
+
+        self.assertEqual(candidates.status_code, 404)
+        self.assertEqual(assign.status_code, 404)
+
+    def test_sync_server_mode_disables_tag_review_routes(self) -> None:
+        with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
+            page = self.client.get("/tag-review")
+            groups = self.client.get("/api/tag-review/groups")
+            assign = self.client.post(
+                "/api/tag-review/assign-group",
+                json={
+                    "group_type": "app",
+                    "group_value": "Code",
+                    "selected_tag": "Development",
+                },
+            )
+            preview = self.client.get("/api/tag-review/yaml-preview")
+
+        self.assertEqual(page.status_code, 404)
+        self.assertEqual(groups.status_code, 404)
+        self.assertEqual(assign.status_code, 404)
+        self.assertEqual(preview.status_code, 404)
+
+
+if __name__ == "__main__":
+    unittest.main()

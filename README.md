@@ -93,8 +93,11 @@ This kind of insight isn't commonly available in time tracking tools, but it's e
 ## Features
 
 For a code-verified implementation matrix, see [FEATURES_STATUS.md](FEATURES_STATUS.md).
+For dashboard, timeline, journal, and API usage, see [DASHBOARD.md](DASHBOARD.md).
+For FastAPI architecture and full endpoint reference, see [api/README.md](api/README.md).
 For multi-device sync setup steps (server + device configuration), see [docs/sync/MULTI_DEVICE_SETUP.md](docs/sync/MULTI_DEVICE_SETUP.md).
 For sync launch validation and pre-flight checks, see [docs/sync/SYNC_HARDENING_LAUNCH.md](docs/sync/SYNC_HARDENING_LAUNCH.md).
+For the full documentation index, see [docs/README.md](docs/README.md).
 
 ### Version 1.0 — Collection Foundation
 
@@ -153,17 +156,21 @@ For sync launch validation and pre-flight checks, see [docs/sync/SYNC_HARDENING_
 
 ## AI Assistance (GitHub Copilot)
 
-The `.github/copilot-instructions.md` file and the `prompts/` folder contain
+The `.github/copilot-instructions.md` file and the `.github/prompts/` folder contain
 ready-made instruction and prompt files that give GitHub Copilot context about
 the activity database so you can ask natural-language questions about your data
 directly from VS Code.
 
-| File | Purpose |
-|------|---------|
-| `.github/copilot-instructions.md` | **Auto-loaded** workspace context — DB schema, column descriptions, common query patterns, and coding conventions |
-| `prompts/query-activity.prompt.md` | Write or explain SQLite queries against `activity.db` |
-| `prompts/productivity-analysis.prompt.md` | Analyse focus time, deep-work blocks, peak hours, and distraction patterns |
-| `prompts/journal-insights.prompt.md` | Summarise or search journal entries and daily reflections |
+For an index of Copilot instructions/prompts and usage guidance, see
+[`.github/README.md`](.github/README.md).
+
+| File                                              | Purpose                                                                                                           |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `.github/copilot-instructions.md`                 | **Auto-loaded** workspace context — DB schema, column descriptions, common query patterns, and coding conventions |
+| `.github/prompts/query-activity.prompt.md`        | Write or explain SQLite queries against `activity.db`                                                             |
+| `.github/prompts/productivity-analysis.prompt.md` | Analyse focus time, deep-work blocks, peak hours, and distraction patterns                                        |
+| `.github/prompts/journal-insights.prompt.md`      | Summarise or search journal entries and daily reflections                                                         |
+| `.github/prompts/sync-analytics.prompt.md`        | Analyse sync-mode metrics, cross-device patterns, and sync data quality                                           |
 
 ### Setup
 
@@ -178,6 +185,7 @@ slash commands:
 - `/query-activity` — e.g. *"total coding time per day this week"*
 - `/productivity-analysis` — e.g. *"what are my most focused hours of the day?"*
 - `/journal-insights` — e.g. *"summarise my wins from this week"*
+- `/sync-analytics` — e.g. *"which device has the highest context-switch density this month?"*
 
 Each prompt will ask for your specific question before generating a response with
 both a plain-English analysis and the underlying SQL.
@@ -310,6 +318,16 @@ Future Analytics Engine
 ```text
 workgraph/
 │
+├── api/
+│   ├── app.py
+│   └── templates/
+│       ├── base.html
+│       ├── dashboard.html
+│       ├── journal.html
+│       ├── timeline.html
+│       ├── sync_server_dashboard.html
+│       └── sync_server_timeline.html
+│
 ├── collector/
 │   ├── window_tracker.py
 │   ├── browser_tracker.py
@@ -320,8 +338,17 @@ workgraph/
 │   └── session_builder.py
 │
 ├── services/
+│   ├── activity_tagger.py
 │   ├── collector_service.py
-│   └── activity_tagger.py
+│   ├── collector_supervisor.py
+│   ├── reporting.py
+│   ├── sync_daemon.py
+│   ├── sync_worker.py
+│   ├── tag_migration.py
+│   └── unified_launcher.py
+│
+├── workgraph/
+│   └── models.py
 │
 ├── db/
 │   ├── repository.py
@@ -329,14 +356,23 @@ workgraph/
 │
 ├── config/
 │   ├── settings.yaml
-│   └── tags.yaml
+│   ├── tags.yaml
+│   ├── goals.yaml
+│   └── identity.json
 │
+├── docs/
+│   ├── architecture-overview.md
+│   ├── DASHBOARD_FEATURES_AND_LOGIC.md
+│   ├── STABILIZATION_IMPLEMENTATION_ROADMAP.md
+│   ├── UI_NOTES.md
+│   ├── operations/
+│   └── sync/
+│
+├── backups/
 ├── logs/
-│
 ├── tests/
 │
 ├── activity.db
-│
 ├── main.py
 │
 └── README.md

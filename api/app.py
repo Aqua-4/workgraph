@@ -4,21 +4,27 @@ import hashlib
 import json
 import logging
 import os
+import sqlite3
 import time
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, Header, HTTPException, Query
+import yaml
+from fastapi import FastAPI, Header, HTTPException, Query, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field, field_validator
-import sqlite3
 
 from services.activity_tagger import ActivityTagger
+from services.tag_review import (
+    build_tag_review_suggestions,
+    build_yaml_preview,
+    load_custom_tag_rules,
+)
 
 app = FastAPI(title="WorkGraph Dashboard")
 sync_logger = logging.getLogger("workgraph.sync")
@@ -97,7 +103,7 @@ def get_db_path() -> Path:
 def _parse_iso_datetime(value: str) -> datetime:
     parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
+        return parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -268,11 +274,35 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS sync_error_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            endpoint TEXT NOT NULL,
+            error_type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'open',
+            status_code INTEGER,
+            device_id TEXT,
+            user_id TEXT,
+            batch_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_endpoint_created
             ON sync_request_logs (endpoint, created_at);
 
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_device_created
             ON sync_request_logs (device_id, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_created
+            ON sync_error_logs (created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_status
+            ON sync_error_logs (status, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_endpoint
+            ON sync_error_logs (endpoint, created_at);
 
         CREATE TABLE IF NOT EXISTS sync_metrics_daily (
             user_id TEXT NOT NULL,
@@ -326,7 +356,7 @@ def _to_utc_iso(value: datetime | str | None) -> str | None:
         local_tz = datetime.now().astimezone().tzinfo
         dt = dt.replace(tzinfo=local_tz)
 
-    return dt.astimezone(timezone.utc).isoformat(timespec="seconds")
+    return dt.astimezone(UTC).isoformat(timespec="seconds")
 
 
 def _table_has_uuid_primary_key(conn: sqlite3.Connection, table_name: str) -> bool:
@@ -525,6 +555,15 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_device_created
             ON sync_request_logs (device_id, created_at);
 
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_created
+            ON sync_error_logs (created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_status
+            ON sync_error_logs (status, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_error_logs_endpoint
+            ON sync_error_logs (endpoint, created_at);
+
         CREATE INDEX IF NOT EXISTS idx_sync_metrics_daily_user_day
             ON sync_metrics_daily (user_id, day_utc);
         """
@@ -575,7 +614,7 @@ def _parse_datetime_safe(raw_value: str | None) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -589,7 +628,9 @@ def _extract_sync_session_fields(payload: dict) -> dict[str, object | None]:
     timezone_name = None
     if payload.get("timezone_name"):
         timezone_name = str(payload.get("timezone_name"))
-    elif isinstance(start_raw, str) and ("+" in start_raw[10:] or start_raw.endswith("Z")):
+    elif isinstance(start_raw, str) and (
+        "+" in start_raw[10:] or start_raw.endswith("Z")
+    ):
         timezone_name = "offset"
 
     duration_val = payload.get("duration_sec")
@@ -601,8 +642,12 @@ def _extract_sync_session_fields(payload: dict) -> dict[str, object | None]:
         active_seconds = None
 
     return {
-        "utc_start": start_dt.astimezone(timezone.utc).isoformat(timespec="seconds") if start_dt else None,
-        "utc_end": end_dt.astimezone(timezone.utc).isoformat(timespec="seconds") if end_dt else None,
+        "utc_start": start_dt.astimezone(UTC).isoformat(timespec="seconds")
+        if start_dt
+        else None,
+        "utc_end": end_dt.astimezone(UTC).isoformat(timespec="seconds")
+        if end_dt
+        else None,
         "timezone_name": timezone_name,
         "active_seconds": active_seconds,
         "application_name": payload.get("app_name") or payload.get("application_name"),
@@ -624,8 +669,30 @@ def _recompute_sync_daily_rollup(
             COUNT(*) AS row_count,
             COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS active_seconds,
             COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)), 0) AS focus_seconds,
-            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER), 0)), 0) AS meeting_seconds,
-            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.context_switches') AS INTEGER), 0)), 0) AS context_switches
+            COALESCE(
+                SUM(
+                    CASE
+                        WHEN CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER) IS NOT NULL
+                            THEN COALESCE(CAST(json_extract(payload_json, '$.meeting_seconds') AS INTEGER), 0)
+                        WHEN (
+                            LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%teams%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%zoom%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%webex%'
+                            OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%slack%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%meet.google.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%teams.microsoft.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%zoom.us%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%webex.com%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%meeting%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%standup%'
+                            OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%huddle%'
+                        ) THEN COALESCE(active_seconds, 0)
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS meeting_seconds,
+            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.context_switches') AS INTEGER), 0)), 0) AS context_switches_payload
         FROM sync_sessions
         WHERE user_id = ?
           AND device_id = ?
@@ -642,6 +709,45 @@ def _recompute_sync_daily_rollup(
             (user_id, device_id, day_utc),
         )
         return
+
+    derived_switches_row = conn.execute(
+        """
+        WITH ordered AS (
+            SELECT
+                utc_start,
+                COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '') AS app_name,
+                COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '') AS window_title,
+                COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '') AS browser_domain,
+                LAG(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_app_name,
+                LAG(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_window_title,
+                LAG(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), ''))
+                    OVER (ORDER BY utc_start, uuid) AS prev_browser_domain
+            FROM sync_sessions
+            WHERE user_id = ?
+              AND device_id = ?
+              AND deleted_at IS NULL
+              AND utc_start IS NOT NULL
+              AND substr(utc_start, 1, 10) = ?
+        )
+        SELECT COUNT(*) AS switch_count
+        FROM ordered
+        WHERE prev_app_name IS NOT NULL
+          AND (
+              COALESCE(app_name, '') != COALESCE(prev_app_name, '')
+              OR COALESCE(window_title, '') != COALESCE(prev_window_title, '')
+              OR COALESCE(browser_domain, '') != COALESCE(prev_browser_domain, '')
+          )
+        """,
+        (user_id, device_id, day_utc),
+    ).fetchone()
+
+    derived_switches = int(
+        (derived_switches_row["switch_count"] if derived_switches_row else 0) or 0
+    )
+    payload_switches = int(row["context_switches_payload"] or 0)
+    context_switches = max(payload_switches, derived_switches)
 
     conn.execute(
         """
@@ -670,7 +776,7 @@ def _recompute_sync_daily_rollup(
             int(row["active_seconds"]),
             int(row["focus_seconds"]),
             int(row["meeting_seconds"]),
-            int(row["context_switches"]),
+            context_switches,
             _now_iso(),
         ),
     )
@@ -760,7 +866,9 @@ class WorkEventCreate(BaseModel):
     def validate_event_type(cls, value: str) -> str:
         trimmed = value.strip()
         if trimmed not in WORK_EVENT_TYPES:
-            raise ValueError(f"event_type must be one of: {', '.join(WORK_EVENT_TYPES)}")
+            raise ValueError(
+                f"event_type must be one of: {', '.join(WORK_EVENT_TYPES)}"
+            )
         return trimmed
 
     @field_validator("impact")
@@ -811,7 +919,9 @@ class DeviceRegisterRequest(BaseModel):
     def validate_mode(cls, value: str) -> str:
         normalized = value.strip().lower()
         if normalized not in DASHBOARD_MODES:
-            raise ValueError("mode must be one of: standalone, sync-client, sync-server")
+            raise ValueError(
+                "mode must be one of: standalone, sync-client, sync-server"
+            )
         return normalized
 
 
@@ -828,6 +938,48 @@ class SyncPullRequest(BaseModel):
     user_id: str = Field(min_length=1)
     cursor: str | None = None
     limit: int = Field(default=1000, ge=1, le=5000)
+
+
+class TagReviewSuggestionRequest(BaseModel):
+    days: int | None = Field(default=None, ge=1, le=3650)
+    selected_tag: str | None = Field(default=None, max_length=128)
+    min_domain_hits: int = Field(default=2, ge=1, le=100)
+    min_repo_hits: int = Field(default=2, ge=1, le=100)
+
+
+class TagReviewYamlRequest(BaseModel):
+    days: int | None = Field(default=None, ge=1, le=3650)
+    selected_tag: str | None = Field(default=None, max_length=128)
+    min_domain_hits: int = Field(default=2, ge=1, le=100)
+    min_repo_hits: int = Field(default=2, ge=1, le=100)
+
+
+class TagReviewGroupAssignRequest(BaseModel):
+    group_type: str = Field(min_length=1, max_length=32)
+    group_value: str = Field(min_length=1, max_length=500)
+    selected_tag: str = Field(min_length=1, max_length=128)
+    reason: str | None = Field(default=None, max_length=500)
+    source_signal: str | None = Field(default=None, max_length=64)
+    days: int = Field(default=7, ge=1, le=3650)
+    only_untagged: bool = True
+
+    @field_validator("group_type")
+    @classmethod
+    def validate_group_type(cls, value: str) -> str:
+        trimmed = value.strip().lower()
+        if trimmed not in {"repo", "domain", "browser_context", "app"}:
+            raise ValueError(
+                "group_type must be one of: repo, domain, browser_context, app"
+            )
+        return trimmed
+
+    @field_validator("group_value", "selected_tag")
+    @classmethod
+    def validate_non_blank(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("value cannot be blank")
+        return trimmed
 
 
 def _decode_metadata(raw_value: str | None) -> dict | None:
@@ -853,7 +1005,7 @@ def _serialize_work_event_row(row: sqlite3.Row) -> dict:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _query_overlapping_activity_sessions(
@@ -886,8 +1038,12 @@ def _build_correlation_summary(sessions: list[dict]) -> dict:
     active_sessions = [s for s in sessions if not bool(s.get("is_idle"))]
     total_active_seconds = sum(int(s.get("duration_sec") or 0) for s in active_sessions)
     total_switches = sum(int(s.get("context_switches") or 0) for s in active_sessions)
-    apps = sorted({str(s.get("app_name")) for s in active_sessions if s.get("app_name")})
-    repos = sorted({str(s.get("git_repo")) for s in active_sessions if s.get("git_repo")})
+    apps = sorted(
+        {str(s.get("app_name")) for s in active_sessions if s.get("app_name")}
+    )
+    repos = sorted(
+        {str(s.get("git_repo")) for s in active_sessions if s.get("git_repo")}
+    )
     return {
         "session_count": len(sessions),
         "active_session_count": len(active_sessions),
@@ -963,8 +1119,60 @@ def _log_sync_request(
     )
 
 
+def _log_sync_error(
+    conn: sqlite3.Connection,
+    *,
+    endpoint: str,
+    error_type: str,
+    message: str,
+    status_code: int | None,
+    device_id: str | None,
+    user_id: str | None,
+    batch_id: str | None = None,
+    retry_count: int = 0,
+    status: str = "open",
+) -> None:
+    now_iso = _now_iso()
+    normalized_message = (
+        message or "unknown sync error"
+    ).strip() or "unknown sync error"
+    conn.execute(
+        """
+        INSERT INTO sync_error_logs (
+            endpoint,
+            error_type,
+            message,
+            retry_count,
+            status,
+            status_code,
+            device_id,
+            user_id,
+            batch_id,
+            created_at,
+            updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            endpoint,
+            error_type,
+            normalized_message,
+            max(0, int(retry_count)),
+            status,
+            status_code,
+            device_id,
+            user_id,
+            batch_id,
+            now_iso,
+            now_iso,
+        ),
+    )
+
+
 def _request_hash(payload: dict) -> str:
-    body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    body = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
@@ -1002,8 +1210,10 @@ def _auth_token_from_header(authorization: str | None) -> str:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
     prefix = "Bearer "
     if not authorization.startswith(prefix):
-        raise HTTPException(status_code=401, detail="Authorization must be Bearer token")
-    token = authorization[len(prefix):].strip()
+        raise HTTPException(
+            status_code=401, detail="Authorization must be Bearer token"
+        )
+    token = authorization[len(prefix) :].strip()
     if not token:
         raise HTTPException(status_code=401, detail="Empty Bearer token")
     return token
@@ -1045,12 +1255,16 @@ def _upsert_sync_payload_row(
     if not row_uuid:
         return None, None
 
-    updated_at = str(payload.get("updated_at") or payload.get("created_at") or _now_iso())
+    updated_at = str(
+        payload.get("updated_at") or payload.get("created_at") or _now_iso()
+    )
     created_at = str(payload.get("created_at") or updated_at)
     deleted_at = payload.get("deleted_at")
     date_value = payload.get("date") if table_name == "sync_daily_reflections" else None
     is_session_table = table_name == "sync_sessions"
-    extracted_fields: dict[str, object | None] = _extract_sync_session_fields(payload) if is_session_table else {}
+    extracted_fields: dict[str, object | None] = (
+        _extract_sync_session_fields(payload) if is_session_table else {}
+    )
 
     cursor = conn.cursor()
     cursor.execute(
@@ -1161,7 +1375,9 @@ def _upsert_sync_payload_row(
             if extracted_fields.get("utc_start"):
                 day_candidates.add(str(extracted_fields["utc_start"])[:10])
             for day_utc in day_candidates:
-                _recompute_sync_daily_rollup(conn, user_id=user_id, device_id=device_id, day_utc=day_utc)
+                _recompute_sync_daily_rollup(
+                    conn, user_id=user_id, device_id=device_id, day_utc=day_utc
+                )
 
         return updated_at, row_uuid
 
@@ -1422,6 +1638,56 @@ def _count_sync_union_rows_after_cursor(
     return int(row["total_rows"] if row is not None else 0)
 
 
+def _count_sync_table_rows_after_cursor(
+    conn: sqlite3.Connection,
+    *,
+    table_name: str,
+    user_id: str,
+    cursor_value: str | None,
+) -> int:
+    updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
+    query = f"SELECT COUNT(*) AS total_rows FROM {table_name} WHERE user_id = ?"
+    params: list[str] = [user_id]
+    if updated_at_cursor is not None:
+        query += """
+          AND (
+                updated_at > ?
+                OR (updated_at = ? AND uuid > ?)
+              )
+        """
+        params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+
+    row = conn.execute(query, params).fetchone()
+    return int(row["total_rows"] if row is not None else 0)
+
+
+def _recent_sync_errors(
+    conn: sqlite3.Connection, *, limit: int = 20
+) -> list[dict[str, object | None]]:
+    rows = conn.execute(
+        """
+        SELECT
+            id,
+            endpoint,
+            error_type,
+            message,
+            retry_count,
+            status,
+            status_code,
+            device_id,
+            user_id,
+            batch_id,
+            created_at,
+            updated_at
+        FROM sync_error_logs
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+        """,
+        (max(1, limit),),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_sync_health(db_path: Path) -> dict:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -1451,11 +1717,13 @@ def get_sync_health(db_path: Path) -> dict:
         """
         SELECT
             d.id AS device_id,
+            d.user_id AS user_id,
             d.name AS device_name,
             d.type AS device_type,
             d.category AS device_category,
             d.last_seen_at AS last_seen_at,
-            c.updated_at AS last_sync_at
+            c.updated_at AS last_sync_at,
+            c.last_pull_cursor AS last_pull_cursor
         FROM sync_devices d
         LEFT JOIN sync_checkpoints c
             ON c.device_id = d.id
@@ -1476,15 +1744,44 @@ def get_sync_health(db_path: Path) -> dict:
         FROM sync_request_logs
         """
     ).fetchone()
-    conn.close()
+    error_count_row = conn.execute(
+        """
+        SELECT COUNT(*) AS open_errors, MAX(created_at) AS last_error_at
+        FROM sync_error_logs
+        WHERE status = 'open'
+        """
+    ).fetchone()
+    recent_errors = _recent_sync_errors(conn, limit=20)
 
     active_tokens = int(token_row["active_tokens"] if token_row is not None else 0)
-    registered_devices = int(device_row["registered_devices"] if device_row is not None else 0)
-    push_total = int(metrics_row["push_total"] if metrics_row and metrics_row["push_total"] is not None else 0)
-    push_success = int(metrics_row["push_success"] if metrics_row and metrics_row["push_success"] is not None else 0)
-    push_conflicts = int(metrics_row["push_conflicts"] if metrics_row and metrics_row["push_conflicts"] is not None else 0)
-    pull_total = int(metrics_row["pull_total"] if metrics_row and metrics_row["pull_total"] is not None else 0)
-    pull_success = int(metrics_row["pull_success"] if metrics_row and metrics_row["pull_success"] is not None else 0)
+    registered_devices = int(
+        device_row["registered_devices"] if device_row is not None else 0
+    )
+    push_total = int(
+        metrics_row["push_total"]
+        if metrics_row and metrics_row["push_total"] is not None
+        else 0
+    )
+    push_success = int(
+        metrics_row["push_success"]
+        if metrics_row and metrics_row["push_success"] is not None
+        else 0
+    )
+    push_conflicts = int(
+        metrics_row["push_conflicts"]
+        if metrics_row and metrics_row["push_conflicts"] is not None
+        else 0
+    )
+    pull_total = int(
+        metrics_row["pull_total"]
+        if metrics_row and metrics_row["pull_total"] is not None
+        else 0
+    )
+    pull_success = int(
+        metrics_row["pull_success"]
+        if metrics_row and metrics_row["pull_success"] is not None
+        else 0
+    )
     avg_push_latency = (
         int(round(float(metrics_row["avg_push_latency_ms"])))
         if metrics_row and metrics_row["avg_push_latency_ms"] is not None
@@ -1495,32 +1792,101 @@ def get_sync_health(db_path: Path) -> dict:
         if metrics_row and metrics_row["avg_pull_latency_ms"] is not None
         else 0
     )
-    last_sync_at = checkpoint_row["last_sync_at"] if checkpoint_row is not None else None
+    last_sync_at = (
+        checkpoint_row["last_sync_at"] if checkpoint_row is not None else None
+    )
     lag_seconds = None
     if last_sync_at:
         try:
-            lag_seconds = max(0, int((datetime.now(timezone.utc) - datetime.fromisoformat(last_sync_at)).total_seconds()))
+            lag_seconds = max(
+                0,
+                int(
+                    (
+                        datetime.now(UTC) - datetime.fromisoformat(last_sync_at)
+                    ).total_seconds()
+                ),
+            )
         except ValueError:
             lag_seconds = None
 
     device_statuses: list[dict[str, object]] = []
     synced_devices = 0
+    pending_pull_rows_total = 0
+    pending_sessions_total = 0
+    pending_journal_entries_total = 0
+    pending_reflections_total = 0
     for row in device_status_rows:
         device_last_sync = row["last_sync_at"]
+        last_pull_cursor = row["last_pull_cursor"]
+        row_user_id = str(row["user_id"] or "").strip()
+        pending_sessions = 0
+        pending_journal_entries = 0
+        pending_reflections = 0
+        pending_pull_rows = 0
+        if row_user_id:
+            pending_sessions = _count_sync_table_rows_after_cursor(
+                conn,
+                table_name="sync_sessions",
+                user_id=row_user_id,
+                cursor_value=last_pull_cursor,
+            )
+            pending_journal_entries = _count_sync_table_rows_after_cursor(
+                conn,
+                table_name="sync_journal_entries",
+                user_id=row_user_id,
+                cursor_value=last_pull_cursor,
+            )
+            pending_reflections = _count_sync_table_rows_after_cursor(
+                conn,
+                table_name="sync_daily_reflections",
+                user_id=row_user_id,
+                cursor_value=last_pull_cursor,
+            )
+            pending_pull_rows = (
+                pending_sessions + pending_journal_entries + pending_reflections
+            )
+
+        pending_pull_rows_total += pending_pull_rows
+        pending_sessions_total += pending_sessions
+        pending_journal_entries_total += pending_journal_entries
+        pending_reflections_total += pending_reflections
+
         is_synced = bool(device_last_sync)
         if is_synced:
             synced_devices += 1
+        health_status = "healthy"
+        if not is_synced:
+            health_status = "not-synced"
+        elif pending_pull_rows > 0:
+            health_status = "pending-pull"
         device_statuses.append(
             {
                 "device_id": row["device_id"],
+                "user_id": row["user_id"],
                 "device_name": row["device_name"],
                 "device_type": row["device_type"],
                 "device_category": row["device_category"],
                 "last_seen_at": row["last_seen_at"],
                 "last_sync_at": device_last_sync,
                 "is_synced": is_synced,
+                "status": health_status,
+                "last_pull_cursor": last_pull_cursor,
+                "pending_pull_rows": pending_pull_rows,
+                "pending_sessions": pending_sessions,
+                "pending_journal_entries": pending_journal_entries,
+                "pending_reflections": pending_reflections,
             }
         )
+
+    open_errors = int(
+        error_count_row["open_errors"] if error_count_row is not None else 0
+    )
+    pending_upload_failures = sum(
+        1
+        for item in recent_errors
+        if str(item.get("endpoint") or "") == "/api/sync/v1/push"
+    )
+    conn.close()
 
     return {
         "enabled": active_tokens > 0,
@@ -1536,9 +1902,21 @@ def get_sync_health(db_path: Path) -> dict:
         "pull_success_rate": (pull_success / pull_total) if pull_total else None,
         "avg_push_latency_ms": avg_push_latency,
         "avg_pull_latency_ms": avg_pull_latency,
-        "last_request_at": metrics_row["last_request_at"] if metrics_row is not None else None,
+        "last_request_at": metrics_row["last_request_at"]
+        if metrics_row is not None
+        else None,
         "synced_devices": synced_devices,
         "unsynced_devices": max(0, registered_devices - synced_devices),
+        "pending_pull_rows": pending_pull_rows_total,
+        "pending_sessions": pending_sessions_total,
+        "pending_journal_entries": pending_journal_entries_total,
+        "pending_reflections": pending_reflections_total,
+        "pending_upload_failures": pending_upload_failures,
+        "sync_failures": open_errors,
+        "last_error_at": error_count_row["last_error_at"]
+        if error_count_row is not None
+        else None,
+        "recent_errors": recent_errors,
         "device_statuses": device_statuses,
     }
 
@@ -1724,6 +2102,110 @@ def _resolve_settings_path() -> Path:
     return DEFAULT_SETTINGS_PATH
 
 
+def _resolve_goals_path() -> Path:
+    personal_path = Path("config/my-goals.yaml")
+    default_path = Path("config/goals.yaml")
+    if personal_path.exists():
+        return personal_path
+    return default_path
+
+
+def _load_goal_targets(path: Path | None = None) -> dict[str, float]:
+    goals_path = path or _resolve_goals_path()
+    if not goals_path.exists():
+        return {}
+
+    raw = yaml.safe_load(goals_path.read_text(encoding="utf-8")) or {}
+    goals_node = raw.get("goals", raw)
+    if not isinstance(goals_node, dict):
+        return {}
+
+    parsed: dict[str, float] = {}
+    for name, value in goals_node.items():
+        try:
+            parsed[str(name)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return parsed
+
+
+def _build_goal_drift_summary(
+    tag_stats: dict[str, object],
+    total_seconds: int,
+) -> dict[str, object] | None:
+    goals = _load_goal_targets()
+    if not goals or total_seconds <= 0:
+        return None
+
+    actual_by_goal: dict[str, float] = {}
+    configured_seconds = 0
+    for goal_name in goals:
+        seconds = int(tag_stats.get(goal_name, 0) or 0)
+        actual_by_goal[goal_name] = (seconds / total_seconds) * 100.0
+        configured_seconds += seconds
+
+    unmapped_seconds = max(total_seconds - configured_seconds, 0)
+    actual_by_goal["Unmapped"] = (unmapped_seconds / total_seconds) * 100.0
+
+    planned_distribution = dict(goals)
+    planned_distribution["Unmapped"] = 0.0
+
+    drift_items: list[dict[str, object]] = []
+    for goal_name, planned_pct in planned_distribution.items():
+        actual_pct = actual_by_goal.get(goal_name, 0.0)
+        delta_pct_points = actual_pct - planned_pct
+        drift_items.append(
+            {
+                "goal": goal_name,
+                "planned_pct": round(float(planned_pct), 2),
+                "actual_pct": round(actual_pct, 2),
+                "delta_pct_points": round(delta_pct_points, 2),
+                "relative_gap_pct": round(
+                    ((planned_pct - actual_pct) / planned_pct) * 100.0, 2
+                )
+                if planned_pct > 0
+                else 0.0,
+            }
+        )
+
+    drift_items.sort(
+        key=lambda item: abs(float(item["delta_pct_points"])), reverse=True
+    )
+    score = sum(abs(float(item["delta_pct_points"])) for item in drift_items) / 2.0
+
+    largest_gap = drift_items[0] if drift_items else None
+    return {
+        "goals_path": str(_resolve_goals_path()),
+        "goal_targets": planned_distribution,
+        "goal_drift_items": drift_items,
+        "goal_drift_score_pct_points": round(score, 2),
+        "goal_coverage_pct": round(
+            sum(actual_by_goal.get(goal_name, 0.0) for goal_name in goals), 2
+        ),
+        "unmapped_pct": round(actual_by_goal.get("Unmapped", 0.0), 2),
+        "largest_gap": largest_gap,
+    }
+
+
+def _build_dashboard_header_context(
+    *,
+    dashboard_mode: str,
+    source: str,
+    days: int,
+    selected_user_id: str | None = None,
+    selected_device_id: str | None = None,
+    selected_user_name: str | None = None,
+    selected_device_name: str | None = None,
+) -> dict[str, object]:
+    return {
+        "mode": dashboard_mode,
+        "source": source,
+        "time_range": f"Last {days} day{'s' if days != 1 else ''}",
+        "user": selected_user_name or selected_user_id or "All users",
+        "device": selected_device_name or selected_device_id or "All devices",
+    }
+
+
 def _read_simple_yaml(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
@@ -1794,8 +2276,216 @@ def _configured_sync_client_status(db_path: Path) -> dict[str, object]:
         conn.close()
 
 
+def _sqlite_table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _sqlite_table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {str(row[1]) for row in rows}
+
+
+def _count_pending_local_rows(
+    conn: sqlite3.Connection,
+    *,
+    table_name: str,
+    updated_at_cursor: str | None,
+    uuid_cursor: str | None,
+) -> int:
+    if not _sqlite_table_exists(conn, table_name):
+        return 0
+
+    columns = _sqlite_table_columns(conn, table_name)
+    if "updated_at" not in columns or "uuid" not in columns:
+        return 0
+
+    query = f"SELECT COUNT(*) AS pending_count FROM {table_name} WHERE 1=1"
+    params: list[str] = []
+    if updated_at_cursor is not None:
+        query += """
+          AND (
+                updated_at > ?
+                OR (updated_at = ? AND uuid > ?)
+              )
+        """
+        params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
+
+    row = conn.execute(query, params).fetchone()
+    return int(row["pending_count"] if row is not None else 0)
+
+
+def get_sync_client_debug(
+    db_path: Path,
+    *,
+    user_id: str | None,
+    device_id: str | None,
+) -> dict[str, object]:
+    debug: dict[str, object] = {
+        "session_count": 0,
+        "distinct_days": 0,
+        "earliest_synced_at": None,
+        "latest_synced_at": None,
+        "days": [],
+        "pending_sessions": 0,
+        "pending_journal_entries": 0,
+        "pending_reflections": 0,
+    }
+
+    if not db_path.exists():
+        return debug
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    try:
+        where_clauses = ["deleted_at IS NULL"]
+        params: list[str] = []
+        if user_id:
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
+        if device_id:
+            where_clauses.append("device_id = ?")
+            params.append(device_id)
+
+        where_sql = " AND ".join(where_clauses)
+
+        coverage_row = conn.execute(
+            f"""
+            SELECT
+                COUNT(*) AS session_count,
+                COUNT(DISTINCT substr(utc_start, 1, 10)) AS distinct_days,
+                MIN(utc_start) AS earliest_synced_at,
+                MAX(utc_start) AS latest_synced_at
+            FROM sync_sessions
+            WHERE {where_sql}
+            """,
+            params,
+        ).fetchone()
+
+        if coverage_row is not None:
+            debug["session_count"] = int(coverage_row["session_count"] or 0)
+            debug["distinct_days"] = int(coverage_row["distinct_days"] or 0)
+            debug["earliest_synced_at"] = coverage_row["earliest_synced_at"]
+            debug["latest_synced_at"] = coverage_row["latest_synced_at"]
+
+        day_rows = conn.execute(
+            f"""
+            SELECT substr(utc_start, 1, 10) AS day_utc, COUNT(*) AS sessions
+            FROM sync_sessions
+            WHERE {where_sql}
+              AND utc_start IS NOT NULL
+            GROUP BY day_utc
+            ORDER BY day_utc DESC
+            LIMIT 10
+            """,
+            params,
+        ).fetchall()
+        debug["days"] = [
+            {
+                "day_utc": str(row["day_utc"]),
+                "sessions": int(row["sessions"] or 0),
+            }
+            for row in day_rows
+        ]
+
+        if _sqlite_table_exists(conn, "sync_state"):
+            state_row = conn.execute(
+                "SELECT last_push_cursor FROM sync_state WHERE id = 1"
+            ).fetchone()
+            if state_row is not None:
+                updated_at_cursor, uuid_cursor = _parse_cursor(
+                    state_row["last_push_cursor"]
+                )
+                debug["pending_sessions"] = _count_pending_local_rows(
+                    conn,
+                    table_name="activity_sessions",
+                    updated_at_cursor=updated_at_cursor,
+                    uuid_cursor=uuid_cursor,
+                )
+                debug["pending_journal_entries"] = _count_pending_local_rows(
+                    conn,
+                    table_name="journal_entries",
+                    updated_at_cursor=updated_at_cursor,
+                    uuid_cursor=uuid_cursor,
+                )
+                debug["pending_reflections"] = _count_pending_local_rows(
+                    conn,
+                    table_name="daily_reflections",
+                    updated_at_cursor=updated_at_cursor,
+                    uuid_cursor=uuid_cursor,
+                )
+    finally:
+        conn.close()
+
+    return debug
+
+
 def _source_for_dashboard_mode(mode: str) -> str:
     return "sync" if mode == "sync-server" else "local"
+
+
+def _ensure_journal_features_enabled() -> None:
+    if _configured_dashboard_mode() == "sync-server":
+        raise HTTPException(
+            status_code=404,
+            detail="Journal features are unavailable in sync-server mode",
+        )
+
+
+def _ensure_tag_review_features_enabled() -> None:
+    if _configured_dashboard_mode() == "sync-server":
+        raise HTTPException(
+            status_code=404, detail="Tag review is unavailable in sync-server mode"
+        )
+
+
+def _build_tag_review_payload(
+    *,
+    db_path: Path,
+    days: int | None,
+    selected_tag: str | None,
+    min_domain_hits: int,
+    min_repo_hits: int,
+) -> tuple[dict[str, dict[str, object]], str, list[dict[str, str]]]:
+    from db.repository import ActivityRepository
+
+    existing_rules = load_custom_tag_rules()
+    with ActivityRepository(db_path) as repository:
+        review_actions = [
+            dict(row)
+            for row in repository.list_review_actions_for_suggestions(
+                days=days,
+                selected_tag=selected_tag,
+            )
+        ]
+
+    suggestions = build_tag_review_suggestions(
+        review_actions,
+        existing_rules,
+        min_domain_hits=min_domain_hits,
+        min_repo_hits=min_repo_hits,
+    )
+    if selected_tag:
+        suggestions = {
+            selected_tag: suggestions.get(
+                selected_tag,
+                {
+                    "tag_name": selected_tag,
+                    "domains": [],
+                    "repos": [],
+                    "keywords": list(
+                        existing_rules.get(selected_tag, {}).get("keywords", [])
+                    ),
+                    "total_reviewed": 0,
+                },
+            )
+        }
+    preview_text, warnings = build_yaml_preview(existing_rules, suggestions)
+    return suggestions, preview_text, warnings
 
 
 def _upsert_sync_user_and_device(
@@ -1871,10 +2561,14 @@ def _upsert_sync_user_and_device(
 def _register_on_sync_server(base_url: str, payload: SyncRegisterRequest) -> dict:
     normalized_base = base_url.strip().rstrip("/")
     if not normalized_base:
-        raise HTTPException(status_code=400, detail="sync_base_url is required for sync-client mode")
+        raise HTTPException(
+            status_code=400, detail="sync_base_url is required for sync-client mode"
+        )
 
     request_url = f"{normalized_base}/api/sync/v1/devices/register"
-    request_body = json.dumps(payload.model_dump(mode="python"), separators=(",", ":")).encode("utf-8")
+    request_body = json.dumps(
+        payload.model_dump(mode="python"), separators=(",", ":")
+    ).encode("utf-8")
     request_obj = urllib_request.Request(
         request_url,
         data=request_body,
@@ -1900,19 +2594,27 @@ def _register_on_sync_server(base_url: str, payload: SyncRegisterRequest) -> dic
     try:
         parsed = json.loads(response_body)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail="sync server returned invalid JSON") from exc
+        raise HTTPException(
+            status_code=502, detail="sync server returned invalid JSON"
+        ) from exc
 
     if not isinstance(parsed, dict):
-        raise HTTPException(status_code=502, detail="sync server returned unexpected response")
+        raise HTTPException(
+            status_code=502, detail="sync server returned unexpected response"
+        )
     return parsed
 
 
 def _resolve_sync_user_id(conn: sqlite3.Connection, user_id: str | None) -> str:
     if user_id:
         return user_id
-    row = conn.execute("SELECT id FROM sync_users ORDER BY updated_at DESC, id ASC LIMIT 1").fetchone()
+    row = conn.execute(
+        "SELECT id FROM sync_users ORDER BY updated_at DESC, id ASC LIMIT 1"
+    ).fetchone()
     if row is None:
-        raise HTTPException(status_code=400, detail="No sync users found. Register a device first.")
+        raise HTTPException(
+            status_code=400, detail="No sync users found. Register a device first."
+        )
     return str(row["id"])
 
 
@@ -1928,9 +2630,16 @@ def get_sync_summary_stats(
     _ensure_sync_tables(conn)
     cursor = conn.cursor()
 
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date = datetime.now(UTC) - timedelta(days=days)
     start_iso = start_date.isoformat(timespec="seconds")
     start_day = start_date.strftime("%Y-%m-%d")
+
+    _rebuild_sync_rollups(
+        conn,
+        user_id=user_id,
+        device_id=device_id,
+        start_day=start_day,
+    )
 
     device_filter_rollup = ""
     device_filter_sessions = ""
@@ -1975,7 +2684,10 @@ def get_sync_summary_stats(
         """,
         params_sessions,
     )
-    tag_stats = {str(row["tag_name"]): int(row["total_seconds"] or 0) for row in cursor.fetchall()}
+    tag_stats = {
+        str(row["tag_name"]): int(row["total_seconds"] or 0)
+        for row in cursor.fetchall()
+    }
 
     cursor.execute(
         f"""
@@ -1991,7 +2703,10 @@ def get_sync_summary_stats(
         """,
         params_sessions,
     )
-    app_stats = {str(row["app_name"]): int(row["total_seconds"] or 0) for row in cursor.fetchall()}
+    app_stats = {
+        str(row["app_name"]): int(row["total_seconds"] or 0)
+        for row in cursor.fetchall()
+    }
 
     cursor.execute(
         f"""
@@ -2008,7 +2723,10 @@ def get_sync_summary_stats(
         """,
         params_sessions,
     )
-    repo_stats = {str(row["repo_name"]): int(row["total_seconds"] or 0) for row in cursor.fetchall()}
+    repo_stats = {
+        str(row["repo_name"]): int(row["total_seconds"] or 0)
+        for row in cursor.fetchall()
+    }
 
     cursor.execute(
         f"""
@@ -2023,7 +2741,9 @@ def get_sync_summary_stats(
         params_sessions,
     )
     tagged_row = cursor.fetchone()
-    tagged_active_seconds = int((tagged_row["tagged_active_seconds"] if tagged_row else 0) or 0)
+    tagged_active_seconds = int(
+        (tagged_row["tagged_active_seconds"] if tagged_row else 0) or 0
+    )
 
     cursor.execute(
         f"""
@@ -2049,7 +2769,9 @@ def get_sync_summary_stats(
                 "day_label": datetime.strptime(day_value, "%Y-%m-%d").strftime("%a"),
                 "active_hours": round(day_active / 3600, 2),
                 "meeting_hours": round(day_meeting / 3600, 2),
-                "switches_per_hour": round(day_switches / max(day_active / 3600, 0.001), 2),
+                "switches_per_hour": round(
+                    day_switches / max(day_active / 3600, 0.001), 2
+                ),
             }
         )
 
@@ -2097,7 +2819,9 @@ def get_sync_summary_stats(
     deep_focus_blocks = [block for block in focus_blocks if block >= 1800]
     deep_work_blocks = len(deep_focus_blocks)
     longest_focus_sec = max(focus_blocks) if focus_blocks else 0
-    avg_focus_sec = (sum(deep_focus_blocks) / len(deep_focus_blocks)) if deep_focus_blocks else 0
+    avg_focus_sec = (
+        (sum(deep_focus_blocks) / len(deep_focus_blocks)) if deep_focus_blocks else 0
+    )
 
     conn.close()
 
@@ -2105,6 +2829,7 @@ def get_sync_summary_stats(
     tagged_ratio = (tagged_active_seconds / total_seconds) if total_seconds else 0
     meeting_ratio = (meeting_seconds / total_seconds) if total_seconds else 0
     switch_rate_per_hour = total_switches / active_hours if active_hours else 0
+    goal_drift = _build_goal_drift_summary(tag_stats, total_seconds)
 
     return {
         "tag_stats": tag_stats,
@@ -2127,6 +2852,7 @@ def get_sync_summary_stats(
         "avg_focus_sec": int(avg_focus_sec or 0),
         "avg_focus_minutes": round((avg_focus_sec or 0) / 60, 1),
         "daily_trend": daily_trend,
+        "goal_drift": goal_drift,
     }
 
 
@@ -2154,19 +2880,38 @@ def get_sync_server_overview(
         selected_user_id = str(users[0]["id"])
 
     devices_query = """
-        SELECT id, user_id, name, type, hostname, category, last_seen_at, created_at, updated_at
-        FROM sync_devices
+        SELECT
+            d.id,
+            d.user_id,
+            u.name AS user_name,
+            d.name,
+            d.type,
+            d.hostname,
+            d.category,
+            d.last_seen_at,
+            d.created_at,
+            d.updated_at
+        FROM sync_devices d
+        LEFT JOIN sync_users u ON u.id = d.user_id
     """
     devices_params: list[str] = []
     if selected_user_id:
         devices_query += " WHERE user_id = ?"
         devices_params.append(selected_user_id)
-    devices_query += " ORDER BY COALESCE(last_seen_at, updated_at) DESC, id ASC"
+    devices_query += " ORDER BY COALESCE(d.last_seen_at, d.updated_at) DESC, d.id ASC"
     devices = conn.execute(devices_query, devices_params).fetchall()
 
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date = datetime.now(UTC) - timedelta(days=days)
     start_iso = start_date.isoformat(timespec="seconds")
     start_day = start_date.strftime("%Y-%m-%d")
+
+    if selected_user_id:
+        _rebuild_sync_rollups(
+            conn,
+            user_id=selected_user_id,
+            device_id=device_id,
+            start_day=start_day,
+        )
 
     global_query = """
         SELECT
@@ -2216,7 +2961,9 @@ def get_sync_server_overview(
                 "day_label": datetime.strptime(day_value, "%Y-%m-%d").strftime("%a"),
                 "active_hours": round(active_seconds / 3600, 2),
                 "meeting_hours": round(meeting_seconds / 3600, 2),
-                "switches_per_hour": round(switches / max(active_seconds / 3600, 0.001), 2),
+                "switches_per_hour": round(
+                    switches / max(active_seconds / 3600, 0.001), 2
+                ),
             }
         )
 
@@ -2294,7 +3041,7 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
             "daily_trend": [],
         }
 
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date = datetime.now(UTC) - timedelta(days=days)
     start_iso = start_date.isoformat()
 
     # Total time by tag
@@ -2308,7 +3055,9 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
         """,
         (start_iso,),
     )
-    tag_stats = {row["tag"] or "Untagged": row["total_seconds"] for row in cursor.fetchall()}
+    tag_stats = {
+        row["tag"] or "Untagged": row["total_seconds"] for row in cursor.fetchall()
+    }
 
     # Total time by app
     cursor.execute(
@@ -2436,7 +3185,9 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     if current_block_end is not None:
         focus_blocks.append(current_block_seconds)
 
-    deep_focus_blocks = [block_seconds for block_seconds in focus_blocks if block_seconds >= 1800]
+    deep_focus_blocks = [
+        block_seconds for block_seconds in focus_blocks if block_seconds >= 1800
+    ]
     deep_work_blocks = len(deep_focus_blocks)
     longest_focus_sec = max(focus_blocks) if focus_blocks else 0
     avg_focus_sec = (
@@ -2582,7 +3333,9 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
                 "day_label": datetime.strptime(day_value, "%Y-%m-%d").strftime("%a"),
                 "active_hours": round(active_seconds / 3600, 2),
                 "meeting_hours": round(meeting_day_seconds / 3600, 2),
-                "switches_per_hour": round(switches / max(active_seconds / 3600, 0.001), 2),
+                "switches_per_hour": round(
+                    switches / max(active_seconds / 3600, 0.001), 2
+                ),
             }
         )
 
@@ -2592,6 +3345,7 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     tagged_ratio = (tagged_active_seconds / total_seconds) if total_seconds else 0
     meeting_ratio = (meeting_seconds / total_seconds) if total_seconds else 0
     switch_rate_per_hour = total_switches / active_hours if active_hours else 0
+    goal_drift = _build_goal_drift_summary(tag_stats, total_seconds)
 
     return {
         "tag_stats": tag_stats,
@@ -2614,6 +3368,7 @@ def get_summary_stats(db_path: Path, days: int = 7) -> dict:
         "avg_focus_sec": int(avg_focus_sec or 0),
         "avg_focus_minutes": round((avg_focus_sec or 0) / 60, 1),
         "daily_trend": daily_trend,
+        "goal_drift": goal_drift,
     }
 
 
@@ -2638,20 +3393,60 @@ async def dashboard(
             days=7,
         )
         sync_health = get_sync_health(db_path)
+        selected_user = next(
+            (
+                item
+                for item in overview.get("users", [])
+                if str(item.get("id")) == str(overview.get("selected_user_id") or "")
+            ),
+            None,
+        )
+        selected_device = next(
+            (
+                item
+                for item in overview.get("devices", [])
+                if str(item.get("id")) == str(overview.get("selected_device_id") or "")
+            ),
+            None,
+        )
         template = jinja_env.get_template("sync_server_dashboard.html")
         return template.render(
             dashboard_mode=dashboard_mode,
             overview=overview,
             sync_health=sync_health,
+            page_context=_build_dashboard_header_context(
+                dashboard_mode=dashboard_mode,
+                source="sync",
+                days=7,
+                selected_user_id=str(overview.get("selected_user_id") or "") or None,
+                selected_device_id=str(overview.get("selected_device_id") or "")
+                or None,
+                selected_user_name=str(
+                    selected_user.get("name") or selected_user.get("id") or ""
+                )
+                if selected_user
+                else None,
+                selected_device_name=str(
+                    selected_device.get("name") or selected_device.get("id") or ""
+                )
+                if selected_device
+                else None,
+            ),
         )
 
     normalized_source = _source_for_dashboard_mode(dashboard_mode)
     resolved_user_id = user_id
     client_sync_status: dict[str, object] | None = None
+    client_sync_debug: dict[str, object] | None = None
     if dashboard_mode == "sync-client":
         client_sync_status = _configured_sync_client_status(db_path)
         if resolved_user_id is None and client_sync_status.get("user_id"):
             resolved_user_id = str(client_sync_status["user_id"])
+        client_sync_debug = get_sync_client_debug(
+            db_path,
+            user_id=resolved_user_id,
+            device_id=str(client_sync_status.get("device_id") or "").strip() or None,
+        )
 
     if normalized_source == "sync":
         conn = sqlite3.connect(db_path)
@@ -2674,10 +3469,24 @@ async def dashboard(
         stats=stats,
         sync_health=sync_health,
         client_sync=client_sync_status,
+        client_sync_debug=client_sync_debug,
         dashboard_mode=dashboard_mode,
         source=normalized_source,
         selected_user_id=resolved_user_id,
         selected_device_id=device_id,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source=normalized_source,
+            days=7,
+            selected_user_id=resolved_user_id,
+            selected_device_id=device_id,
+            selected_user_name=str(client_sync_status.get("user_id") or "")
+            if client_sync_status
+            else resolved_user_id,
+            selected_device_name=str(client_sync_status.get("device_id") or "")
+            if client_sync_status
+            else device_id,
+        ),
     )
 
 
@@ -2697,9 +3506,137 @@ async def timeline(
         return "<h1>WorkGraph Timeline</h1><p>No data collected yet.</p>"
 
     dashboard_mode = _configured_dashboard_mode()
+
+    if dashboard_mode == "sync-server":
+        overview = get_sync_server_overview(
+            db_path,
+            user_id=user_id,
+            device_id=device_id,
+            days=days,
+        )
+        resolved_user_id = str(overview.get("selected_user_id") or "").strip() or None
+        resolved_device_id = (
+            str(overview.get("selected_device_id") or "").strip() or None
+        )
+
+        start_date = datetime.now(UTC) - timedelta(days=days)
+        if resolved_user_id:
+            sessions = query_sync_sessions(
+                db_path,
+                user_id=resolved_user_id,
+                start_date=start_date,
+                device_id=resolved_device_id,
+                limit=2000,
+            )
+        else:
+            sessions = []
+
+        available_tags = sorted({str(s.get("tag")) for s in sessions if s.get("tag")})
+        available_apps = sorted(
+            {str(s.get("app_name")) for s in sessions if s.get("app_name")}
+        )
+
+        if tag:
+            sessions = [s for s in sessions if s.get("tag") == tag]
+        if app:
+            sessions = [s for s in sessions if s.get("app_name") == app]
+
+        server_devices = overview.get("devices", [])
+        device_name_map = {
+            str(item.get("id")): str(
+                item.get("name") or item.get("id") or "unknown-device"
+            )
+            for item in server_devices
+            if item.get("id")
+        }
+
+        device_totals: dict[str, dict[str, int]] = {}
+        app_totals: dict[str, int] = {}
+        for session in sessions:
+            raw_duration = session.get("duration_sec")
+            try:
+                duration_sec = int(raw_duration or 0)
+            except (TypeError, ValueError):
+                duration_sec = 0
+
+            device_key = str(session.get("device_id") or "unknown-device")
+            if device_key not in device_totals:
+                device_totals[device_key] = {"total_seconds": 0, "session_count": 0}
+            device_totals[device_key]["total_seconds"] += duration_sec
+            device_totals[device_key]["session_count"] += 1
+
+            app_key = str(session.get("app_name") or "Unknown")
+            app_totals[app_key] = app_totals.get(app_key, 0) + duration_sec
+
+        device_activity = [
+            {
+                "device_id": device_id,
+                "device_name": device_name_map.get(device_id, device_id),
+                "total_seconds": values["total_seconds"],
+                "session_count": values["session_count"],
+            }
+            for device_id, values in device_totals.items()
+        ]
+        device_activity.sort(
+            key=lambda item: (int(item["total_seconds"]), int(item["session_count"])),
+            reverse=True,
+        )
+
+        app_activity = [
+            {"app_name": app_name, "total_seconds": total_seconds}
+            for app_name, total_seconds in app_totals.items()
+        ]
+        app_activity.sort(key=lambda item: int(item["total_seconds"]), reverse=True)
+
+        chart_sessions = sorted(
+            sessions,
+            key=lambda s: str(s.get("start_time") or s.get("utc_start") or ""),
+        )[:300]
+        table_sessions = sessions[:200]
+        sync_health = get_sync_health(db_path)
+
+        template = jinja_env.get_template("sync_server_timeline.html")
+        return template.render(
+            sessions=table_sessions,
+            filtered_count=len(sessions),
+            days=days,
+            selected_tag=tag,
+            selected_app=app,
+            selected_user_id=resolved_user_id,
+            selected_device_id=resolved_device_id,
+            available_tags=available_tags,
+            available_apps=available_apps,
+            chart_sessions=chart_sessions,
+            sync_health=sync_health,
+            dashboard_mode=dashboard_mode,
+            server_users=overview.get("users", []),
+            server_devices=server_devices,
+            device_name_map=device_name_map,
+            device_activity=device_activity[:10],
+            app_activity=app_activity[:10],
+            page_context=_build_dashboard_header_context(
+                dashboard_mode=dashboard_mode,
+                source="sync",
+                days=days,
+                selected_user_id=resolved_user_id,
+                selected_device_id=resolved_device_id,
+                selected_user_name=next(
+                    (
+                        str(item.get("name") or item.get("id") or "")
+                        for item in overview.get("users", [])
+                        if str(item.get("id")) == str(resolved_user_id or "")
+                    ),
+                    None,
+                ),
+                selected_device_name=device_name_map.get(resolved_device_id)
+                if resolved_device_id
+                else None,
+            ),
+        )
+
     default_source = _source_for_dashboard_mode(dashboard_mode)
     normalized_source = _normalize_source(source or default_source)
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date = datetime.now(UTC) - timedelta(days=days)
     if normalized_source == "sync":
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
@@ -2717,7 +3654,9 @@ async def timeline(
         sessions = query_sessions(db_path, start_date=start_date, limit=2000)
 
     available_tags = sorted({str(s.get("tag")) for s in sessions if s.get("tag")})
-    available_apps = sorted({str(s.get("app_name")) for s in sessions if s.get("app_name")})
+    available_apps = sorted(
+        {str(s.get("app_name")) for s in sessions if s.get("app_name")}
+    )
 
     # Filter by tag/app if provided
     if tag:
@@ -2725,7 +3664,9 @@ async def timeline(
     if app:
         sessions = [s for s in sessions if s.get("app_name") == app]
 
-    chart_sessions = sorted(sessions, key=lambda s: str(s.get("start_time") or ""))[:300]
+    chart_sessions = sorted(sessions, key=lambda s: str(s.get("start_time") or ""))[
+        :300
+    ]
     table_sessions = sessions[:120]
     sync_health = get_sync_health(db_path)
 
@@ -2743,12 +3684,23 @@ async def timeline(
         available_apps=available_apps,
         chart_sessions=chart_sessions,
         sync_health=sync_health,
+        dashboard_mode=dashboard_mode,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source=normalized_source,
+            days=days,
+            selected_user_id=user_id,
+            selected_device_id=device_id,
+            selected_user_name=user_id,
+            selected_device_name=device_id,
+        ),
     )
 
 
 @app.get("/journal", response_class=HTMLResponse)
 async def journal_page(saved: str | None = Query(None)):
     """Journal view for adding entries and reflections."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
 
     if not db_path.exists():
@@ -2779,6 +3731,296 @@ async def journal_page(saved: str | None = Query(None)):
         sync_health=sync_health,
         message=message,
         error=None,
+        dashboard_mode=_configured_dashboard_mode(),
+    )
+
+
+@app.get("/tag-review", response_class=HTMLResponse)
+async def tag_review_page(
+    days: int = Query(7, ge=1, le=3650),
+    only_untagged: bool = Query(True),
+    app_name: str | None = Query(None),
+    domain: str | None = Query(None),
+    repo: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    dashboard_mode = _configured_dashboard_mode()
+    available_tags = get_available_tags()
+    sync_health = get_sync_health(db_path) if db_path.exists() else None
+
+    groups: list[dict[str, object]] = []
+    group_count = 0
+    if db_path.exists():
+        from db.repository import ActivityRepository
+
+        with ActivityRepository(db_path) as repository:
+            groups = repository.list_tag_review_groups(
+                days=days,
+                only_untagged=only_untagged,
+                app_name=app_name,
+                domain=domain,
+                repo=repo,
+                limit=limit,
+                offset=0,
+            )
+            group_count = repository.count_tag_review_groups(
+                days=days,
+                only_untagged=only_untagged,
+                app_name=app_name,
+                domain=domain,
+                repo=repo,
+            )
+
+    suggestions, preview_text, warnings = _build_tag_review_payload(
+        db_path=db_path,
+        days=days,
+        selected_tag=None,
+        min_domain_hits=2,
+        min_repo_hits=2,
+    )
+
+    template = jinja_env.get_template("tag_review.html")
+    return template.render(
+        groups=groups,
+        group_count=group_count,
+        days=days,
+        only_untagged=only_untagged,
+        filter_app_name=app_name,
+        filter_domain=domain,
+        filter_repo=repo,
+        limit=limit,
+        available_tags=available_tags,
+        suggestions=suggestions,
+        yaml_preview=preview_text,
+        warnings=warnings,
+        sync_health=sync_health,
+        dashboard_mode=dashboard_mode,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source="local",
+            days=days,
+        ),
+    )
+
+
+@app.get("/api/tag-review/groups")
+async def api_tag_review_groups(
+    days: int = Query(7, ge=1, le=3650),
+    only_untagged: bool = Query(True),
+    app_name: str | None = Query(None),
+    domain: str | None = Query(None),
+    repo: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+
+    if not db_path.exists():
+        return {
+            "groups": [],
+            "count": 0,
+            "filters": {
+                "days": days,
+                "only_untagged": only_untagged,
+                "app_name": app_name,
+                "domain": domain,
+                "repo": repo,
+                "limit": limit,
+                "offset": offset,
+            },
+        }
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        groups = repository.list_tag_review_groups(
+            days=days,
+            only_untagged=only_untagged,
+            app_name=app_name,
+            domain=domain,
+            repo=repo,
+            limit=limit,
+            offset=offset,
+        )
+        count = repository.count_tag_review_groups(
+            days=days,
+            only_untagged=only_untagged,
+            app_name=app_name,
+            domain=domain,
+            repo=repo,
+        )
+
+    return {
+        "groups": groups,
+        "count": count,
+        "filters": {
+            "days": days,
+            "only_untagged": only_untagged,
+            "app_name": app_name,
+            "domain": domain,
+            "repo": repo,
+            "limit": limit,
+            "offset": offset,
+        },
+    }
+
+
+@app.get("/api/tag-review/groups/{group_type}/{group_value}")
+async def api_tag_review_group_detail(
+    group_type: str,
+    group_value: str,
+    days: int = Query(7, ge=1, le=3650),
+    only_untagged: bool = Query(True),
+    limit: int = Query(100, ge=1, le=500),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {
+            "group_type": group_type,
+            "group_value": group_value,
+            "sessions": [],
+            "count": 0,
+        }
+
+    if group_type not in {"repo", "domain", "browser_context", "app"}:
+        raise HTTPException(status_code=400, detail="Invalid group_type")
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        sessions = [
+            dict(row)
+            for row in repository.list_tag_review_group_sessions(
+                group_type=group_type,
+                group_value=group_value,
+                days=days,
+                only_untagged=only_untagged,
+                limit=limit,
+            )
+        ]
+
+    total_seconds = sum(int(item.get("duration_sec") or 0) for item in sessions)
+    return {
+        "group_type": group_type,
+        "group_value": group_value,
+        "sessions": sessions,
+        "count": len(sessions),
+        "total_seconds": total_seconds,
+    }
+
+
+@app.post("/api/tag-review/assign-group")
+async def api_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail="No activity database found")
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        sessions = repository.list_tag_review_group_sessions(
+            group_type=payload.group_type,
+            group_value=payload.group_value,
+            days=payload.days,
+            only_untagged=payload.only_untagged,
+            limit=5000,
+        )
+        if not sessions:
+            raise HTTPException(
+                status_code=404, detail="No matching sessions found for group"
+            )
+
+        session_ids: list[int] = []
+        for session in sessions:
+            session_ids.append(int(session["id"]))
+            repository.create_tag_review_action(
+                session_id=int(session["id"]),
+                original_tag=session["tag"],
+                selected_tag=payload.selected_tag,
+                reason=payload.reason,
+                source_signal=payload.source_signal or payload.group_type,
+            )
+        affected_count = repository.update_session_tags(
+            session_ids, payload.selected_tag
+        )
+        updated_sessions = [
+            dict(repository.get_session(session_id))
+            for session_id in session_ids[:20]
+            if repository.get_session(session_id) is not None
+        ]
+
+    return {
+        "ok": True,
+        "group_type": payload.group_type,
+        "group_value": payload.group_value,
+        "selected_tag": payload.selected_tag,
+        "affected_count": affected_count,
+        "sessions": updated_sessions,
+    }
+
+
+@app.post("/api/tag-review/suggestions")
+async def api_tag_review_suggestions(payload: TagReviewSuggestionRequest):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    suggestions, _, _ = _build_tag_review_payload(
+        db_path=db_path,
+        days=payload.days,
+        selected_tag=payload.selected_tag,
+        min_domain_hits=payload.min_domain_hits,
+        min_repo_hits=payload.min_repo_hits,
+    )
+    return {
+        "suggestions": suggestions,
+        "count": len(suggestions),
+    }
+
+
+@app.get("/api/tag-review/yaml-preview")
+async def api_tag_review_yaml_preview(
+    days: int | None = Query(None, ge=1, le=3650),
+    selected_tag: str | None = Query(None),
+    min_domain_hits: int = Query(2, ge=1, le=100),
+    min_repo_hits: int = Query(2, ge=1, le=100),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    suggestions, preview_text, warnings = _build_tag_review_payload(
+        db_path=db_path,
+        days=days,
+        selected_tag=selected_tag,
+        min_domain_hits=min_domain_hits,
+        min_repo_hits=min_repo_hits,
+    )
+    return {
+        "yaml": preview_text,
+        "warnings": warnings,
+        "suggestions": suggestions,
+    }
+
+
+@app.post("/api/tag-review/yaml-download")
+async def api_tag_review_yaml_download(payload: TagReviewYamlRequest):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    _, preview_text, _ = _build_tag_review_payload(
+        db_path=db_path,
+        days=payload.days,
+        selected_tag=payload.selected_tag,
+        min_domain_hits=payload.min_domain_hits,
+        min_repo_hits=payload.min_repo_hits,
+    )
+    return Response(
+        content=preview_text,
+        media_type="application/x-yaml",
+        headers={
+            "Content-Disposition": 'attachment; filename="tag-review-preview.yaml"'
+        },
     )
 
 
@@ -2793,7 +4035,7 @@ async def api_sessions(
     if not db_path.exists():
         return {"sessions": []}
 
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date = datetime.now(UTC) - timedelta(days=days)
     sessions = query_sessions(db_path, start_date=start_date, limit=limit)
 
     return {
@@ -2847,7 +4089,9 @@ async def register_device_for_mode(payload: DeviceRegisterRequest):
     register_payload = SyncRegisterRequest(user=payload.user, device=payload.device)
 
     if mode == "sync-client":
-        server_response = _register_on_sync_server(str(payload.sync_base_url or ""), register_payload)
+        server_response = _register_on_sync_server(
+            str(payload.sync_base_url or ""), register_payload
+        )
         return {
             "mode": mode,
             "registered": True,
@@ -2864,7 +4108,9 @@ async def register_device_for_mode(payload: DeviceRegisterRequest):
     started = time.perf_counter()
 
     issue_token = mode == "sync-server"
-    token, now_iso = _upsert_sync_user_and_device(conn, register_payload, issue_token=issue_token)
+    token, now_iso = _upsert_sync_user_and_device(
+        conn, register_payload, issue_token=issue_token
+    )
 
     _log_sync_request(
         conn,
@@ -2902,9 +4148,37 @@ async def api_sync_health():
             "last_sync_at": None,
             "synced_devices": 0,
             "unsynced_devices": 0,
+            "pending_pull_rows": 0,
+            "pending_sessions": 0,
+            "pending_journal_entries": 0,
+            "pending_reflections": 0,
+            "pending_upload_failures": 0,
+            "sync_failures": 0,
+            "last_error_at": None,
+            "recent_errors": [],
             "device_statuses": [],
         }
     return get_sync_health(db_path)
+
+
+@app.get("/api/sync/errors")
+async def api_sync_errors(limit: int = Query(20, ge=1, le=200)):
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {"errors": [], "count": 0}
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_sync_tables(conn)
+    try:
+        errors = _recent_sync_errors(conn, limit=limit)
+    finally:
+        conn.close()
+
+    return {
+        "errors": errors,
+        "count": len(errors),
+    }
 
 
 @app.get("/api/sync/users")
@@ -3027,6 +4301,7 @@ async def api_sync_rollups_rebuild(
 @app.post("/api/journal")
 async def create_journal_entry(payload: JournalCreate):
     """Create a journal entry with optional historical timestamps."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3038,7 +4313,7 @@ async def create_journal_entry(payload: JournalCreate):
     if start_iso and end_iso and end_iso < start_iso:
         raise HTTPException(status_code=400, detail="end_time must be after start_time")
 
-    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now_iso = datetime.now(UTC).isoformat(timespec="seconds")
     cursor.execute(
         """
         INSERT INTO journal_entries (
@@ -3074,6 +4349,7 @@ async def list_journal_entries(
     limit: int = Query(100, ge=1, le=500),
 ):
     """List journal entries with optional range filtering."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3102,16 +4378,19 @@ async def list_journal_entries(
 @app.get("/api/journal/tags")
 async def list_journal_tags():
     """List configured tags available for journal tagging."""
+    _ensure_journal_features_enabled()
     return {"tags": get_available_tags()}
 
 
 @app.get("/api/work-events/types")
 async def list_work_event_types():
+    _ensure_journal_features_enabled()
     return {"types": WORK_EVENT_TYPES, "impacts": WORK_EVENT_IMPACTS}
 
 
 @app.post("/api/work-events")
 async def create_work_event(payload: WorkEventCreate):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3119,7 +4398,7 @@ async def create_work_event(payload: WorkEventCreate):
     cursor = conn.cursor()
 
     event_time_iso = _to_utc_iso(payload.event_time)
-    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now_iso = datetime.now(UTC).isoformat(timespec="seconds")
     cursor.execute(
         """
         INSERT INTO work_events (
@@ -3160,6 +4439,7 @@ async def list_work_events(
     project: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
 ):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3196,6 +4476,7 @@ async def list_work_events(
 
 @app.get("/api/work-events/{event_id}")
 async def get_work_event(event_id: int):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3215,6 +4496,7 @@ async def get_work_event(event_id: int):
 
 @app.put("/api/work-events/{event_id}")
 async def update_work_event(event_id: int, payload: WorkEventCreate):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3256,7 +4538,10 @@ async def update_work_event(event_id: int, payload: WorkEventCreate):
 
 
 @app.get("/api/work-events/{event_id}/correlated-sessions")
-async def correlated_work_event_sessions(event_id: int, limit: int = Query(500, ge=1, le=1000)):
+async def correlated_work_event_sessions(
+    event_id: int, limit: int = Query(500, ge=1, le=1000)
+):
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3301,6 +4586,7 @@ async def correlated_work_event_sessions(event_id: int, limit: int = Query(500, 
 @app.get("/api/journal/{journal_id}")
 async def get_journal_entry(journal_id: int):
     """Get one journal entry by id."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3323,6 +4609,7 @@ async def get_journal_entry(journal_id: int):
 @app.put("/api/journal/{journal_id}")
 async def update_journal_entry(journal_id: int, payload: JournalCreate):
     """Update an existing journal entry."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3367,6 +4654,7 @@ async def update_journal_entry(journal_id: int, payload: JournalCreate):
 @app.get("/api/journal/{journal_id}/correlated-sessions")
 async def correlated_sessions(journal_id: int, limit: int = Query(500, ge=1, le=1000)):
     """Fetch sessions overlapping a journal entry time range and a simple summary."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3410,6 +4698,7 @@ async def correlated_sessions(journal_id: int, limit: int = Query(500, ge=1, le=
 @app.put("/api/reflections/{date}")
 async def upsert_reflection(date: str, payload: ReflectionUpsert):
     """Create or update a reflection record for a date."""
+    _ensure_journal_features_enabled()
     try:
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError as exc:
@@ -3421,7 +4710,7 @@ async def upsert_reflection(date: str, payload: ReflectionUpsert):
     _ensure_aux_tables(conn)
     cursor = conn.cursor()
 
-    now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now_iso = datetime.now(UTC).isoformat(timespec="seconds")
     cursor.execute(
         """
         INSERT INTO daily_reflections (
@@ -3461,6 +4750,7 @@ async def upsert_reflection(date: str, payload: ReflectionUpsert):
 
 @app.get("/api/reflections/{date}")
 async def get_reflection(date: str):
+    _ensure_journal_features_enabled()
     try:
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError as exc:
@@ -3484,9 +4774,12 @@ async def get_reflection(date: str):
 
 
 @app.get("/api/reflections/{date}/correlated-sessions")
-async def correlated_reflection_sessions(date: str, limit: int = Query(500, ge=1, le=1000)):
+async def correlated_reflection_sessions(
+    date: str, limit: int = Query(500, ge=1, le=1000)
+):
+    _ensure_journal_features_enabled()
     try:
-        day_start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        day_start = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=UTC)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="date must be YYYY-MM-DD") from exc
 
@@ -3534,6 +4827,7 @@ async def list_reflections(
     limit: int = Query(100, ge=1, le=500),
 ):
     """List reflections in date range."""
+    _ensure_journal_features_enabled()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -3581,46 +4875,164 @@ async def sync_register_device(payload: SyncRegisterRequest):
 
 
 @app.post("/api/sync/v1/push")
-async def sync_push_changes(payload: SyncPushRequest, authorization: str | None = Header(default=None)):
+async def sync_push_changes(
+    payload: SyncPushRequest, authorization: str | None = Header(default=None)
+):
     started = time.perf_counter()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     _ensure_sync_tables(conn)
-    _require_sync_auth(
-        conn,
-        authorization=authorization,
-        device_id=payload.device_id,
-        user_id=payload.user_id,
-    )
-    cursor = conn.cursor()
+    try:
+        _require_sync_auth(
+            conn,
+            authorization=authorization,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        cursor = conn.cursor()
 
-    raw_payload = payload.model_dump(mode="python")
-    req_hash = _request_hash(raw_payload)
+        raw_payload = payload.model_dump(mode="python")
+        req_hash = _request_hash(raw_payload)
 
-    cursor.execute(
-        "SELECT request_hash, response_json FROM sync_batches WHERE batch_id = ?",
-        (payload.batch_id,),
-    )
-    existing_batch = cursor.fetchone()
-    if existing_batch is not None:
-        if existing_batch["request_hash"] != req_hash:
+        cursor.execute(
+            "SELECT request_hash, response_json FROM sync_batches WHERE batch_id = ?",
+            (payload.batch_id,),
+        )
+        existing_batch = cursor.fetchone()
+        if existing_batch is not None:
+            if existing_batch["request_hash"] != req_hash:
+                raise HTTPException(
+                    status_code=409,
+                    detail="batch_id already exists with different payload",
+                )
+            response_json = existing_batch["response_json"]
+            replay_response = json.loads(response_json)
+            accepted = replay_response.get("accepted", {})
             _log_sync_request(
                 conn,
                 endpoint="/api/sync/v1/push",
-                status_code=409,
+                status_code=200,
                 latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
                 device_id=payload.device_id,
                 user_id=payload.user_id,
                 batch_id=payload.batch_id,
-                conflict_count=1,
+                accepted_count=int(
+                    sum(
+                        int(accepted.get(k, 0))
+                        for k in ["sessions", "journal_entries", "daily_reflections"]
+                    )
+                ),
+                conflict_count=int(len(replay_response.get("conflicts", []))),
             )
             conn.commit()
-            conn.close()
-            raise HTTPException(status_code=409, detail="batch_id already exists with different payload")
-        response_json = existing_batch["response_json"]
-        replay_response = json.loads(response_json)
-        accepted = replay_response.get("accepted", {})
+            return replay_response
+
+        sessions = payload.changes.get("sessions") or []
+        journal_entries = payload.changes.get("journal_entries") or []
+        reflections = payload.changes.get("daily_reflections") or []
+
+        cursors: list[tuple[str, str]] = []
+        for row in sessions:
+            updated_at, row_uuid = _upsert_sync_payload_row(
+                conn,
+                table_name="sync_sessions",
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                payload=row,
+            )
+            if updated_at and row_uuid:
+                cursors.append((updated_at, row_uuid))
+        for row in journal_entries:
+            updated_at, row_uuid = _upsert_sync_payload_row(
+                conn,
+                table_name="sync_journal_entries",
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                payload=row,
+            )
+            if updated_at and row_uuid:
+                cursors.append((updated_at, row_uuid))
+        for row in reflections:
+            updated_at, row_uuid = _upsert_sync_payload_row(
+                conn,
+                table_name="sync_daily_reflections",
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                payload=row,
+            )
+            if updated_at and row_uuid:
+                cursors.append((updated_at, row_uuid))
+
+        now_iso = _now_iso()
+        next_push_cursor = payload.client_cursor
+        if cursors:
+            max_updated_at, max_uuid = max(cursors)
+            next_push_cursor = _build_cursor(max_updated_at, max_uuid)
+
+        response_body = {
+            "accepted": {
+                "sessions": len(sessions),
+                "journal_entries": len(journal_entries),
+                "daily_reflections": len(reflections),
+            },
+            "conflicts": [],
+            "next_push_cursor": next_push_cursor,
+            "server_time": now_iso,
+        }
+
+        cursor.execute(
+            """
+            INSERT INTO sync_checkpoints (
+                device_id,
+                user_id,
+                last_push_cursor,
+                last_pull_cursor,
+                updated_at
+            )
+            VALUES (
+                ?,
+                ?,
+                ?,
+                COALESCE((SELECT last_pull_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
+                ?
+            )
+            ON CONFLICT(device_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                last_push_cursor = excluded.last_push_cursor,
+                updated_at = excluded.updated_at
+            """,
+            (
+                payload.device_id,
+                payload.user_id,
+                next_push_cursor,
+                payload.device_id,
+                now_iso,
+            ),
+        )
+
+        cursor.execute(
+            """
+            INSERT INTO sync_batches (
+                batch_id,
+                device_id,
+                user_id,
+                request_hash,
+                response_json,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payload.batch_id,
+                payload.device_id,
+                payload.user_id,
+                req_hash,
+                json.dumps(response_body, separators=(",", ":")),
+                now_iso,
+            ),
+        )
+
         _log_sync_request(
             conn,
             endpoint="/api/sync/v1/push",
@@ -3629,242 +5041,226 @@ async def sync_push_changes(payload: SyncPushRequest, authorization: str | None 
             device_id=payload.device_id,
             user_id=payload.user_id,
             batch_id=payload.batch_id,
-            accepted_count=int(sum(int(accepted.get(k, 0)) for k in ["sessions", "journal_entries", "daily_reflections"])),
-            conflict_count=int(len(replay_response.get("conflicts", []))),
+            accepted_count=len(sessions) + len(journal_entries) + len(reflections),
+            conflict_count=0,
+        )
+
+        conn.commit()
+        return response_body
+    except HTTPException as exc:
+        _log_sync_error(
+            conn,
+            endpoint="/api/sync/v1/push",
+            error_type="http_error",
+            message=str(exc.detail),
+            status_code=exc.status_code,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+        )
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/push",
+            status_code=exc.status_code,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+            conflict_count=1 if exc.status_code == 409 else 0,
         )
         conn.commit()
+        raise
+    except Exception as exc:
+        _log_sync_error(
+            conn,
+            endpoint="/api/sync/v1/push",
+            error_type=exc.__class__.__name__,
+            message=str(exc),
+            status_code=500,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+        )
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/push",
+            status_code=500,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            batch_id=payload.batch_id,
+        )
+        conn.commit()
+        raise
+    finally:
         conn.close()
-        return replay_response
-
-    sessions = payload.changes.get("sessions") or []
-    journal_entries = payload.changes.get("journal_entries") or []
-    reflections = payload.changes.get("daily_reflections") or []
-
-    cursors: list[tuple[str, str]] = []
-    for row in sessions:
-        updated_at, row_uuid = _upsert_sync_payload_row(
-            conn,
-            table_name="sync_sessions",
-            user_id=payload.user_id,
-            device_id=payload.device_id,
-            payload=row,
-        )
-        if updated_at and row_uuid:
-            cursors.append((updated_at, row_uuid))
-    for row in journal_entries:
-        updated_at, row_uuid = _upsert_sync_payload_row(
-            conn,
-            table_name="sync_journal_entries",
-            user_id=payload.user_id,
-            device_id=payload.device_id,
-            payload=row,
-        )
-        if updated_at and row_uuid:
-            cursors.append((updated_at, row_uuid))
-    for row in reflections:
-        updated_at, row_uuid = _upsert_sync_payload_row(
-            conn,
-            table_name="sync_daily_reflections",
-            user_id=payload.user_id,
-            device_id=payload.device_id,
-            payload=row,
-        )
-        if updated_at and row_uuid:
-            cursors.append((updated_at, row_uuid))
-
-    now_iso = _now_iso()
-    next_push_cursor = payload.client_cursor
-    if cursors:
-        max_updated_at, max_uuid = max(cursors)
-        next_push_cursor = _build_cursor(max_updated_at, max_uuid)
-
-    response_body = {
-        "accepted": {
-            "sessions": len(sessions),
-            "journal_entries": len(journal_entries),
-            "daily_reflections": len(reflections),
-        },
-        "conflicts": [],
-        "next_push_cursor": next_push_cursor,
-        "server_time": now_iso,
-    }
-
-    cursor.execute(
-        """
-        INSERT INTO sync_checkpoints (
-            device_id,
-            user_id,
-            last_push_cursor,
-            last_pull_cursor,
-            updated_at
-        )
-        VALUES (
-            ?,
-            ?,
-            ?,
-            COALESCE((SELECT last_pull_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
-            ?
-        )
-        ON CONFLICT(device_id) DO UPDATE SET
-            user_id = excluded.user_id,
-            last_push_cursor = excluded.last_push_cursor,
-            updated_at = excluded.updated_at
-        """,
-        (payload.device_id, payload.user_id, next_push_cursor, payload.device_id, now_iso),
-    )
-
-    cursor.execute(
-        """
-        INSERT INTO sync_batches (
-            batch_id,
-            device_id,
-            user_id,
-            request_hash,
-            response_json,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            payload.batch_id,
-            payload.device_id,
-            payload.user_id,
-            req_hash,
-            json.dumps(response_body, separators=(",", ":")),
-            now_iso,
-        ),
-    )
-
-    _log_sync_request(
-        conn,
-        endpoint="/api/sync/v1/push",
-        status_code=200,
-        latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
-        device_id=payload.device_id,
-        user_id=payload.user_id,
-        batch_id=payload.batch_id,
-        accepted_count=len(sessions) + len(journal_entries) + len(reflections),
-        conflict_count=0,
-    )
-
-    conn.commit()
-    conn.close()
-    return response_body
 
 
 @app.post("/api/sync/v1/pull")
-async def sync_pull_changes(payload: SyncPullRequest, authorization: str | None = Header(default=None)):
+async def sync_pull_changes(
+    payload: SyncPullRequest, authorization: str | None = Header(default=None)
+):
     started = time.perf_counter()
     db_path = get_db_path()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     _ensure_sync_tables(conn)
-    _require_sync_auth(
-        conn,
-        authorization=authorization,
-        device_id=payload.device_id,
-        user_id=payload.user_id,
-    )
+    try:
+        _require_sync_auth(
+            conn,
+            authorization=authorization,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
 
-    rows = _list_sync_union_rows(
-        conn,
-        user_id=payload.user_id,
-        cursor_value=payload.cursor,
-        limit=payload.limit,
-    )
-    active_sessions: list[dict] = []
-    active_journal_entries: list[dict] = []
-    active_daily_reflections: list[dict] = []
-    tombstones: list[dict] = []
+        rows = _list_sync_union_rows(
+            conn,
+            user_id=payload.user_id,
+            cursor_value=payload.cursor,
+            limit=payload.limit,
+        )
+        active_sessions: list[dict] = []
+        active_journal_entries: list[dict] = []
+        active_daily_reflections: list[dict] = []
+        tombstones: list[dict] = []
 
-    for row in rows:
-        entity = str(row["entity"])
-        row_id = str(row["id"])
-        updated_at = row["updated_at"]
-        deleted_at = row["deleted_at"]
-        if deleted_at:
-            tombstones.append(
-                {
-                    "entity": entity,
-                    "id": row_id,
-                    "deleted_at": deleted_at,
-                    "updated_at": updated_at,
-                }
+        for row in rows:
+            entity = str(row["entity"])
+            row_id = str(row["id"])
+            updated_at = row["updated_at"]
+            deleted_at = row["deleted_at"]
+            if deleted_at:
+                tombstones.append(
+                    {
+                        "entity": entity,
+                        "id": row_id,
+                        "deleted_at": deleted_at,
+                        "updated_at": updated_at,
+                    }
+                )
+                continue
+
+            payload_json = row["payload_json"]
+            if not payload_json:
+                continue
+            item = json.loads(payload_json)
+            if entity == "sessions":
+                active_sessions.append(item)
+            elif entity == "journal_entries":
+                active_journal_entries.append(item)
+            elif entity == "daily_reflections":
+                active_daily_reflections.append(item)
+
+        next_cursor = payload.cursor
+        if rows:
+            last_row = rows[-1]
+            next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
+
+        total_after_cursor = _count_sync_union_rows_after_cursor(
+            conn,
+            user_id=payload.user_id,
+            cursor_value=payload.cursor,
+        )
+        has_more = total_after_cursor > len(rows)
+
+        now_iso = _now_iso()
+        conn.execute(
+            """
+            INSERT INTO sync_checkpoints (
+                device_id,
+                user_id,
+                last_push_cursor,
+                last_pull_cursor,
+                updated_at
             )
-            continue
-
-        payload_json = row["payload_json"]
-        if not payload_json:
-            continue
-        item = json.loads(payload_json)
-        if entity == "sessions":
-            active_sessions.append(item)
-        elif entity == "journal_entries":
-            active_journal_entries.append(item)
-        elif entity == "daily_reflections":
-            active_daily_reflections.append(item)
-
-    next_cursor = payload.cursor
-    if rows:
-        last_row = rows[-1]
-        next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
-
-    total_after_cursor = _count_sync_union_rows_after_cursor(
-        conn,
-        user_id=payload.user_id,
-        cursor_value=payload.cursor,
-    )
-    has_more = total_after_cursor > len(rows)
-
-    now_iso = _now_iso()
-    conn.execute(
-        """
-        INSERT INTO sync_checkpoints (
-            device_id,
-            user_id,
-            last_push_cursor,
-            last_pull_cursor,
-            updated_at
+            VALUES (
+                ?,
+                ?,
+                COALESCE((SELECT last_push_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
+                ?,
+                ?
+            )
+            ON CONFLICT(device_id) DO UPDATE SET
+                user_id = excluded.user_id,
+                last_pull_cursor = excluded.last_pull_cursor,
+                updated_at = excluded.updated_at
+            """,
+            (
+                payload.device_id,
+                payload.user_id,
+                payload.device_id,
+                next_cursor,
+                now_iso,
+            ),
         )
-        VALUES (
-            ?,
-            ?,
-            COALESCE((SELECT last_push_cursor FROM sync_checkpoints WHERE device_id = ?), NULL),
-            ?,
-            ?
+
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            status_code=200,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+            accepted_count=len(active_sessions)
+            + len(active_journal_entries)
+            + len(active_daily_reflections),
+            has_more=has_more,
         )
-        ON CONFLICT(device_id) DO UPDATE SET
-            user_id = excluded.user_id,
-            last_pull_cursor = excluded.last_pull_cursor,
-            updated_at = excluded.updated_at
-        """,
-        (payload.device_id, payload.user_id, payload.device_id, next_cursor, now_iso),
-    )
+        conn.commit()
 
-    _log_sync_request(
-        conn,
-        endpoint="/api/sync/v1/pull",
-        status_code=200,
-        latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
-        device_id=payload.device_id,
-        user_id=payload.user_id,
-        accepted_count=len(active_sessions) + len(active_journal_entries) + len(active_daily_reflections),
-        has_more=has_more,
-    )
-    conn.commit()
-    conn.close()
-
-    return {
-        "changes": {
-            "sessions": active_sessions,
-            "journal_entries": active_journal_entries,
-            "daily_reflections": active_daily_reflections,
-            "tombstones": tombstones,
-        },
-        "next_cursor": next_cursor,
-        "has_more": has_more,
-        "server_time": now_iso,
-    }
+        return {
+            "changes": {
+                "sessions": active_sessions,
+                "journal_entries": active_journal_entries,
+                "daily_reflections": active_daily_reflections,
+                "tombstones": tombstones,
+            },
+            "next_cursor": next_cursor,
+            "has_more": has_more,
+            "server_time": now_iso,
+        }
+    except HTTPException as exc:
+        _log_sync_error(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            error_type="http_error",
+            message=str(exc.detail),
+            status_code=exc.status_code,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            status_code=exc.status_code,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        conn.commit()
+        raise
+    except Exception as exc:
+        _log_sync_error(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            error_type=exc.__class__.__name__,
+            message=str(exc),
+            status_code=500,
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        _log_sync_request(
+            conn,
+            endpoint="/api/sync/v1/pull",
+            status_code=500,
+            latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            device_id=payload.device_id,
+            user_id=payload.user_id,
+        )
+        conn.commit()
+        raise
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

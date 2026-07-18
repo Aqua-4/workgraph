@@ -8,10 +8,10 @@ identity_path: config/identity.json
 dashboard_mode: standalone
 sync_base_url: http://127.0.0.1:9000
 sync_token: ""
-sync_batch_size: 1000
-sync_pull_limit: 1000
+sync_batch_size: 100
+sync_pull_limit: 100
 sync_max_pull_pages: 20
-sync_timeout_seconds: 10
-sync_interval_seconds: 60
-sync_backoff_base_seconds: 1
-sync_backoff_max_seconds: 60
+sync_timeout_seconds: 60
+sync_interval_seconds: 7200
+sync_backoff_base_seconds: 30
+sync_backoff_max_seconds: 1800

@@ -340,8 +340,133 @@ class SyncApiTests(unittest.TestCase):
         self.assertIn("avg_push_latency_ms", health)
         self.assertIn("synced_devices", health)
         self.assertIn("unsynced_devices", health)
+        self.assertIn("pending_pull_rows", health)
+        self.assertIn("pending_sessions", health)
+        self.assertIn("pending_journal_entries", health)
+        self.assertIn("pending_reflections", health)
+        self.assertIn("sync_failures", health)
+        self.assertIn("recent_errors", health)
         self.assertIn("device_statuses", health)
         self.assertEqual(len(health["device_statuses"]), 2)
+
+    def test_sync_health_reports_pending_pull_counts(self) -> None:
+        register_device_1 = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-pending", "name": "Pending User"},
+                "device": {
+                    "id": "device-pending-1",
+                    "name": "Pending Source",
+                    "type": "work",
+                    "hostname": "PD-1",
+                    "category": "linux",
+                },
+            },
+        )
+        register_device_2 = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-pending", "name": "Pending User"},
+                "device": {
+                    "id": "device-pending-2",
+                    "name": "Pending Target",
+                    "type": "work",
+                    "hostname": "PD-2",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_device_1.status_code, 200)
+        self.assertEqual(register_device_2.status_code, 200)
+
+        token_1 = register_device_1.json()["device_token"]
+        push_response = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-pending-1",
+                "user_id": "user-pending",
+                "client_cursor": None,
+                "batch_id": "batch-pending-health-1",
+                "changes": {
+                    "sessions": [
+                        {
+                            "uuid": "sess-pending-1",
+                            "created_at": "2026-07-11T10:00:00+00:00",
+                            "updated_at": "2026-07-11T10:00:00+00:00",
+                            "app_name": "Code",
+                            "duration_sec": 300,
+                        }
+                    ],
+                    "journal_entries": [
+                        {
+                            "uuid": "journal-pending-1",
+                            "created_at": "2026-07-11T10:05:00+00:00",
+                            "updated_at": "2026-07-11T10:05:00+00:00",
+                            "title": "Pending journal",
+                        }
+                    ],
+                    "daily_reflections": [
+                        {
+                            "uuid": "reflection-pending-1",
+                            "date": "2026-07-11",
+                            "created_at": "2026-07-11T10:10:00+00:00",
+                            "updated_at": "2026-07-11T10:10:00+00:00",
+                            "wins": "Pending reflection",
+                        }
+                    ],
+                },
+            },
+            headers={"Authorization": f"Bearer {token_1}"},
+        )
+        self.assertEqual(push_response.status_code, 200)
+
+        health_response = self.client.get("/api/sync/health")
+        self.assertEqual(health_response.status_code, 200)
+        health = health_response.json()
+        self.assertGreaterEqual(health["pending_pull_rows"], 3)
+        self.assertGreaterEqual(health["pending_sessions"], 1)
+        self.assertGreaterEqual(health["pending_journal_entries"], 1)
+        self.assertGreaterEqual(health["pending_reflections"], 1)
+        device_two = next(
+            item for item in health["device_statuses"] if item["device_id"] == "device-pending-2"
+        )
+        self.assertGreaterEqual(device_two["pending_pull_rows"], 3)
+
+    def test_sync_errors_endpoint_lists_failed_requests(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-error", "name": "Error User"},
+                "device": {
+                    "id": "device-error-1",
+                    "name": "Error Device",
+                    "type": "work",
+                    "hostname": "ER-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+
+        failed_push = self.client.post(
+            "/api/sync/v1/push",
+            json={
+                "device_id": "device-error-1",
+                "user_id": "user-error",
+                "client_cursor": None,
+                "batch_id": "batch-error-1",
+                "changes": {},
+            },
+            headers={"Authorization": "Bearer invalid-token"},
+        )
+        self.assertEqual(failed_push.status_code, 401)
+
+        errors_response = self.client.get("/api/sync/errors")
+        self.assertEqual(errors_response.status_code, 200)
+        body = errors_response.json()
+        self.assertGreaterEqual(body["count"], 1)
+        self.assertEqual(body["errors"][0]["endpoint"], "/api/sync/v1/push")
+        self.assertEqual(body["errors"][0]["status_code"], 401)
 
     def test_retry_storm_duplicate_batch_id_is_idempotent(self) -> None:
         register_response = self.client.post(
@@ -936,6 +1061,44 @@ class SyncApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Sync Server Dashboard", response.text)
+        self.assertNotIn(">Journal<", response.text)
+
+    def test_sync_server_mode_disables_journal_routes(self) -> None:
+        with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
+            journal_page = self.client.get("/journal")
+            self.assertEqual(journal_page.status_code, 404)
+
+            journal_api = self.client.get("/api/journal")
+            self.assertEqual(journal_api.status_code, 404)
+
+            reflections_api = self.client.get("/api/reflections")
+            self.assertEqual(reflections_api.status_code, 404)
+
+            work_events_api = self.client.get("/api/work-events")
+            self.assertEqual(work_events_api.status_code, 404)
+
+    def test_sync_server_mode_keeps_timeline_available(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "user-server-timeline", "name": "Server Timeline User"},
+                "device": {
+                    "id": "device-server-timeline-1",
+                    "name": "Server Timeline Device",
+                    "type": "work",
+                    "hostname": "ST-1",
+                    "category": "linux",
+                },
+            },
+        )
+        self.assertEqual(register_response.status_code, 200)
+
+        with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
+            timeline_response = self.client.get("/timeline")
+
+        self.assertEqual(timeline_response.status_code, 200)
+        self.assertIn("Activity Timeline", timeline_response.text)
+        self.assertNotIn(">Journal<", timeline_response.text)
 
     def test_dashboard_sync_client_shows_status_when_registered(self) -> None:
         bootstrap = self.client.post(
@@ -969,7 +1132,13 @@ class SyncApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Sync Client Status", response.text)
         self.assertIn("Last Synced:", response.text)
+        self.assertNotIn("Sync Health", response.text)
         self.assertNotIn("Register On Sync Server", response.text)
+        self.assertNotIn("Registered Devices", response.text)
+        self.assertNotIn("Active Tokens", response.text)
+        self.assertNotIn("No devices registered yet.", response.text)
+        self.assertNotIn("User ID:", response.text)
+        self.assertNotIn("Device ID:", response.text)
 
 
 if __name__ == "__main__":

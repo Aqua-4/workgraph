@@ -1,15 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}WorkGraph Dashboard{% endblock %}</title>
-    <link
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-        rel="stylesheet"
-        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-        crossorigin="anonymous"
-    >
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <style>
         * {
             margin: 0;
@@ -24,7 +21,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1240px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -83,7 +80,7 @@
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .stats-grid {
@@ -97,7 +94,7 @@
             background: #fff;
             border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .stat-value {
@@ -105,6 +102,75 @@
             font-weight: bold;
             color: #0066cc;
             margin: 10px 0;
+        }
+
+        .metric-card,
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .metric-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid #e5eef9;
+            border-radius: 14px;
+            padding: 18px 20px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .metric-card__label {
+            font-size: 0.76rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #64748b;
+        }
+
+        .metric-card__value {
+            font-size: clamp(1.7rem, 2vw, 2.3rem);
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1;
+        }
+
+        .metric-card__subtext {
+            color: #64748b;
+            font-size: 0.92rem;
+            line-height: 1.45;
+        }
+
+        .metric-card__trend {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #0f766e;
+        }
+
+        .page-context {
+            margin-top: 18px;
+            padding: 16px 18px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+            border: 1px solid #dbeafe;
+        }
+
+        .page-context__item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .page-context__label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #64748b;
+        }
+
+        .page-context__value {
+            color: #0f172a;
+            font-weight: 600;
         }
 
         .stat-label {
@@ -298,33 +364,61 @@
             padding: 10px;
             margin-bottom: 12px;
         }
-
     </style>
     {% block extra_styles %}{% endblock %}
 </head>
+
 <body>
     <header>
         <div class="container">
             <h1>📊 WorkGraph Dashboard</h1>
-            <nav>
+            <nav class="d-flex flex-wrap gap-2 mt-2">
                 <a href="/" class="{% block nav_dashboard %}{% endblock %}">Dashboard</a>
                 <a href="/timeline" class="{% block nav_timeline %}{% endblock %}">Timeline</a>
+                {% if dashboard_mode != "sync-server" %}
+                <a href="/tag-review" class="{% block nav_tag_review %}{% endblock %}">Tag Review</a>
                 <a href="/journal" class="{% block nav_journal %}{% endblock %}">Journal</a>
+                {% endif %}
             </nav>
+            {% if page_context %}
+            <div class="page-context">
+                <div class="row g-2">
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">Mode</span>
+                        <span class="page-context__value">{{ page_context.mode }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">Source</span>
+                        <span class="page-context__value">{{ page_context.source }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">User</span>
+                        <span class="page-context__value">{{ page_context.user }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">Device</span>
+                        <span class="page-context__value">{{ page_context.device }}</span>
+                    </div>
+                    <div class="col-12 col-sm-6 col-lg page-context__item">
+                        <span class="page-context__label">Time Range</span>
+                        <span class="page-context__value">{{ page_context.time_range }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </header>
 
-    <div class="container">
+    <div class="container-fluid px-4">
         {% block content %}{% endblock %}
     </div>
 
     <footer>
         <p>WorkGraph — Local-first work telemetry and goal attribution</p>
     </footer>
-    <script
-        src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
-        crossorigin="anonymous"
-    ></script>
+        crossorigin="anonymous"></script>
 </body>
+
 </html>

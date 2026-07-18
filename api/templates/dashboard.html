@@ -4,6 +4,66 @@
 
 {% block nav_dashboard %}active{% endblock %}
 
+{% block extra_styles %}
+<style>
+    .pie-wrap {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .pie-canvas {
+        width: 170px;
+        height: 170px;
+        border-radius: 50%;
+        border: 1px solid #e5e7eb;
+        flex: 0 0 170px;
+    }
+
+    .pie-legend {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 6px;
+        min-width: 240px;
+        flex: 1 1 240px;
+    }
+
+    .pie-legend li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.85rem;
+        color: #374151;
+    }
+
+    .legend-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+        flex: 0 0 10px;
+    }
+
+    .legend-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 210px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div>
     <h2>This Week Overview</h2>
@@ -21,11 +81,6 @@
         <div style="font-size: 0.95em; color: #4b5563;">
             Local-only dashboard and collection. No remote sync APIs are required.
         </div>
-        {% elif dashboard_mode == "sync-client" %}
-        <div class="stat-label" style="margin-bottom: 8px;">Sync Client Mode</div>
-        <div style="font-size: 0.95em; color: #4b5563;">
-            Local dashboard remains primary. Register this device on your sync server to obtain a device token.
-        </div>
         {% else %}
         <div class="stat-label" style="margin-bottom: 8px;">Sync Server Mode</div>
         <div style="font-size: 0.95em; color: #4b5563;">
@@ -40,12 +95,6 @@
         <div class="stat-label" style="margin-bottom: 8px; color: #166534;">Device already registered</div>
         <div style="font-size: 0.9em; color: #4b5563; line-height: 1.6;">
             <div><strong>Last Synced:</strong> {{ client_sync.last_synced_at|human_datetime }}</div>
-            {% if client_sync.user_id %}
-            <div><strong>User ID:</strong> {{ client_sync.user_id }}</div>
-            {% endif %}
-            {% if client_sync.device_id %}
-            <div><strong>Device ID:</strong> {{ client_sync.device_id }}</div>
-            {% endif %}
         </div>
     </div>
     {% else %}
@@ -60,25 +109,41 @@
             Register devices directly on this sync server.
             {% endif %}
         </div>
-        <form id="device-register-form" style="display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <form id="device-register-form" class="row g-2">
             {% if dashboard_mode == "sync-client" %}
-            <input
-                type="text"
-                id="register-sync-base-url"
-                value="{{ client_sync.sync_base_url if client_sync else '' }}"
-                placeholder="sync_base_url (e.g. http://192.168.1.10:8000)"
-                style="grid-column: 1 / -1;"
-            />
+            <div class="col-12">
+                <input type="text" class="form-control" id="register-sync-base-url"
+                    value="{{ client_sync.sync_base_url if client_sync else '' }}"
+                    placeholder="sync_base_url (e.g. http://192.168.1.10:8000)" />
+            </div>
             {% endif %}
-            <input type="text" id="register-user-id" placeholder="user_id" value="{{ selected_user_id or '' }}" required />
-            <input type="text" id="register-user-name" placeholder="user_name" required />
-            <input type="text" id="register-device-id" placeholder="device_id" required />
-            <input type="text" id="register-device-name" placeholder="device_name" required />
-            <input type="text" id="register-device-type" placeholder="device_type (work/personal)" required />
-            <input type="text" id="register-device-hostname" placeholder="hostname (optional)" />
-            <input type="text" id="register-device-category" placeholder="category/platform (optional)" />
-            <div style="grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                <button type="submit">
+            <div class="col-12 col-md-6 col-xl-4">
+                <input type="text" class="form-control" id="register-user-id" placeholder="user_id"
+                    value="{{ selected_user_id or '' }}" required />
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+                <input type="text" class="form-control" id="register-user-name" placeholder="user_name" required />
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+                <input type="text" class="form-control" id="register-device-id" placeholder="device_id" required />
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+                <input type="text" class="form-control" id="register-device-name" placeholder="device_name" required />
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+                <input type="text" class="form-control" id="register-device-type"
+                    placeholder="device_type (work/personal)" required />
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+                <input type="text" class="form-control" id="register-device-hostname"
+                    placeholder="hostname (optional)" />
+            </div>
+            <div class="col-12 col-md-6 col-xl-4">
+                <input type="text" class="form-control" id="register-device-category"
+                    placeholder="category/platform (optional)" />
+            </div>
+            <div class="col-12 d-flex gap-2 align-items-center flex-wrap">
+                <button type="submit" class="btn btn-primary">
                     {% if dashboard_mode == "sync-client" %}
                     Register On Sync Server
                     {% elif dashboard_mode == "sync-server" %}
@@ -93,7 +158,56 @@
     </div>
     {% endif %}
 
-    {% if sync_health %}
+    {% if dashboard_mode == "sync-client" and client_sync_debug %}
+    <div class="card" style="margin-bottom: 12px; border: 1px dashed #d1d5db;">
+        <h3 style="margin-top: 0;">Sync Client Debug</h3>
+        <div class="row g-3" style="margin-bottom: 8px;">
+            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Synced Sessions</div>
+                <div class="stat-value">{{ client_sync_debug.session_count }}</div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Distinct Synced Days</div>
+                <div class="stat-value">{{ client_sync_debug.distinct_days }}</div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Earliest Synced</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.earliest_synced_at|human_datetime
+                    }}</div>
+            </div>
+            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Latest Synced</div>
+                <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.latest_synced_at|human_datetime
+                    }}</div>
+            </div>
+        </div>
+
+        <div class="row g-3" style="margin-bottom: 0;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Pending Sessions</div>
+                <div class="stat-value">{{ client_sync_debug.pending_sessions }}</div>
+            </div>
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Pending Journal</div>
+                <div class="stat-value">{{ client_sync_debug.pending_journal_entries }}</div>
+            </div>
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-label">Pending Reflections</div>
+                <div class="stat-value">{{ client_sync_debug.pending_reflections }}</div>
+            </div>
+        </div>
+
+        {% if client_sync_debug.days %}
+        <div style="margin-top: 12px; font-size: 0.85em; color: #6b7280;">
+            {% for day_row in client_sync_debug.days %}
+            <div>{{ day_row.day_utc }}: {{ day_row.sessions }} sessions</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if dashboard_mode == "sync-server" and sync_health %}
     <h2>Sync Health</h2>
     <div class="card">
         {% if sync_health.registered_devices == 0 %}
@@ -107,22 +221,22 @@
             ({{ sync_health.unsynced_devices }} pending first sync)
             {% endif %}
         </div>
-        <div class="stats-grid" style="margin-bottom: 0;">
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+        <div class="row g-3" style="margin-bottom: 0;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Registered Devices</div>
                 <div class="stat-value">{{ sync_health.registered_devices }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     active sync clients
                 </div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Active Tokens</div>
                 <div class="stat-value">{{ sync_health.active_tokens }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     valid device tokens
                 </div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Last Sync</div>
                 <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at|human_datetime }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -147,8 +261,8 @@
     </div>
     {% endif %}
 
-    <div class="stats-grid">
-        <div class="stat-box">
+    <div class="row g-3">
+        <div class="col-12 col-sm-6 col-xl-4 stat-box">
             <div class="stat-label">Total Active Time</div>
             <div class="stat-value">{{ "%.1f"|format(stats.total_hours) }}h</div>
             <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -156,7 +270,7 @@
             </div>
         </div>
 
-        <div class="stat-box">
+        <div class="col-12 col-sm-6 col-xl-4 stat-box">
             <div class="stat-label">Categories Tagged</div>
             <div class="stat-value">{{ stats.tag_stats|length }}</div>
             <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -164,7 +278,7 @@
             </div>
         </div>
 
-        <div class="stat-box">
+        <div class="col-12 col-sm-6 col-xl-4 stat-box">
             <div class="stat-label">Apps Used</div>
             <div class="stat-value">{{ stats.app_stats|length }}</div>
             <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -172,7 +286,7 @@
             </div>
         </div>
 
-        <div class="stat-box">
+        <div class="col-12 col-sm-6 col-xl-4 stat-box">
             <div class="stat-label">Goal Coverage</div>
             <div class="stat-value">{{ "%.0f"|format(stats.tagged_ratio * 100) }}%</div>
             <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -180,7 +294,7 @@
             </div>
         </div>
 
-        <div class="stat-box">
+        <div class="col-12 col-sm-6 col-xl-4 stat-box">
             <div class="stat-label">Context Switch Rate</div>
             <div class="stat-value">{{ "%.1f"|format(stats.switch_rate_per_hour) }}</div>
             <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -188,7 +302,7 @@
             </div>
         </div>
 
-        <div class="stat-box">
+        <div class="col-12 col-sm-6 col-xl-4 stat-box">
             <div class="stat-label">Meeting Load (Proxy)</div>
             <div class="stat-value">{{ "%.1f"|format(stats.meeting_hours) }}h</div>
             <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -199,22 +313,22 @@
 
     <h2>Focus Quality</h2>
     <div class="card">
-        <div class="stats-grid" style="margin-bottom: 0;">
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+        <div class="row g-3" style="margin-bottom: 0;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Deep Work Blocks</div>
                 <div class="stat-value">{{ stats.deep_work_blocks }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     sessions >= 30 minutes
                 </div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Longest Focus Block</div>
                 <div class="stat-value">{{ "%.1f"|format(stats.longest_focus_hours) }}h</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     max uninterrupted active block
                 </div>
             </div>
-            <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
                 <div class="stat-label">Average Focus Block</div>
                 <div class="stat-value">{{ "%.0f"|format(stats.avg_focus_minutes) }}m</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -224,51 +338,89 @@
         </div>
     </div>
 
+    {% if stats.goal_drift %}
+    <h2>Goal Drift</h2>
+    <div class="card">
+        <div class="row g-3" style="margin-bottom: 0;">
+            <div class="col-12 col-md-6 col-xl-3 metric-card">
+                <div class="metric-card__label">Drift Score</div>
+                <div class="metric-card__value">{{ "%.1f"|format(stats.goal_drift.goal_drift_score_pct_points) }}%</div>
+                <div class="metric-card__subtext">Total allocation mismatch across configured goals.</div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3 metric-card">
+                <div class="metric-card__label">Goal Coverage</div>
+                <div class="metric-card__value">{{ "%.1f"|format(stats.goal_drift.goal_coverage_pct) }}%</div>
+                <div class="metric-card__subtext">Tagged time aligned to configured goal categories.</div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3 metric-card">
+                <div class="metric-card__label">Unmapped Time</div>
+                <div class="metric-card__value">{{ "%.1f"|format(stats.goal_drift.unmapped_pct) }}%</div>
+                <div class="metric-card__subtext">Time that has no matching goal tag and drifts outside the plan.</div>
+            </div>
+            <div class="col-12 col-md-6 col-xl-3 metric-card">
+                <div class="metric-card__label">Largest Gap</div>
+                <div class="metric-card__value" style="font-size: 1.5rem;">{{ stats.goal_drift.largest_gap.goal }}</div>
+                <div class="metric-card__subtext">
+                    {% if stats.goal_drift.largest_gap %}
+                    planned {{ "%.1f"|format(stats.goal_drift.largest_gap.planned_pct) }}%, actual {{
+                    "%.1f"|format(stats.goal_drift.largest_gap.actual_pct) }}%
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if stats.goal_drift.goal_drift_items %}
+        <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Goal</th>
+                        <th>Planned</th>
+                        <th>Actual</th>
+                        <th>Delta</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in stats.goal_drift.goal_drift_items %}
+                    <tr>
+                        <td>{{ item.goal }}</td>
+                        <td>{{ "%.1f"|format(item.planned_pct) }}%</td>
+                        <td>{{ "%.1f"|format(item.actual_pct) }}%</td>
+                        <td>{{ "+" if item.delta_pct_points > 0 else "" }}{{ "%.1f"|format(item.delta_pct_points) }} pts
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <h2>Time by Goal (Tagged)</h2>
     <div class="card">
         {% if stats.tag_stats %}
-        <div class="bar-chart">
-            {% set max_seconds = stats.tag_stats.values()|max %}
-            {% for tag, seconds in stats.tag_stats.items()|sort(attribute='1', reverse=True) %}
-            <div class="bar-item">
-                <div class="bar-label">
-                    <span class="tag-badge">{{ tag }}</span>
-                </div>
-                <div class="bar-container">
-                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
-                        {% if (seconds / max_seconds * 100) > 15 %}
-                        {{ "%.1f"|format(seconds / 3600) }}h
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
-            </div>
-            {% endfor %}
+        <div class="pie-wrap">
+            <canvas id="tagPie" class="pie-canvas" width="170" height="170"
+                aria-label="Tag activity pie chart"></canvas>
+            <ul id="tagPieLegend" class="pie-legend"></ul>
         </div>
+        <script id="tagPieData" type="application/json">{{ stats.tag_stats|tojson }}</script>
         {% else %}
-        <p style="color: #999; padding: 20px; text-align: center;">No tagged activities yet. Configure tags in config/tags.yaml</p>
+        <p style="color: #999; padding: 20px; text-align: center;">No tagged activities yet. Configure tags in
+            config/tags.yaml</p>
         {% endif %}
     </div>
 
     <h2>Time by Application</h2>
     <div class="card">
         {% if stats.app_stats %}
-        <div class="bar-chart">
-            {% set max_seconds = stats.app_stats.values()|max %}
-            {% for app, seconds in stats.app_stats.items()|sort(attribute='1', reverse=True) %}
-            <div class="bar-item">
-                <div class="bar-label">{{ app }}</div>
-                <div class="bar-container">
-                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
-                        {% if (seconds / max_seconds * 100) > 15 %}
-                        {{ "%.1f"|format(seconds / 3600) }}h
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
-            </div>
-            {% endfor %}
+        <div class="pie-wrap">
+            <canvas id="appPie" class="pie-canvas" width="170" height="170"
+                aria-label="Application activity pie chart"></canvas>
+            <ul id="appPieLegend" class="pie-legend"></ul>
         </div>
+        <script id="appPieData" type="application/json">{{ stats.app_stats|tojson }}</script>
         {% else %}
         <p style="color: #999; padding: 20px; text-align: center;">No activity data yet. Run the collector.</p>
         {% endif %}
@@ -277,22 +429,12 @@
     <h2>Repository Focus</h2>
     <div class="card">
         {% if stats.repo_stats %}
-        <div class="bar-chart">
-            {% set max_seconds = stats.repo_stats.values()|max %}
-            {% for repo, seconds in stats.repo_stats.items()|sort(attribute='1', reverse=True) %}
-            <div class="bar-item">
-                <div class="bar-label">{{ repo }}</div>
-                <div class="bar-container">
-                    <div class="bar" style="width: {% if max_seconds > 0 %}{{ (seconds / max_seconds * 100)|int }}{% else %}0{% endif %}%">
-                        {% if (seconds / max_seconds * 100) > 15 %}
-                        {{ "%.1f"|format(seconds / 3600) }}h
-                        {% endif %}
-                    </div>
-                </div>
-                <div class="bar-value">{{ "%.1f"|format(seconds / 3600) }}h</div>
-            </div>
-            {% endfor %}
+        <div class="pie-wrap">
+            <canvas id="repoPie" class="pie-canvas" width="170" height="170"
+                aria-label="Repository activity pie chart"></canvas>
+            <ul id="repoPieLegend" class="pie-legend"></ul>
         </div>
+        <script id="repoPieData" type="application/json">{{ stats.repo_stats|tojson }}</script>
         {% else %}
         <p style="color: #999; padding: 20px; text-align: center;">No repository activity detected in this window.</p>
         {% endif %}
@@ -329,8 +471,10 @@
     <h2>Quick Tips</h2>
     <div class="card">
         <ul style="margin-left: 20px; line-height: 1.8;">
-            <li><strong>Goal Attribution:</strong> Edit <code>config/tags.yaml</code> to tag your projects and goals.</li>
-            <li><strong>Check Timeline:</strong> Visit the <a href="/timeline">Timeline</a> view to see a detailed chronological breakdown.</li>
+            <li><strong>Goal Attribution:</strong> Edit <code>config/tags.yaml</code> to tag your projects and goals.
+            </li>
+            <li><strong>Check Timeline:</strong> Visit the <a href="/timeline">Timeline</a> view to see a detailed
+                chronological breakdown.</li>
             <li><strong>More Data:</strong> Run the collector for a week to see meaningful patterns emerge.</li>
             <li><strong>Meeting Detection:</strong> Version 1.2 will auto-detect Teams, Zoom, and Meet meetings.</li>
         </ul>
@@ -338,68 +482,164 @@
 </div>
 
 <script>
-(() => {
-    const form = document.getElementById("device-register-form");
-    if (!form) {
-        return;
-    }
+    (() => {
+        const palette = [
+            "#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#dc3545",
+            "#20c997", "#0dcaf0", "#ffc107", "#6610f2", "#d63384"
+        ];
 
-    const resultNode = document.getElementById("register-result");
-    const readValue = (id) => {
-        const node = document.getElementById(id);
-        return node ? (node.value || "").trim() : "";
-    };
+        const renderPieMap = (canvasId, legendId, dataId) => {
+            const canvas = document.getElementById(canvasId);
+            const legend = document.getElementById(legendId);
+            const dataNode = document.getElementById(dataId);
+            if (!canvas || !legend || !dataNode) {
+                return;
+            }
 
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        if (resultNode) {
-            resultNode.textContent = "Registering device...";
-            resultNode.style.color = "#374151";
-        }
+            let mapData = {};
+            try {
+                mapData = JSON.parse(dataNode.textContent || "{}");
+            } catch (_error) {
+                return;
+            }
 
-        const payload = {
-            mode: "{{ dashboard_mode }}",
-            user: {
-                id: readValue("register-user-id"),
-                name: readValue("register-user-name"),
-            },
-            device: {
-                id: readValue("register-device-id"),
-                name: readValue("register-device-name"),
-                type: readValue("register-device-type"),
-                hostname: readValue("register-device-hostname") || null,
-                category: readValue("register-device-category") || null,
-            },
-            sync_base_url: readValue("register-sync-base-url") || null,
+            const entries = Object.entries(mapData)
+                .map(([name, totalSeconds]) => [String(name), Number(totalSeconds || 0)])
+                .filter((item) => Number.isFinite(item[1]) && item[1] > 0)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            if (!entries.length) {
+                return;
+            }
+
+            const total = entries.reduce((acc, item) => acc + item[1], 0);
+            if (!total) {
+                return;
+            }
+
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+                return;
+            }
+
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = Math.min(cx, cy) - 2;
+            let startAngle = -Math.PI / 2;
+            legend.innerHTML = "";
+
+            entries.forEach(([label, value], index) => {
+                const angle = (value / total) * Math.PI * 2;
+                const color = palette[index % palette.length];
+
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, radius, startAngle, startAngle + angle);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+
+                const li = document.createElement("li");
+
+                const nameWrap = document.createElement("span");
+                nameWrap.className = "legend-name";
+
+                const dot = document.createElement("span");
+                dot.className = "legend-dot";
+                dot.style.background = color;
+
+                const text = document.createElement("span");
+                text.className = "legend-text";
+                text.title = label;
+                text.textContent = label;
+
+                nameWrap.appendChild(dot);
+                nameWrap.appendChild(text);
+
+                const stats = document.createElement("span");
+                const pct = ((value / total) * 100).toFixed(1);
+                const hours = (value / 3600).toFixed(1);
+                stats.textContent = `${hours}h (${pct}%)`;
+
+                li.appendChild(nameWrap);
+                li.appendChild(stats);
+                legend.appendChild(li);
+
+                startAngle += angle;
+            });
         };
 
-        try {
-            const response = await fetch("/api/device/register", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify(payload),
-            });
-            const data = await response.json();
-            if (!response.ok) {
-                const detail = data && data.detail ? data.detail : "Registration failed";
-                throw new Error(detail);
+        renderPieMap("tagPie", "tagPieLegend", "tagPieData");
+        renderPieMap("appPie", "appPieLegend", "appPieData");
+        renderPieMap("repoPie", "repoPieLegend", "repoPieData");
+    })();
+
+</script>
+
+<script>
+    (() => {
+        const form = document.getElementById("device-register-form");
+        if (!form) {
+            return;
+        }
+
+        const resultNode = document.getElementById("register-result");
+        const readValue = (id) => {
+            const node = document.getElementById(id);
+            return node ? (node.value || "").trim() : "";
+        };
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (resultNode) {
+                resultNode.textContent = "Registering device...";
+                resultNode.style.color = "#374151";
             }
 
-            let message = data.message || "Device registered";
-            if (data.device_token) {
-                message += ` device_token=${data.device_token}`;
+            const payload = {
+                mode: "{{ dashboard_mode }}",
+                user: {
+                    id: readValue("register-user-id"),
+                    name: readValue("register-user-name"),
+                },
+                device: {
+                    id: readValue("register-device-id"),
+                    name: readValue("register-device-name"),
+                    type: readValue("register-device-type"),
+                    hostname: readValue("register-device-hostname") || null,
+                    category: readValue("register-device-category") || null,
+                },
+                sync_base_url: readValue("register-sync-base-url") || null,
+            };
+
+            try {
+                const response = await fetch("/api/device/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    const detail = data && data.detail ? data.detail : "Registration failed";
+                    throw new Error(detail);
+                }
+
+                let message = data.message || "Device registered";
+                if (data.device_token) {
+                    message += ` device_token=${data.device_token}`;
+                }
+                if (resultNode) {
+                    resultNode.textContent = message;
+                    resultNode.style.color = "#166534";
+                }
+            } catch (error) {
+                if (resultNode) {
+                    resultNode.textContent = error instanceof Error ? error.message : "Registration failed";
+                    resultNode.style.color = "#b91c1c";
+                }
             }
-            if (resultNode) {
-                resultNode.textContent = message;
-                resultNode.style.color = "#166534";
-            }
-        } catch (error) {
-            if (resultNode) {
-                resultNode.textContent = error instanceof Error ? error.message : "Registration failed";
-                resultNode.style.color = "#b91c1c";
-            }
-        }
-    });
-})();
+        });
+    })();
 </script>
 {% endblock %}

@@ -2,6 +2,8 @@
 
 The WorkGraph web app provides local and sync-backed visibility into activity sessions, trends, journaling, and structured work events.
 
+Detailed mode-by-mode dashboard rendering and feature logic is documented in `docs/DASHBOARD_FEATURES_AND_LOGIC.md`.
+
 ## Quick Start
 
 ### Unified (Recommended)

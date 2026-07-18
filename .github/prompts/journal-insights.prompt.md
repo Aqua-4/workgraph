@@ -1,11 +1,17 @@
 ---
-mode: ask
+agent: agent
 description: Summarise, search, or draw insights from workgraph journal entries and daily reflections.
 ---
 
 You have access to the user's journal from the workgraph activity database
 (`activity.db`). Use the schema below to retrieve, summarise, or find themes
 across entries. Always present data in a clear, empathetic tone.
+
+Default response mode is insights-only. Do not include SQL/query text unless the
+user explicitly asks for SQL, query details, or exact filtering logic.
+
+When possible, connect narrative text to observed activity patterns (apps, tags,
+repos, context-switch density, and focused minutes).
 
 ## Relevant tables
 
@@ -33,6 +39,26 @@ Structured end-of-day entries.
 | `energy` | 1–5 self-rating |
 | `stress` | 1–5 self-rating |
 
+### work_events
+Structured events with contextual business impact.
+
+| Column | Notes |
+|--------|-------|
+| `event_time` | point-in-time timestamp |
+| `event_type` | e.g. Achievement, Incident, Decision, Risk, Blocker |
+| `impact` | Low/Medium/High/Critical |
+| `project` | optional project label |
+| `notes` | free text details |
+
+## Correlation-first analysis guidance
+
+- If journal/reflection has a time range, correlate with overlapping activity
+  sessions for evidence-backed interpretation.
+- For event-centric requests, correlate nearby activity windows around
+  `work_events.event_time`.
+- Always separate observed facts from interpretation.
+- Explicitly call out uncertainty when notes are sparse or time windows are missing.
+
 ## Example SQL
 
 ```sql
@@ -55,8 +81,16 @@ SELECT strftime('%w', date) AS dow,
        ROUND(AVG(energy),2)  AS avg_energy,
        ROUND(AVG(stress),2)  AS avg_stress
 FROM daily_reflections
+WHERE deleted_at IS NULL
 GROUP BY dow
 ORDER BY dow;
+
+-- Blocker events and nearest activity context
+SELECT event_time, event_type, impact, project, notes
+FROM work_events
+WHERE event_type = 'Blocker'
+ORDER BY COALESCE(event_time, created_at) DESC
+LIMIT 20;
 ```
 
 ## Notes for Copilot
@@ -66,6 +100,8 @@ ORDER BY dow;
   the user requests.
 - When searching by keyword, use `LIKE '%keyword%'` or suggest FTS if the user
   has SQLite FTS5 available.
+- In sync-server mode, journal/reflection/work-event API routes may be disabled;
+  if analysis is still requested, use direct SQLite queries where available.
 
 ---
 

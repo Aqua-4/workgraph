@@ -1,0 +1,641 @@
+{% extends "base.html" %}
+
+{% block title %}Tag Review - WorkGraph{% endblock %}
+
+{% block nav_tag_review %}active{% endblock %}
+
+{% block extra_styles %}
+<style>
+    :root {
+        --tag-review-repo: #0f766e;
+        --tag-review-domain: #0369a1;
+        --tag-review-browser-context: #b45309;
+        --tag-review-app: #6d28d9;
+    }
+
+    .tag-review-shell {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .tag-review-preview {
+        width: 100%;
+        min-height: 460px;
+        height: 100%;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.85rem;
+    }
+
+    .tag-review-muted {
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+
+    .tag-review-table td,
+    .tag-review-table th {
+        vertical-align: top;
+    }
+
+    .tag-review-row {
+        --tag-review-accent: #475569;
+    }
+
+    .tag-review-row[data-group-type="repo"] {
+        --tag-review-accent: var(--tag-review-repo);
+    }
+
+    .tag-review-row[data-group-type="domain"] {
+        --tag-review-accent: var(--tag-review-domain);
+    }
+
+    .tag-review-row[data-group-type="browser_context"] {
+        --tag-review-accent: var(--tag-review-browser-context);
+    }
+
+    .tag-review-row[data-group-type="app"] {
+        --tag-review-accent: var(--tag-review-app);
+    }
+
+    .tag-review-group-card {
+        border-left: 4px solid var(--tag-review-accent);
+        border-radius: 0.85rem;
+        background:
+            linear-gradient(135deg, color-mix(in srgb, var(--tag-review-accent) 10%, white), white 58%),
+            white;
+        padding: 0.8rem 0.9rem;
+        min-height: 100%;
+    }
+
+    .tag-review-group-chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.24rem 0.55rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--tag-review-accent);
+        background: color-mix(in srgb, var(--tag-review-accent) 13%, white);
+        border: 1px solid color-mix(in srgb, var(--tag-review-accent) 22%, white);
+    }
+
+    .tag-review-group-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-top: 0.45rem;
+        overflow-wrap: anywhere;
+    }
+
+    .tag-review-meta-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-top: 0.55rem;
+    }
+
+    .tag-review-meta-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.28rem 0.55rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        font-size: 0.79rem;
+        color: #334155;
+    }
+
+    .tag-review-samples {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 0.55rem;
+    }
+
+    .tag-review-sample-item {
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.8rem;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+    }
+
+    .tag-review-sample-title {
+        font-weight: 600;
+        color: #0f172a;
+    }
+
+    .tag-review-sample-meta {
+        margin-top: 0.2rem;
+        font-size: 0.82rem;
+        color: #64748b;
+    }
+
+    .tag-review-actions {
+        display: grid;
+        gap: 0.6rem;
+    }
+
+    .tag-review-detail-row {
+        display: none;
+    }
+
+    .tag-review-detail-row.is-open {
+        display: table-row;
+    }
+
+    .tag-review-detail-panel {
+        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+        border: 1px solid #dbe4ee;
+        border-radius: 1rem;
+        padding: 1rem;
+        margin-top: 0.25rem;
+    }
+
+    .tag-review-detail-status {
+        font-size: 0.88rem;
+        color: #64748b;
+        margin-bottom: 0.75rem;
+    }
+
+    .tag-review-detail-list {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .tag-review-detail-item {
+        padding: 0.8rem 0.9rem;
+        border-radius: 0.9rem;
+        border: 1px solid #e2e8f0;
+        background: white;
+    }
+
+    .tag-review-detail-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        align-items: baseline;
+        margin-bottom: 0.35rem;
+    }
+
+    .tag-review-detail-title {
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .tag-review-detail-time {
+        font-size: 0.8rem;
+        color: #64748b;
+    }
+
+    .tag-review-detail-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-top: 0.5rem;
+    }
+
+    .tag-review-detail-tag {
+        padding: 0.22rem 0.5rem;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-size: 0.77rem;
+        font-weight: 600;
+    }
+
+    .tag-review-toggle {
+        align-self: start;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tag-review-shell">
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1">Tag Review</h2>
+            <p class="tag-review-muted mb-0">Review missed entries, keep manual overrides, and export reusable YAML
+                suggestions.</p>
+        </div>
+        <span class="badge text-bg-secondary">{{ group_count }} groups</span>
+    </div>
+
+    {% if sync_health and sync_health.enabled %}
+    <div class="card p-3">
+        <h3 class="mb-1">Sync Health</h3>
+        <div class="d-flex gap-2 flex-wrap">
+            <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
+            <span class="badge text-bg-light border">Synced: {{ sync_health.synced_devices }}</span>
+            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card p-3 p-md-4">
+        <h3 class="mb-3">Filters</h3>
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-12 col-md-2">
+                <label for="days" class="form-label">Past Days</label>
+                <input type="number" class="form-control" id="days" name="days" min="1" max="3650" value="{{ days }}">
+            </div>
+            <div class="col-12 col-md-3">
+                <label for="app_name" class="form-label">App</label>
+                <input type="text" class="form-control" id="app_name" name="app_name"
+                    value="{{ filter_app_name or '' }}">
+            </div>
+            <div class="col-12 col-md-3">
+                <label for="domain" class="form-label">Domain</label>
+                <input type="text" class="form-control" id="domain" name="domain" value="{{ filter_domain or '' }}">
+            </div>
+            <div class="col-12 col-md-2">
+                <label for="repo" class="form-label">Repo</label>
+                <input type="text" class="form-control" id="repo" name="repo" value="{{ filter_repo or '' }}">
+            </div>
+            <div class="col-12 col-md-2">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="only_untagged" name="only_untagged" value="true"
+                        {% if only_untagged %}checked{% endif %}>
+                    <label class="form-check-label" for="only_untagged">Only untagged</label>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Apply</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12 col-xl-8">
+            <div class="card p-3 p-md-4 h-100">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <h3 class="m-0">Grouped Review Queue</h3>
+                    <span class="tag-review-muted">Assigning a tag updates all matching sessions in the bucket
+                        immediately.</span>
+                </div>
+                <div id="tag-review-feedback" style="display: none;"></div>
+                {% if groups %}
+                <div class="table-responsive">
+                    <table class="table table-sm tag-review-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Group</th>
+                                <th>Coverage</th>
+                                <th>Samples</th>
+                                <th>Assign</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for group in groups %}
+                            <tr class="tag-review-row" data-group-type="{{ group.group_type }}"
+                                data-group-value="{{ group.group_value }}">
+                                <td>
+                                    <div class="tag-review-group-card">
+                                        <span class="tag-review-group-chip">{{ group.group_type.replace('_', ' ')|title
+                                            }}</span>
+                                        <div class="tag-review-group-value">{{ group.group_value }}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="tag-review-group-card">
+                                        <div class="tag-review-meta-list">
+                                            <span class="tag-review-meta-pill">{{ group.session_count }} sessions</span>
+                                            <span class="tag-review-meta-pill">{{ "%.1f"|format((group.total_seconds /
+                                                3600) if group.total_seconds else 0) }}h active</span>
+                                        </div>
+                                        {% if group.dominant_apps %}
+                                        <div class="tag-review-muted mt-2">Apps: {{ group.dominant_apps|join(', ') }}
+                                        </div>
+                                        {% endif %}
+                                        {% if group.current_tags %}
+                                        <div class="tag-review-muted mt-1">Current tags: {{ group.current_tags|join(',
+                                            ') }}</div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if group.sample_sessions %}
+                                    <ul class="tag-review-samples">
+                                        {% for sample in group.sample_sessions %}
+                                        <li class="tag-review-sample-item">
+                                            <div class="tag-review-sample-title">{{ sample.app_name }}</div>
+                                            {% if sample.window_title %}
+                                            <div class="tag-review-sample-meta">{{ sample.window_title }}</div>
+                                            {% endif %}
+                                            <div class="tag-review-sample-meta">
+                                                {% if sample.browser_domain %}{{ sample.browser_domain }}{% elif
+                                                sample.git_repo %}{{ sample.git_repo }}{% else %}No domain or repo
+                                                signal{% endif %}
+                                            </div>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% else %}
+                                    <span class="tag-review-muted">No sample sessions available.</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="tag-review-actions">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary tag-review-toggle"
+                                            aria-expanded="false">Inspect Sessions</button>
+                                        <div class="d-flex gap-2 flex-wrap align-items-start">
+                                            <select class="form-select form-select-sm tag-review-select"
+                                                style="min-width: 180px;">
+                                                <option value="">Choose tag</option>
+                                                {% for tag in available_tags %}
+                                                <option value="{{ tag }}">{{ tag }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="button"
+                                                class="btn btn-sm btn-primary tag-review-assign-btn">Assign</button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr class="tag-review-detail-row"
+                                data-detail-for="{{ group.group_type }}::{{ group.group_value }}">
+                                <td colspan="4">
+                                    <div class="tag-review-detail-panel">
+                                        <div class="tag-review-detail-status">Expand a bucket to inspect the matching
+                                            sessions.</div>
+                                        <div class="tag-review-detail-list"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No matching review groups in this range.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-4">
+            <div class="card p-3 p-md-4 h-100">
+                <h3 class="mb-2">YAML Preview</h3>
+                <p class="tag-review-muted">Preview/download only in this phase. Existing keywords stay visible, but new
+                    keywords are
+                    not generated.</p>
+                {% if warnings %}
+                <div class="error">
+                    {% for warning in warnings %}
+                    <div>{{ warning.field }} conflict for {{ warning.value }} (owned by {{ warning.owner }})</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <textarea id="tag-review-yaml-preview" class="tag-review-preview form-control"
+                    readonly>{{ yaml_preview }}</textarea>
+                <div class="d-flex gap-2 mt-3 flex-wrap">
+                    <button id="tag-review-refresh-preview" type="button" class="btn btn-outline-primary">Refresh
+                        Preview</button>
+                    <button id="tag-review-download" type="button" class="btn btn-primary">Download YAML</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-3 p-md-4">
+        <h3 class="mb-3">Rule Suggestions</h3>
+        {% if suggestions %}
+        <div class="row g-3">
+            {% for tag_name, suggestion in suggestions.items() %}
+            <div class="col-12 col-lg-6">
+                <div class="border rounded p-3 h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+                        <strong>{{ tag_name }}</strong>
+                        <span class="badge text-bg-light border">{{ suggestion.total_reviewed }} reviewed</span>
+                    </div>
+                    <div class="mb-2">
+                        <div class="tag-review-muted">Domains</div>
+                        {% if suggestion.domains %}
+                        <ul class="mb-0">
+                            {% for item in suggestion.domains %}
+                            <li>{{ item.value }} ({{ item.sample_count }}){% if item.conflict_with %} conflict: {{
+                                item.conflict_with }}{% endif %}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="tag-review-muted">No domain suggestions yet.</div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <div class="tag-review-muted">Repos</div>
+                        {% if suggestion.repos %}
+                        <ul class="mb-0">
+                            {% for item in suggestion.repos %}
+                            <li>{{ item.value }} ({{ item.sample_count }}){% if item.conflict_with %} conflict: {{
+                                item.conflict_with }}{% endif %}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div class="tag-review-muted">No repo suggestions yet.</div>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <div class="tag-review-muted">Existing keywords</div>
+                        {% if suggestion.keywords %}
+                        <div>{{ suggestion.keywords|join(', ') }}</div>
+                        {% else %}
+                        <div class="tag-review-muted">No configured keywords.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0">No reviewed actions yet. Assign a few sessions to start generating reusable
+            suggestions.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    (() => {
+        const feedbackNode = document.getElementById("tag-review-feedback");
+        const previewNode = document.getElementById("tag-review-yaml-preview");
+        const queryString = window.location.search;
+        const searchParams = new URLSearchParams(window.location.search);
+
+        function groupKey(groupType, groupValue) {
+            return `${groupType}::${groupValue}`;
+        }
+
+        function setFeedback(message, type) {
+            if (!feedbackNode) {
+                return;
+            }
+            feedbackNode.className = type === "error" ? "error" : "success";
+            feedbackNode.textContent = message;
+            feedbackNode.style.display = "block";
+        }
+
+        async function refreshPreview() {
+            const response = await fetch(`/api/tag-review/yaml-preview${queryString}`);
+            if (!response.ok) {
+                setFeedback("Failed to refresh YAML preview.", "error");
+                return;
+            }
+            const payload = await response.json();
+            if (previewNode) {
+                previewNode.value = payload.yaml || "";
+            }
+        }
+
+        function renderDetailSessions(sessions) {
+            if (!sessions.length) {
+                return '<div class="tag-review-detail-status">No matching sessions found for this bucket.</div>';
+            }
+
+            return sessions.map((session) => {
+                const detailTags = [
+                    session.browser_domain,
+                    session.git_repo,
+                    session.tag ? `Tag: ${session.tag}` : null,
+                ].filter(Boolean).map((item) => `<span class="tag-review-detail-tag">${escapeHtml(item)}</span>`).join("");
+
+                return `
+                    <div class="tag-review-detail-item">
+                        <div class="tag-review-detail-header">
+                            <div class="tag-review-detail-title">${escapeHtml(session.app_name || "Unknown App")}</div>
+                            <div class="tag-review-detail-time">${escapeHtml(session.start_time || "")}</div>
+                        </div>
+                        <div>${escapeHtml(session.window_title || "No window title")}</div>
+                        ${detailTags ? `<div class="tag-review-detail-tags">${detailTags}</div>` : ""}
+                    </div>
+                `;
+            }).join("");
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+        }
+
+        async function toggleDetails(row, button) {
+            const groupType = row?.getAttribute("data-group-type");
+            const groupValue = row?.getAttribute("data-group-value");
+            const detailRow = document.querySelector(`[data-detail-for="${CSS.escape(groupKey(groupType, groupValue))}"]`);
+            if (!groupType || !groupValue || !detailRow) {
+                return;
+            }
+
+            const detailStatus = detailRow.querySelector(".tag-review-detail-status");
+            const detailList = detailRow.querySelector(".tag-review-detail-list");
+            const isOpen = detailRow.classList.contains("is-open");
+            if (isOpen) {
+                detailRow.classList.remove("is-open");
+                button?.setAttribute("aria-expanded", "false");
+                button.textContent = "Inspect Sessions";
+                return;
+            }
+
+            detailRow.classList.add("is-open");
+            button?.setAttribute("aria-expanded", "true");
+            button.textContent = "Hide Sessions";
+
+            if (detailRow.dataset.loaded === "true") {
+                return;
+            }
+
+            if (detailStatus) {
+                detailStatus.textContent = "Loading matching sessions...";
+            }
+
+            const params = new URLSearchParams();
+            params.set("days", searchParams.get("days") || "{{ days }}");
+            params.set("only_untagged", searchParams.get("only_untagged") || "{{ 'true' if only_untagged else 'false' }}");
+            params.set("limit", "50");
+
+            const response = await fetch(`/api/tag-review/groups/${encodeURIComponent(groupType)}/${encodeURIComponent(groupValue)}?${params.toString()}`);
+            if (!response.ok) {
+                if (detailStatus) {
+                    detailStatus.textContent = "Failed to load matching sessions.";
+                }
+                return;
+            }
+
+            const payload = await response.json();
+            if (detailStatus) {
+                detailStatus.textContent = `${payload.count} matching sessions, ${((payload.total_seconds || 0) / 3600).toFixed(1)}h total.`;
+            }
+            if (detailList) {
+                detailList.innerHTML = renderDetailSessions(payload.sessions || []);
+            }
+            detailRow.dataset.loaded = "true";
+        }
+
+        document.querySelectorAll(".tag-review-assign-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const row = button.closest("tr");
+                const select = row?.querySelector(".tag-review-select");
+                const groupType = row?.getAttribute("data-group-type");
+                const groupValue = row?.getAttribute("data-group-value");
+                const selectedTag = select?.value || "";
+                if (!groupType || !groupValue || !selectedTag) {
+                    setFeedback("Choose a tag before assigning.", "error");
+                    return;
+                }
+
+                const response = await fetch("/api/tag-review/assign-group", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        group_type: groupType,
+                        group_value: groupValue,
+                        selected_tag: selectedTag,
+                        source_signal: groupType,
+                        days: {{ days }},
+                    }),
+                });
+        if (!response.ok) {
+            setFeedback("Failed to assign tag.", "error");
+            return;
+        }
+
+        setFeedback(`Assigned ${selectedTag} to the ${groupType} bucket. Refreshing page...`, "success");
+        window.location.reload();
+    });
+        });
+
+    document.querySelectorAll(".tag-review-toggle").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const row = button.closest("tr");
+            await toggleDetails(row, button);
+        });
+    });
+
+    document.getElementById("tag-review-refresh-preview")?.addEventListener("click", refreshPreview);
+
+    document.getElementById("tag-review-download")?.addEventListener("click", async () => {
+        const response = await fetch("/api/tag-review/yaml-download", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                days: {{ days }}
+                }),
+            });
+    if (!response.ok) {
+        setFeedback("Failed to download YAML.", "error");
+        return;
+    }
+    const blob = await response.blob();
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = "tag-review-preview.yaml";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+    });
+}) ();
+</script>
+{% endblock %}

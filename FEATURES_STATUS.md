@@ -15,65 +15,83 @@ Verification basis:
 
 ## v1.0 Collection Foundation
 
-| Feature | Status | Notes |
-|---|---|---|
-| Active application tracking | Implemented | Windows and Linux active window capture in collector |
-| Window title tracking | Implemented | Collected as part of each activity sample |
-| Browser domain tracking | Implemented | Title extraction first, then browser history fallback |
-| Idle time detection | Implemented | Idle tracker integrated into collector pipeline |
-| Session aggregation | Implemented | Session builder groups contiguous samples |
-| Local SQLite storage | Implemented | SQLite repository and schema are active |
-| Lightweight background service | Implemented | Supervisor and run scripts included |
+| Feature                        | Status      | Notes                                                 |
+| ------------------------------ | ----------- | ----------------------------------------------------- |
+| Active application tracking    | Implemented | Windows and Linux active window capture in collector  |
+| Window title tracking          | Implemented | Collected as part of each activity sample             |
+| Browser domain tracking        | Implemented | Title extraction first, then browser history fallback |
+| Idle time detection            | Implemented | Idle tracker integrated into collector pipeline       |
+| Session aggregation            | Implemented | Session builder groups contiguous samples             |
+| Local SQLite storage           | Implemented | SQLite repository and schema are active               |
+| Lightweight background service | Implemented | Supervisor and run scripts included                   |
 
 ## v1.1 Work Attribution
 
-| Feature | Status | Notes |
-|---|---|---|
-| Git repository tracking | Implemented | Repo, branch, commit, modified files are collected |
-| Activity tagging | Implemented | Rule-based tags from `config/tags.yaml` |
-| Context-switch counting | Implemented | Computed during session updates |
-| Advanced session splitting | Implemented | Gap- and context-based session boundaries |
-| Focus time analytics | Implemented | Dashboard stats include deep-work and focus metrics |
-| Calendar event tracking | Planned | No calendar collector in current code |
+| Feature                    | Status      | Notes                                               |
+| -------------------------- | ----------- | --------------------------------------------------- |
+| Git repository tracking    | Implemented | Repo, branch, commit, modified files are collected  |
+| Activity tagging           | Implemented | Rule-based tags from `config/tags.yaml`             |
+| Context-switch counting    | Implemented | Computed during session updates                     |
+| Advanced session splitting | Implemented | Gap- and context-based session boundaries           |
+| Focus time analytics       | Implemented | Dashboard stats include deep-work and focus metrics |
+| Calendar event tracking    | Planned     | No calendar collector in current code               |
 
 ## v1.2 Visualization
 
-| Feature | Status | Notes |
-|---|---|---|
-| Local dashboard | Implemented | HTML dashboard route with summary stats |
-| Timeline view | Implemented | Timeline route with filters |
-| REST API for sessions and stats | Implemented | `/api/sessions` and `/api/stats` |
-| Journal entries API | Implemented | Create, list, get, update endpoints |
-| Structured work events API | Implemented | Create/list typed events with impact and project context |
-| Correlated sessions for journal windows | Implemented | Correlation endpoint with overlap summary |
-| Daily reflections API | Implemented | Upsert and list reflections |
-| Weekly reports | Implemented | CLI report generator with deterministic markdown output |
-| Server SQLite sync backend (via API) | Implemented | Device register, push, pull, idempotent batches, and checkpoints |
-| Sync analytics mode (`source=sync`) | Implemented | Dashboard and `/api/stats` support explicit sync source |
-| Sync metadata endpoints | Implemented | `/api/sync/users` and `/api/sync/devices` |
-| Sync rollup endpoints | Implemented | `/api/sync/stats` and `/api/sync/rollups/rebuild` |
-| User-scoped sync isolation | Implemented | Pull/analytics enforce user scoping; schema supports user-scoped uuid uniqueness |
-| PostgreSQL backend for multi-device sync | Planned | Deferred to optional v3 backend after SQLite sync service is stable |
-| Activity export (JSON, CSV, Markdown) | Implemented | CLI exports session data in multiple formats |
+| Feature                                  | Status      | Notes                                                                            |
+| ---------------------------------------- | ----------- | -------------------------------------------------------------------------------- |
+| Local dashboard                          | Implemented | HTML dashboard route with summary stats                                          |
+| Timeline view                            | Implemented | Timeline route with filters                                                      |
+| REST API for sessions and stats          | Implemented | `/api/sessions` and `/api/stats`                                                 |
+| Journal entries API                      | Implemented | Create, list, get, update endpoints                                              |
+| Structured work events API               | Implemented | Create/list typed events with impact and project context                         |
+| Correlated sessions for journal windows  | Implemented | Correlation endpoint with overlap summary                                        |
+| Daily reflections API                    | Implemented | Upsert and list reflections                                                      |
+| Weekly reports                           | Implemented | CLI report generator with deterministic markdown output                          |
+| Server SQLite sync backend (via API)     | Implemented | Device register, push, pull, idempotent batches, and checkpoints                 |
+| Sync analytics mode (`source=sync`)      | Implemented | Dashboard and `/api/stats` support explicit sync source                          |
+| Sync metadata endpoints                  | Implemented | `/api/sync/users` and `/api/sync/devices`                                        |
+| Sync rollup endpoints                    | Implemented | `/api/sync/stats` and `/api/sync/rollups/rebuild`                                |
+| User-scoped sync isolation               | Implemented | Pull/analytics enforce user scoping; schema supports user-scoped uuid uniqueness |
+| PostgreSQL backend for multi-device sync | Planned     | Deferred to optional v3 backend after SQLite sync service is stable              |
+| Activity export (JSON, CSV, Markdown)    | Implemented | CLI exports session data in multiple formats                                     |
 
 ## v2.0 Analytics Engine
 
-| Feature | Status | Notes |
-|---|---|---|
-| Goal drift detection | Implemented | Planned-vs-actual goal allocation drift via CLI |
-| Focus block analysis | Partial | Core focus metrics exist in dashboard stats |
-| Weekly/monthly reports | Partial | Weekly CLI report is implemented; monthly report not yet implemented |
-| Burnout risk indicators | Planned | No burnout model/heuristics yet |
-| Trend analysis | Partial | 7-day trend rows implemented in dashboard stats |
+| Feature                 | Status      | Notes                                                                                                   |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
+| Goal drift detection    | Implemented | Planned-vs-actual goal allocation drift via CLI                                                         |
+| Focus block analysis    | Partial     | Core focus metrics exist in dashboard stats                                                             |
+| Weekly/monthly reports  | Implemented | Weekly and monthly CLI reports are implemented (`workgraph report weekly` / `workgraph report monthly`) |
+| Burnout risk indicators | Planned     | No burnout model/heuristics yet                                                                         |
+| Trend analysis          | Partial     | 7-day trend rows implemented in dashboard stats                                                         |
 
 ## v3.0 Intelligence
 
-| Feature | Status | Notes |
-|---|---|---|
-| AI-powered coaching | Planned | No LLM coaching flow in current code |
-| Productivity recommendations | Planned | No recommendation engine yet |
-| Goal alignment analysis | Planned | No goal-vs-target analyzer yet |
-| Team insights | Planned | Depends on future multi-device/team backend |
+| Feature                      | Status  | Notes                                       |
+| ---------------------------- | ------- | ------------------------------------------- |
+| AI-powered coaching          | Planned | No LLM coaching flow in current code        |
+| Productivity recommendations | Planned | No recommendation engine yet                |
+| Goal alignment analysis      | Planned | No goal-vs-target analyzer yet              |
+| Team insights                | Planned | Depends on future multi-device/team backend |
+
+## Release Notes
+
+### 2026-07-14
+
+- Tag Review API transition: grouped-only workflow is now the only supported contract.
+- Breaking change for external consumers:
+	- Removed legacy per-session endpoints:
+		- `GET /api/tag-review/candidates`
+		- `POST /api/tag-review/assign`
+	- Use grouped endpoints instead:
+		- `GET /api/tag-review/groups`
+		- `GET /api/tag-review/groups/{group_type}/{group_value}`
+		- `POST /api/tag-review/assign-group`
+- Existing suggestion and YAML preview/download endpoints remain unchanged:
+	- `POST /api/tag-review/suggestions`
+	- `GET /api/tag-review/yaml-preview`
+	- `POST /api/tag-review/yaml-download`
 
 ## Notes
 
