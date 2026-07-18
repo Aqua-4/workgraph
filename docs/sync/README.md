@@ -2,6 +2,33 @@
 
 This folder contains implementation and operations documents for WorkGraph multi-device sync.
 
+## Sync Architecture
+
+```mermaid
+flowchart LR
+	subgraph Clients[Client Devices]
+		Collector["Collectors<br/>(window, browser, git, idle)"]
+		LocalDB[(Local SQLite DB)]
+		Daemon[Sync Daemon]
+		Worker[Sync Worker]
+		Collector --> LocalDB
+		LocalDB --> Daemon
+		Daemon --> Worker
+	end
+
+	subgraph Server[Sync Server]
+		API["FastAPI Sync API<br/>register • push • pull"]
+		ServerDB[(Server SQLite DB)]
+		Dashboard["Sync-aware Dashboard<br/>& aggregate metrics"]
+		API --> ServerDB
+		Dashboard --> ServerDB
+	end
+
+	Worker -- authenticated push/pull --> API
+	API -- sync state, rows, cursors --> Worker
+	ServerDB -- cross-device summaries --> Dashboard
+```
+
 ## Documents
 
 - [MULTI_DEVICE_SETUP.md](MULTI_DEVICE_SETUP.md): practical setup steps for Raspberry Pi sync server and multiple client devices.
