@@ -8,6 +8,9 @@ database (`activity.db`). Use the schema below to analyse patterns and give
 concrete, evidence-based insights. Where relevant, provide the SQL you used so
 the user can verify or extend the analysis themselves.
 
+If the request is about sync-server or multi-device behavior, include user/device
+scoping and state whether findings are local-only or cross-device.
+
 ## Schema quick-reference
 
 ```sql
@@ -35,6 +38,14 @@ daily_reflections (
   energy  INTEGER,  -- 1-5
   stress  INTEGER   -- 1-5
 )
+
+work_events (
+  event_time TEXT,
+  event_type TEXT,
+  impact TEXT,
+  project TEXT,
+  notes TEXT
+)
 ```
 
 ## Analysis guidelines
@@ -44,12 +55,33 @@ daily_reflections (
 - Peak hours = hours where total active `duration_sec` is highest
 - Distraction score = `SUM(context_switches) / total_active_hours`
 - Compare energy/stress scores in `daily_reflections` against coding output
+- Include at least one trend comparison (current vs previous equal window)
+- Highlight data quality caveats (missing tags, low sample size, sync lag)
+
+## API and mode awareness
+
+Use these endpoint semantics when structuring analysis sections:
+
+- `GET /api/stats` for local or sync-backed summary (`source=local|sync`)
+- `GET /api/sync/stats` for explicit sync-scoped user/device analytics
+- `GET /api/sync/health` and `GET /api/sync/errors` for reliability context
+
+If sync reliability looks poor, call it out before over-interpreting trends.
 
 ## What to include in the response
 
 1. A plain-English summary of the key patterns found
 2. 2–3 specific, actionable recommendations
 3. The SQL queries used (so the user can run them or adapt them)
+4. Confidence notes (high/medium/low) based on data completeness
+
+## Additional analyses to proactively suggest
+
+- Device-by-device focus efficiency comparison
+- Meeting proxy load vs deep-work loss by day
+- Repo-level context-switch hotspots
+- Work-event impact timeline (incident/risk/blocker periods)
+- Energy/stress leading indicators before low-focus days
 
 ---
 

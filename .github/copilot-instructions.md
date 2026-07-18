@@ -103,7 +103,7 @@ End-of-day structured reflection entries.
 | `services/activity_tagger.py` | Rule-based tag assignment |
 | `config/tags.yaml` | Tag rules (app/domain/title patterns) |
 | `config/settings.yaml` | Runtime configuration |
-| `api/app.py` | Flask dashboard API |
+| `api/app.py` | FastAPI dashboard API |
 | `api/templates/dashboard.html` | Main dashboard UI |
 
 ---
@@ -158,3 +158,11 @@ ORDER BY minutes DESC;
 - SQLite queries use plain `sqlite3` module; parameterised queries only (no f-string SQL).
 - Tests live in `tests/` and run with `uv run python -m pytest`.
 - Config is read from `config/settings.yaml`; never hard-code paths.
+
+## Agent execution preference
+
+- If you need to fetch data from SQLite during analysis, prefer running queries via
+  `uv run python` using the `sqlite3` module instead of shelling out to ad-hoc SQL tooling.
+- Use parameterized queries and filter `deleted_at IS NULL` by default unless deleted rows
+  are explicitly requested.
+- For sync-focused analytics, include `user_id` and optional `device_id` scoping where applicable.

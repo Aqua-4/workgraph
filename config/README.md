@@ -8,14 +8,14 @@ This directory contains WorkGraph configuration files that control how the colle
 
 Controls the core collection parameters:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `database_path` | `activity.db` | Path to SQLite database where activity sessions are stored |
-| `poll_interval_seconds` | `5` | How often to sample the active window (in seconds) |
-| `idle_threshold_seconds` | `300` | Time (in seconds) after which you're marked as idle (5 minutes default) |
-| `session_gap_seconds` | `90` | Maximum gap (in seconds) before a new session starts |
-| `browser_history_lookback_seconds` | `600` | How far back to look in browser history for domain detection (10 minutes default) |
-| `log_path` | `logs/workgraph.log` | Where to write debug logs |
+| Setting                            | Default              | Description                                                                       |
+| ---------------------------------- | -------------------- | --------------------------------------------------------------------------------- |
+| `database_path`                    | `activity.db`        | Path to SQLite database where activity sessions are stored                        |
+| `poll_interval_seconds`            | `5`                  | How often to sample the active window (in seconds)                                |
+| `idle_threshold_seconds`           | `300`                | Time (in seconds) after which you're marked as idle (5 minutes default)           |
+| `session_gap_seconds`              | `90`                 | Maximum gap (in seconds) before a new session starts                              |
+| `browser_history_lookback_seconds` | `600`                | How far back to look in browser history for domain detection (10 minutes default) |
+| `log_path`                         | `logs/workgraph.log` | Where to write debug logs                                                         |
 
 #### Personal Override (recommended)
 
