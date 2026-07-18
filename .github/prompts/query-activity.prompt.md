@@ -8,6 +8,9 @@ SQLite queries. Prefer source-aware analysis (local or sync). Always use
 parameterized queries in Python code and always filter `deleted_at IS NULL`
 unless the user explicitly asks for deleted rows.
 
+Default response mode is insights-only. Do not return SQL/query text unless the
+user explicitly asks for SQL, query details, or step-by-step verification output.
+
 ## Database path
 `activity.db` (project root — override via `config/settings.yaml → database_path`)
 
@@ -51,8 +54,8 @@ with these API contracts and fields:
 - `GET /api/sync/stats` (sync-scoped analytics)
 - `GET /api/sync/users` and `GET /api/sync/devices` (analytics segmentation)
 
-If the question is sync-server scoped, include `user_id` and optional `device_id`
-filters in SQL examples.
+If the question is sync-server scoped, apply `user_id` and optional `device_id`
+scoping in the analysis.
 
 ## Query quality checklist
 

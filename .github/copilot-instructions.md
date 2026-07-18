@@ -166,3 +166,5 @@ ORDER BY minutes DESC;
 - Use parameterized queries and filter `deleted_at IS NULL` by default unless deleted rows
   are explicitly requested.
 - For sync-focused analytics, include `user_id` and optional `device_id` scoping where applicable.
+- Response default for analytics prompts should be insights-only. Do not return SQL/query text
+  unless the user explicitly asks for SQL, query details, or reproducibility steps.

@@ -6,6 +6,9 @@ description: Analyze multi-device sync analytics, data quality, and reliability 
 You are analyzing WorkGraph in sync-aware mode. Use the local SQLite database and
 sync-related tables and APIs to evaluate both productivity metrics and data quality.
 
+Default response mode is insights-only. Do not include SQL/query text unless the
+user explicitly asks for SQL, query details, or validation steps.
+
 Prioritize user-scoped and device-scoped findings. Make it explicit whether each
 insight is local-only, sync-aggregated, or uncertain due to sync lag/errors.
 
@@ -76,7 +79,7 @@ ORDER BY switches_per_active_hour DESC;
   - Reliability/data-quality insights
   - Recommendations
 - Include confidence level per major finding (high/medium/low).
-- Include SQL used and clearly mark assumptions.
+- Clearly mark assumptions.
 
 ---
 
