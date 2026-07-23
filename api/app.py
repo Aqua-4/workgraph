@@ -871,7 +871,34 @@ def _recompute_sync_daily_rollup(
         SELECT
             COUNT(*) AS row_count,
             COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS active_seconds,
-            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)), 0) AS focus_seconds,
+            COALESCE(
+                SUM(
+                    CASE
+                        -- Use client-supplied focus_seconds when present
+                        WHEN CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER) IS NOT NULL
+                            THEN COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)
+                        -- Server-side heuristic: session >= 25 min, not idle, not a meeting
+                        WHEN COALESCE(active_seconds, 0) >= 1500
+                            AND COALESCE(CAST(json_extract(payload_json, '$.is_idle') AS INTEGER), 0) = 0
+                            AND NOT (
+                                LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%teams%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%zoom%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%webex%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%slack%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%meet.google.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%teams.microsoft.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%zoom.us%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%webex.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%meeting%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%standup%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%huddle%'
+                            )
+                        THEN COALESCE(active_seconds, 0)
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS focus_seconds,
             COALESCE(
                 SUM(
                     CASE
