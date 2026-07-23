@@ -65,7 +65,13 @@ class ActivityRepository:
             "ALTER TABLE daily_reflections ADD COLUMN uuid TEXT",
             "ALTER TABLE daily_reflections ADD COLUMN user_id TEXT",
             "ALTER TABLE daily_reflections ADD COLUMN device_id TEXT",
+            "ALTER TABLE daily_reflections ADD COLUMN updated_at TEXT",
             "ALTER TABLE daily_reflections ADD COLUMN deleted_at TEXT",
+            "ALTER TABLE work_events ADD COLUMN uuid TEXT",
+            "ALTER TABLE work_events ADD COLUMN user_id TEXT",
+            "ALTER TABLE work_events ADD COLUMN device_id TEXT",
+            "ALTER TABLE work_events ADD COLUMN updated_at TEXT",
+            "ALTER TABLE work_events ADD COLUMN deleted_at TEXT",
         ]
         for migration in migrations:
             try:
@@ -214,6 +220,17 @@ class ActivityRepository:
                 """
                 CREATE INDEX IF NOT EXISTS idx_daily_reflections_user_date
                     ON daily_reflections (user_id, date)
+                """
+            )
+            self._connection.commit()
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self._connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_work_events_uuid
+                    ON work_events (uuid)
                 """
             )
             self._connection.commit()
@@ -952,6 +969,15 @@ class ActivityRepository:
             table_name="daily_reflections", cursor=cursor, limit=limit
         )
 
+    def list_work_event_changes_since(
+        self,
+        cursor: str | None = None,
+        limit: int = 1000,
+    ) -> list[sqlite3.Row]:
+        return self._list_entity_changes(
+            table_name="work_events", cursor=cursor, limit=limit
+        )
+
     def upsert_session_by_uuid(self, payload: dict) -> None:
         now = _format_datetime(datetime.now(UTC))
         row_uuid = str(payload.get("uuid") or uuid4())
@@ -1181,6 +1207,63 @@ class ActivityRepository:
         )
         self._connection.commit()
 
+    def upsert_work_event_by_uuid(self, payload: dict) -> None:
+        now = _format_datetime(datetime.now(UTC))
+        row_uuid = str(payload.get("uuid") or uuid4())
+        row_updated_at = payload.get("updated_at") or payload.get("created_at") or now
+        row_created_at = payload.get("created_at") or row_updated_at
+
+        self._connection.execute(
+            """
+            INSERT INTO work_events (
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                event_time,
+                event_type,
+                title,
+                impact,
+                project,
+                notes,
+                metadata,
+                deleted_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(uuid) DO UPDATE SET
+                user_id = excluded.user_id,
+                device_id = excluded.device_id,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                event_time = excluded.event_time,
+                event_type = excluded.event_type,
+                title = excluded.title,
+                impact = excluded.impact,
+                project = excluded.project,
+                notes = excluded.notes,
+                metadata = excluded.metadata,
+                deleted_at = excluded.deleted_at
+            WHERE excluded.updated_at >= COALESCE(work_events.updated_at, work_events.created_at)
+            """,
+            (
+                row_uuid,
+                payload.get("user_id") or self._user_id,
+                payload.get("device_id") or self._device_id,
+                row_created_at,
+                row_updated_at,
+                payload.get("event_time"),
+                payload.get("event_type"),
+                payload.get("title"),
+                payload.get("impact"),
+                payload.get("project"),
+                payload.get("notes"),
+                _to_json_text(payload.get("metadata")),
+                payload.get("deleted_at"),
+            ),
+        )
+        self._connection.commit()
+
     def mark_deleted(
         self,
         *,
@@ -1255,9 +1338,15 @@ class ActivityRepository:
         notes: str | None = None,
         metadata: dict | None = None,
     ) -> int:
+        row_uuid = str(uuid4())
+        row_created_at = _format_datetime(created_at)
+        row_updated_at = row_created_at
         cursor = self._connection.execute(
             """
             INSERT INTO work_events (
+                uuid,
+                user_id,
+                device_id,
                 created_at,
                 event_time,
                 event_type,
@@ -1265,12 +1354,17 @@ class ActivityRepository:
                 impact,
                 project,
                 notes,
-                metadata
+                metadata,
+                updated_at,
+                deleted_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                _format_datetime(created_at),
+                row_uuid,
+                self._user_id,
+                self._device_id,
+                row_created_at,
                 _format_datetime(event_time) if event_time else None,
                 event_type,
                 title,
@@ -1278,6 +1372,8 @@ class ActivityRepository:
                 project,
                 notes,
                 json.dumps(metadata) if metadata is not None else None,
+                row_updated_at,
+                None,
             ),
         )
         self._connection.commit()
@@ -1288,6 +1384,7 @@ class ActivityRepository:
             """
             SELECT *
             FROM work_events
+            WHERE deleted_at IS NULL
             ORDER BY COALESCE(event_time, created_at) DESC
             LIMIT ?
             """,
@@ -1554,6 +1651,8 @@ def _resolve_entity_table(entity: str) -> str:
         return "journal_entries"
     if normalized in {"reflections", "reflection", "daily_reflections"}:
         return "daily_reflections"
+    if normalized in {"work_events", "work-event", "work_events"}:
+        return "work_events"
     raise ValueError(f"Unsupported sync entity: {entity}")
 
 

@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
-from uuid import uuid4
+from uuid import NAMESPACE_DNS, uuid4, uuid5
 
 import yaml
 from fastapi import FastAPI, Header, HTTPException, Query, Response
@@ -149,6 +149,9 @@ def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS work_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT,
+            user_id TEXT,
+            device_id TEXT,
             created_at TEXT NOT NULL,
             event_time TEXT,
             event_type TEXT NOT NULL,
@@ -156,8 +159,13 @@ def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
             impact TEXT,
             project TEXT,
             notes TEXT,
-            metadata TEXT
+            metadata TEXT,
+            updated_at TEXT,
+            deleted_at TEXT
         );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_work_events_uuid
+            ON work_events (uuid);
 
         CREATE INDEX IF NOT EXISTS idx_work_events_event_time
             ON work_events (event_time);
@@ -169,7 +177,56 @@ def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
             ON work_events (impact);
         """
     )
+    _backfill_work_events_metadata(conn)
     conn.commit()
+
+
+def _default_user_id() -> str:
+    return str(uuid5(NAMESPACE_DNS, "workgraph.local.user"))
+
+
+def _default_device_id() -> str:
+    return str(uuid5(NAMESPACE_DNS, f"workgraph.local.device.{os.uname().nodename}"))
+
+
+def _work_event_sync_identity(conn: sqlite3.Connection) -> tuple[str, str]:
+    if _sqlite_table_exists(conn, "sync_state"):
+        row = conn.execute(
+            "SELECT user_id, device_id FROM sync_state WHERE id = 1"
+        ).fetchone()
+        if row is not None and row["user_id"] and row["device_id"]:
+            return str(row["user_id"]), str(row["device_id"])
+    return _default_user_id(), _default_device_id()
+
+
+def _backfill_work_events_metadata(conn: sqlite3.Connection) -> None:
+    if not _sqlite_table_exists(conn, "work_events"):
+        return
+
+    user_id, device_id = _work_event_sync_identity(conn)
+    rows = conn.execute(
+        """
+        SELECT id, created_at, event_time, updated_at, uuid, user_id, device_id
+        FROM work_events
+        ORDER BY id ASC
+        """
+    ).fetchall()
+    for row in rows:
+        row_uuid = str(
+            row["uuid"] or uuid5(NAMESPACE_DNS, f"workgraph.work-event.{row['id']}")
+        )
+        row_updated_at = str(row["updated_at"] or row["created_at"] or _now_iso())
+        conn.execute(
+            """
+            UPDATE work_events
+            SET uuid = ?,
+                user_id = COALESCE(user_id, ?),
+                device_id = COALESCE(device_id, ?),
+                updated_at = COALESCE(updated_at, ?)
+            WHERE id = ?
+            """,
+            (row_uuid, user_id, device_id, row_updated_at, row["id"]),
+        )
 
 
 def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
@@ -265,6 +322,17 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             payload_json TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS sync_work_events (
+            uuid TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
+            deleted_at TEXT,
+            payload_json TEXT NOT NULL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_updated
             ON sync_sessions (user_id, updated_at, uuid);
 
@@ -273,6 +341,9 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_updated
             ON sync_daily_reflections (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_work_events_user_updated
+            ON sync_work_events (user_id, updated_at, uuid);
 
         CREATE TABLE IF NOT EXISTS sync_request_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -346,6 +417,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
         "ALTER TABLE sync_sessions ADD COLUMN ingest_seq INTEGER",
         "ALTER TABLE sync_journal_entries ADD COLUMN ingest_seq INTEGER",
         "ALTER TABLE sync_daily_reflections ADD COLUMN ingest_seq INTEGER",
+        "ALTER TABLE sync_work_events ADD COLUMN ingest_seq INTEGER",
     ]:
         try:
             conn.execute(stmt)
@@ -536,6 +608,48 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
             """
         )
 
+    if _table_has_uuid_primary_key(conn, "sync_work_events"):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS sync_work_events_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                ingest_seq INTEGER,
+                deleted_at TEXT,
+                payload_json TEXT NOT NULL,
+                UNIQUE(user_id, uuid)
+            );
+
+            INSERT INTO sync_work_events_v2 (
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                ingest_seq,
+                deleted_at,
+                payload_json
+            )
+            SELECT
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                ingest_seq,
+                deleted_at,
+                payload_json
+            FROM sync_work_events;
+
+            DROP TABLE sync_work_events;
+            ALTER TABLE sync_work_events_v2 RENAME TO sync_work_events;
+            """
+        )
+
 
 def _ensure_sync_unique_indexes(conn: sqlite3.Connection) -> None:
     conn.executescript(
@@ -548,6 +662,9 @@ def _ensure_sync_unique_indexes(conn: sqlite3.Connection) -> None:
 
         CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_reflections_user_uuid
             ON sync_daily_reflections (user_id, uuid);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_work_events_user_uuid
+            ON sync_work_events (user_id, uuid);
         """
     )
 
@@ -585,6 +702,9 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_ingest
             ON sync_daily_reflections (user_id, ingest_seq, uuid);
 
+        CREATE INDEX IF NOT EXISTS idx_sync_work_events_user_ingest
+            ON sync_work_events (user_id, ingest_seq, uuid);
+
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_endpoint_created
             ON sync_request_logs (endpoint, created_at);
 
@@ -619,6 +739,7 @@ def _backfill_sync_ingest_sequences(conn: sqlite3.Connection) -> None:
         "sessions": "sync_sessions",
         "journal_entries": "sync_journal_entries",
         "daily_reflections": "sync_daily_reflections",
+        "work_events": "sync_work_events",
     }
     rows = conn.execute(
         """
@@ -634,6 +755,10 @@ def _backfill_sync_ingest_sequences(conn: sqlite3.Connection) -> None:
             UNION ALL
             SELECT 'daily_reflections' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
             FROM sync_daily_reflections
+            WHERE COALESCE(ingest_seq, 0) <= 0
+            UNION ALL
+            SELECT 'work_events' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
+            FROM sync_work_events
             WHERE COALESCE(ingest_seq, 0) <= 0
         )
         ORDER BY sort_ts ASC, entity ASC, row_id ASC
@@ -1360,6 +1485,7 @@ def _upsert_sync_payload_row(
     deleted_at = payload.get("deleted_at")
     date_value = payload.get("date") if table_name == "sync_daily_reflections" else None
     is_session_table = table_name == "sync_sessions"
+    is_work_event_table = table_name == "sync_work_events"
     extracted_fields: dict[str, object | None] = (
         _extract_sync_session_fields(payload) if is_session_table else {}
     )
@@ -1404,6 +1530,32 @@ def _upsert_sync_payload_row(
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
                     date_value,
+                    user_id,
+                    row_uuid,
+                ),
+            )
+        elif is_work_event_table:
+            ingest_seq = _next_sync_ingest_seq(conn)
+            cursor.execute(
+                f"""
+                UPDATE {table_name}
+                SET user_id = ?,
+                    device_id = ?,
+                    created_at = ?,
+                    updated_at = ?,
+                    ingest_seq = ?,
+                    deleted_at = ?,
+                    payload_json = ?
+                WHERE user_id = ? AND uuid = ?
+                """,
+                (
+                    user_id,
+                    device_id,
+                    created_at,
+                    updated_at,
+                    ingest_seq,
+                    deleted_at,
+                    json.dumps(payload, separators=(",", ":")),
                     user_id,
                     row_uuid,
                 ),
@@ -1510,6 +1662,33 @@ def _upsert_sync_payload_row(
                 user_id,
                 device_id,
                 date_value,
+                created_at,
+                updated_at,
+                ingest_seq,
+                deleted_at,
+                json.dumps(payload, separators=(",", ":")),
+            ),
+        )
+    elif is_work_event_table:
+        ingest_seq = _next_sync_ingest_seq(conn)
+        cursor.execute(
+            f"""
+            INSERT INTO {table_name} (
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                ingest_seq,
+                deleted_at,
+                    payload_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row_uuid,
+                user_id,
+                device_id,
                 created_at,
                 updated_at,
                 ingest_seq,
@@ -1638,6 +1817,7 @@ def _list_sync_tombstones(
         ("sync_sessions", "sessions"),
         ("sync_journal_entries", "journal_entries"),
         ("sync_daily_reflections", "daily_reflections"),
+        ("sync_work_events", "work_events"),
     ]
     tombstones: list[dict] = []
     for table_name, entity_name in mappings:
@@ -1706,6 +1886,9 @@ def _list_sync_union_rows(
             UNION ALL
             SELECT 'daily_reflections' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
             FROM sync_daily_reflections
+            UNION ALL
+            SELECT 'work_events' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
+            FROM sync_work_events
         )
         WHERE user_id = ?
     """
@@ -1745,6 +1928,8 @@ def _count_sync_union_rows_after_cursor(
             SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_journal_entries
             UNION ALL
             SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_daily_reflections
+            UNION ALL
+            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_work_events
         )
         WHERE user_id = ?
     """
@@ -1946,6 +2131,7 @@ def get_sync_health(db_path: Path) -> dict:
     pending_sessions_total = 0
     pending_journal_entries_total = 0
     pending_reflections_total = 0
+    pending_work_events_total = 0
     for row in device_status_rows:
         device_last_sync = row["last_sync_at"]
         last_pull_cursor = row["last_pull_cursor"]
@@ -1953,6 +2139,7 @@ def get_sync_health(db_path: Path) -> dict:
         pending_sessions = 0
         pending_journal_entries = 0
         pending_reflections = 0
+        pending_work_events = 0
         pending_pull_rows = 0
         if row_user_id:
             pending_sessions = _count_sync_table_rows_after_cursor(
@@ -1973,14 +2160,24 @@ def get_sync_health(db_path: Path) -> dict:
                 user_id=row_user_id,
                 cursor_value=last_pull_cursor,
             )
+            pending_work_events = _count_sync_table_rows_after_cursor(
+                conn,
+                table_name="sync_work_events",
+                user_id=row_user_id,
+                cursor_value=last_pull_cursor,
+            )
             pending_pull_rows = (
-                pending_sessions + pending_journal_entries + pending_reflections
+                pending_sessions
+                + pending_journal_entries
+                + pending_reflections
+                + pending_work_events
             )
 
         pending_pull_rows_total += pending_pull_rows
         pending_sessions_total += pending_sessions
         pending_journal_entries_total += pending_journal_entries
         pending_reflections_total += pending_reflections
+        pending_work_events_total += pending_work_events
 
         is_synced = bool(device_last_sync)
         if is_synced:
@@ -2006,6 +2203,7 @@ def get_sync_health(db_path: Path) -> dict:
                 "pending_sessions": pending_sessions,
                 "pending_journal_entries": pending_journal_entries,
                 "pending_reflections": pending_reflections,
+                "pending_work_events": pending_work_events,
             }
         )
 
@@ -2042,6 +2240,7 @@ def get_sync_health(db_path: Path) -> dict:
         "pending_sessions": pending_sessions_total,
         "pending_journal_entries": pending_journal_entries_total,
         "pending_reflections": pending_reflections_total,
+        "pending_work_events": pending_work_events_total,
         "pending_upload_failures": pending_upload_failures,
         "sync_failures": open_errors,
         "last_error_at": error_count_row["last_error_at"]
@@ -4527,12 +4726,16 @@ async def create_work_event(payload: WorkEventCreate):
     conn.row_factory = sqlite3.Row
     _ensure_aux_tables(conn)
     cursor = conn.cursor()
+    user_id, device_id = _work_event_sync_identity(conn)
 
     event_time_iso = _to_utc_iso(payload.event_time)
     now_iso = datetime.now(UTC).isoformat(timespec="seconds")
     cursor.execute(
         """
         INSERT INTO work_events (
+            uuid,
+            user_id,
+            device_id,
             created_at,
             event_time,
             event_type,
@@ -4540,11 +4743,16 @@ async def create_work_event(payload: WorkEventCreate):
             impact,
             project,
             notes,
-            metadata
+            metadata,
+            updated_at,
+            deleted_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
+            str(uuid4()),
+            user_id,
+            device_id,
             now_iso,
             event_time_iso,
             payload.event_type,
@@ -4553,6 +4761,8 @@ async def create_work_event(payload: WorkEventCreate):
             payload.project,
             payload.notes,
             json.dumps(payload.metadata) if payload.metadata is not None else None,
+            now_iso,
+            None,
         ),
     )
     conn.commit()
@@ -4579,6 +4789,7 @@ async def list_work_events(
 
     query = "SELECT * FROM work_events WHERE 1=1"
     params: list[str | int] = []
+    query += " AND deleted_at IS NULL"
 
     if from_ts:
         query += " AND COALESCE(event_time, created_at) >= ?"
@@ -4614,7 +4825,7 @@ async def get_work_event(event_id: int):
     _ensure_aux_tables(conn)
 
     row = conn.execute(
-        "SELECT * FROM work_events WHERE id = ?",
+        "SELECT * FROM work_events WHERE id = ? AND deleted_at IS NULL",
         (event_id,),
     ).fetchone()
     conn.close()
@@ -4640,6 +4851,7 @@ async def update_work_event(event_id: int, payload: WorkEventCreate):
         raise HTTPException(status_code=404, detail="Work event not found")
 
     event_time_iso = _to_utc_iso(payload.event_time)
+    now_iso = datetime.now(UTC).isoformat(timespec="seconds")
     cursor.execute(
         """
         UPDATE work_events
@@ -4649,7 +4861,8 @@ async def update_work_event(event_id: int, payload: WorkEventCreate):
             impact = ?,
             project = ?,
             notes = ?,
-            metadata = ?
+            metadata = ?,
+            updated_at = ?
         WHERE id = ?
         """,
         (
@@ -4660,12 +4873,45 @@ async def update_work_event(event_id: int, payload: WorkEventCreate):
             payload.project,
             payload.notes,
             json.dumps(payload.metadata) if payload.metadata is not None else None,
+            now_iso,
             event_id,
         ),
     )
     conn.commit()
     conn.close()
     return {"id": event_id, "updated": True}
+
+
+@app.delete("/api/work-events/{event_id}")
+async def delete_work_event(event_id: int):
+    _ensure_journal_features_enabled()
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    row = cursor.execute(
+        "SELECT id FROM work_events WHERE id = ? AND deleted_at IS NULL",
+        (event_id,),
+    ).fetchone()
+    if row is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Work event not found")
+
+    now_iso = datetime.now(UTC).isoformat(timespec="seconds")
+    cursor.execute(
+        """
+        UPDATE work_events
+        SET deleted_at = ?,
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (now_iso, now_iso, event_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": event_id, "deleted": True}
 
 
 @app.get("/api/work-events/{event_id}/correlated-sessions")

@@ -130,6 +130,7 @@ class SyncWorker:
         sent_sessions = 0
         sent_journals = 0
         sent_reflections = 0
+        sent_work_events = 0
 
         while True:
             sessions = [
@@ -150,8 +151,14 @@ class SyncWorker:
                     cursor=cursor, limit=self.settings.batch_size
                 )
             ]
+            work_events = [
+                dict(row)
+                for row in self.repository.list_work_event_changes_since(
+                    cursor=cursor, limit=self.settings.batch_size
+                )
+            ]
 
-            if not sessions and not journals and not reflections:
+            if not sessions and not journals and not reflections and not work_events:
                 break
 
             response = self.client.push(
@@ -164,6 +171,7 @@ class SyncWorker:
                         "sessions": sessions,
                         "journal_entries": journals,
                         "daily_reflections": reflections,
+                        "work_events": work_events,
                     },
                 }
             )
@@ -171,11 +179,12 @@ class SyncWorker:
             sent_sessions += len(sessions)
             sent_journals += len(journals)
             sent_reflections += len(reflections)
+            sent_work_events += len(work_events)
             batches += 1
 
             cursor = (
                 response.get("next_push_cursor")
-                or _max_row_cursor(sessions + journals + reflections)
+                or _max_row_cursor(sessions + journals + reflections + work_events)
                 or cursor
             )
 
@@ -184,6 +193,7 @@ class SyncWorker:
                 and len(sessions) < self.settings.batch_size
                 and len(journals) < self.settings.batch_size
                 and len(reflections) < self.settings.batch_size
+                and len(work_events) < self.settings.batch_size
             ):
                 break
 
@@ -192,6 +202,7 @@ class SyncWorker:
             "sessions": sent_sessions,
             "journal_entries": sent_journals,
             "daily_reflections": sent_reflections,
+            "work_events": sent_work_events,
             "last_cursor": cursor,
         }
 
@@ -207,6 +218,7 @@ class SyncWorker:
         applied_sessions = 0
         applied_journals = 0
         applied_reflections = 0
+        applied_work_events = 0
         applied_tombstones = 0
 
         while pages < self.settings.max_pull_pages:
@@ -224,6 +236,7 @@ class SyncWorker:
             sessions = changes.get("sessions") or []
             journals = changes.get("journal_entries") or []
             reflections = changes.get("daily_reflections") or []
+            work_events = changes.get("work_events") or []
             tombstones = changes.get("tombstones") or []
 
             for row in sessions:
@@ -232,6 +245,8 @@ class SyncWorker:
                 self.repository.upsert_journal_by_uuid(row)
             for row in reflections:
                 self.repository.upsert_reflection_by_uuid(row)
+            for row in work_events:
+                self.repository.upsert_work_event_by_uuid(row)
             for tombstone in tombstones:
                 deleted_at = tombstone.get("deleted_at")
                 if not deleted_at:
@@ -246,11 +261,12 @@ class SyncWorker:
             applied_sessions += len(sessions)
             applied_journals += len(journals)
             applied_reflections += len(reflections)
+            applied_work_events += len(work_events)
             applied_tombstones += len(tombstones)
 
             next_cursor = (
                 response.get("next_cursor")
-                or _max_row_cursor(sessions + journals + reflections)
+                or _max_row_cursor(sessions + journals + reflections + work_events)
                 or cursor
             )
             cursor = next_cursor
@@ -262,6 +278,7 @@ class SyncWorker:
             "sessions": applied_sessions,
             "journal_entries": applied_journals,
             "daily_reflections": applied_reflections,
+            "work_events": applied_work_events,
             "tombstones": applied_tombstones,
             "last_cursor": cursor,
         }
