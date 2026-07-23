@@ -1384,9 +1384,11 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
         "push_sessions": 0,
         "push_journal_entries": 0,
         "push_daily_reflections": 0,
+        "push_work_events": 0,
         "pull_sessions": 0,
         "pull_journal_entries": 0,
         "pull_daily_reflections": 0,
+        "pull_work_events": 0,
         "pull_tombstones": 0,
     }
 
@@ -1408,34 +1410,40 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
             push_sessions = int(push.get("sessions", 0) or 0)
             push_journals = int(push.get("journal_entries", 0) or 0)
             push_reflections = int(push.get("daily_reflections", 0) or 0)
+            push_work_events = int(push.get("work_events", 0) or 0)
 
             pull_sessions = int(pull.get("sessions", 0) or 0)
             pull_journals = int(pull.get("journal_entries", 0) or 0)
             pull_reflections = int(pull.get("daily_reflections", 0) or 0)
+            pull_work_events = int(pull.get("work_events", 0) or 0)
             pull_tombstones = int(pull.get("tombstones", 0) or 0)
 
             totals["push_sessions"] += push_sessions
             totals["push_journal_entries"] += push_journals
             totals["push_daily_reflections"] += push_reflections
+            totals["push_work_events"] += push_work_events
             totals["pull_sessions"] += pull_sessions
             totals["pull_journal_entries"] += pull_journals
             totals["pull_daily_reflections"] += pull_reflections
+            totals["pull_work_events"] += pull_work_events
             totals["pull_tombstones"] += pull_tombstones
 
             cycle_progress = (
                 push_sessions
                 + push_journals
                 + push_reflections
+                + push_work_events
                 + pull_sessions
                 + pull_journals
                 + pull_reflections
+                + pull_work_events
                 + pull_tombstones
             )
 
             print(
                 f"cycle {cycle}: "
-                f"push(s={push_sessions},j={push_journals},r={push_reflections}) "
-                f"pull(s={pull_sessions},j={pull_journals},r={pull_reflections},t={pull_tombstones})"
+                f"push(s={push_sessions},j={push_journals},r={push_reflections},w={push_work_events}) "
+                f"pull(s={pull_sessions},j={pull_journals},r={pull_reflections},w={pull_work_events},t={pull_tombstones})"
             )
 
             if cycle_progress == 0:
@@ -1449,8 +1457,8 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
     print(f"Cycles run: {cycles_run}")
     print(
         "Totals: "
-        f"push(s={totals['push_sessions']},j={totals['push_journal_entries']},r={totals['push_daily_reflections']}), "
-        f"pull(s={totals['pull_sessions']},j={totals['pull_journal_entries']},r={totals['pull_daily_reflections']},t={totals['pull_tombstones']})"
+        f"push(s={totals['push_sessions']},j={totals['push_journal_entries']},r={totals['push_daily_reflections']},w={totals['push_work_events']}), "
+        f"pull(s={totals['pull_sessions']},j={totals['pull_journal_entries']},r={totals['pull_daily_reflections']},w={totals['pull_work_events']},t={totals['pull_tombstones']})"
     )
 
 
@@ -1612,7 +1620,13 @@ def run_sync_verify_command(args: argparse.Namespace) -> None:
         return
 
     mismatches: list[str] = []
-    for field in ["sessions", "journal_entries", "daily_reflections", "active_seconds"]:
+    for field in [
+        "sessions",
+        "journal_entries",
+        "daily_reflections",
+        "work_events",
+        "active_seconds",
+    ]:
         local_value = int(local_totals[field])
         server_value = int(server_totals[field])
         if local_value != server_value:
@@ -1639,6 +1653,7 @@ def run_sync_verify_command(args: argparse.Namespace) -> None:
         f"sessions={local_totals['sessions']}, "
         f"journal_entries={local_totals['journal_entries']}, "
         f"daily_reflections={local_totals['daily_reflections']}, "
+        f"work_events={local_totals['work_events']}, "
         f"active_seconds={local_totals['active_seconds']}"
     )
 
@@ -1665,11 +1680,13 @@ def _local_sync_totals(conn: sqlite3.Connection) -> dict[str, int]:
     sessions = _count_active_rows(conn, "activity_sessions")
     journals = _count_active_rows(conn, "journal_entries")
     reflections = _count_active_rows(conn, "daily_reflections")
+    work_events = _count_active_rows(conn, "work_events")
     active_seconds = _sum_active_seconds(conn)
     return {
         "sessions": sessions,
         "journal_entries": journals,
         "daily_reflections": reflections,
+        "work_events": work_events,
         "active_seconds": active_seconds,
     }
 
@@ -1719,6 +1736,7 @@ def _pull_server_totals(
         "sessions": 0,
         "journal_entries": 0,
         "daily_reflections": 0,
+        "work_events": 0,
         "active_seconds": 0,
     }
     truncated = False
@@ -1737,10 +1755,12 @@ def _pull_server_totals(
         sessions = changes.get("sessions") or []
         journals = changes.get("journal_entries") or []
         reflections = changes.get("daily_reflections") or []
+        work_events = changes.get("work_events") or []
 
         totals["sessions"] += len(sessions)
         totals["journal_entries"] += len(journals)
         totals["daily_reflections"] += len(reflections)
+        totals["work_events"] += len(work_events)
         totals["active_seconds"] += sum(
             int(item.get("duration_sec") or 0) for item in sessions
         )
