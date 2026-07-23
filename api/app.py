@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import yaml
 from fastapi import FastAPI, Header, HTTPException, Query, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field, field_validator
@@ -93,6 +93,12 @@ jinja_env.filters["human_datetime"] = _human_datetime
 # Mount static files
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> FileResponse:
+    """Serve the dashboard favicon from the static assets directory."""
+    return FileResponse(static_dir / "favicon.svg", media_type="image/svg+xml")
 
 
 def get_db_path() -> Path:
@@ -213,6 +219,11 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             updated_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS sync_ingest_sequence (
+            seq INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS sync_sessions (
             uuid TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -226,6 +237,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             repo_name TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
             deleted_at TEXT,
             payload_json TEXT NOT NULL
         );
@@ -236,6 +248,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             device_id TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
             deleted_at TEXT,
             payload_json TEXT NOT NULL
         );
@@ -247,6 +260,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             date TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
             deleted_at TEXT,
             payload_json TEXT NOT NULL
         );
@@ -329,6 +343,9 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
         "ALTER TABLE sync_sessions ADD COLUMN application_name TEXT",
         "ALTER TABLE sync_sessions ADD COLUMN tag TEXT",
         "ALTER TABLE sync_sessions ADD COLUMN repo_name TEXT",
+        "ALTER TABLE sync_sessions ADD COLUMN ingest_seq INTEGER",
+        "ALTER TABLE sync_journal_entries ADD COLUMN ingest_seq INTEGER",
+        "ALTER TABLE sync_daily_reflections ADD COLUMN ingest_seq INTEGER",
     ]:
         try:
             conn.execute(stmt)
@@ -336,6 +353,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             pass
 
     _migrate_sync_tables_to_user_scoped_keys(conn)
+    _backfill_sync_ingest_sequences(conn)
 
     _backfill_sync_session_columns(conn)
     _ensure_sync_runtime_indexes(conn)
@@ -385,6 +403,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 repo_name TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                ingest_seq INTEGER,
                 deleted_at TEXT,
                 payload_json TEXT NOT NULL,
                 UNIQUE(user_id, uuid)
@@ -403,6 +422,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 repo_name,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
@@ -419,6 +439,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 repo_name,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             FROM sync_sessions;
@@ -438,6 +459,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 device_id TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                ingest_seq INTEGER,
                 deleted_at TEXT,
                 payload_json TEXT NOT NULL,
                 UNIQUE(user_id, uuid)
@@ -449,6 +471,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 device_id,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
@@ -458,6 +481,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 device_id,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             FROM sync_journal_entries;
@@ -478,6 +502,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 date TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                ingest_seq INTEGER,
                 deleted_at TEXT,
                 payload_json TEXT NOT NULL,
                 UNIQUE(user_id, uuid)
@@ -490,6 +515,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 date,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
@@ -500,6 +526,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 date,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             FROM sync_daily_reflections;
@@ -531,6 +558,9 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_updated
             ON sync_sessions (user_id, updated_at, uuid);
 
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_ingest
+            ON sync_sessions (user_id, ingest_seq, uuid);
+
         CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_utc_start
             ON sync_sessions (user_id, utc_start);
 
@@ -546,8 +576,14 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_sync_journal_user_updated
             ON sync_journal_entries (user_id, updated_at, uuid);
 
+        CREATE INDEX IF NOT EXISTS idx_sync_journal_user_ingest
+            ON sync_journal_entries (user_id, ingest_seq, uuid);
+
         CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_updated
             ON sync_daily_reflections (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_ingest
+            ON sync_daily_reflections (user_id, ingest_seq, uuid);
 
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_endpoint_created
             ON sync_request_logs (endpoint, created_at);
@@ -568,6 +604,48 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
             ON sync_metrics_daily (user_id, day_utc);
         """
     )
+
+
+def _next_sync_ingest_seq(conn: sqlite3.Connection) -> int:
+    cursor = conn.execute(
+        "INSERT INTO sync_ingest_sequence (created_at) VALUES (?)",
+        (_now_iso(),),
+    )
+    return int(cursor.lastrowid)
+
+
+def _backfill_sync_ingest_sequences(conn: sqlite3.Connection) -> None:
+    mappings = {
+        "sessions": "sync_sessions",
+        "journal_entries": "sync_journal_entries",
+        "daily_reflections": "sync_daily_reflections",
+    }
+    rows = conn.execute(
+        """
+        SELECT entity, row_id
+        FROM (
+            SELECT 'sessions' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
+            FROM sync_sessions
+            WHERE COALESCE(ingest_seq, 0) <= 0
+            UNION ALL
+            SELECT 'journal_entries' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
+            FROM sync_journal_entries
+            WHERE COALESCE(ingest_seq, 0) <= 0
+            UNION ALL
+            SELECT 'daily_reflections' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
+            FROM sync_daily_reflections
+            WHERE COALESCE(ingest_seq, 0) <= 0
+        )
+        ORDER BY sort_ts ASC, entity ASC, row_id ASC
+        """
+    ).fetchall()
+
+    for row in rows:
+        table_name = mappings[str(row["entity"])]
+        conn.execute(
+            f"UPDATE {table_name} SET ingest_seq = ? WHERE id = ?",
+            (_next_sync_ingest_seq(conn), int(row["row_id"])),
+        )
 
 
 def _rebuild_sync_rollups(
@@ -1185,6 +1263,26 @@ def _parse_cursor(cursor: str | None) -> tuple[str | None, str | None]:
     return updated_at or None, row_uuid or ""
 
 
+def _parse_ingest_seq_cursor(cursor: str | None) -> int | None:
+    if not cursor:
+        return None
+    raw = str(cursor).strip()
+    if not raw:
+        return None
+    if raw.startswith("seq:"):
+        raw = raw[4:]
+    if not raw.isdigit():
+        return None
+    value = int(raw)
+    return value if value >= 0 else None
+
+
+def _build_ingest_seq_cursor(ingest_seq: int | None) -> str | None:
+    if ingest_seq is None or ingest_seq < 0:
+        return None
+    return f"seq:{ingest_seq}"
+
+
 def _build_cursor(updated_at: str | None, row_uuid: str | None) -> str | None:
     if not updated_at or not row_uuid:
         return None
@@ -1283,6 +1381,7 @@ def _upsert_sync_payload_row(
             return str(existing["updated_at"]), str(existing["uuid"])
 
         if table_name == "sync_daily_reflections":
+            ingest_seq = _next_sync_ingest_seq(conn)
             cursor.execute(
                 f"""
                 UPDATE {table_name}
@@ -1290,6 +1389,7 @@ def _upsert_sync_payload_row(
                     device_id = ?,
                     created_at = ?,
                     updated_at = ?,
+                    ingest_seq = ?,
                     deleted_at = ?,
                     payload_json = ?,
                     date = COALESCE(?, date)
@@ -1300,6 +1400,7 @@ def _upsert_sync_payload_row(
                     device_id,
                     created_at,
                     updated_at,
+                    ingest_seq,
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
                     date_value,
@@ -1308,6 +1409,7 @@ def _upsert_sync_payload_row(
                 ),
             )
         elif is_session_table:
+            ingest_seq = _next_sync_ingest_seq(conn)
             cursor.execute(
                 f"""
                 UPDATE {table_name}
@@ -1315,6 +1417,7 @@ def _upsert_sync_payload_row(
                     device_id = ?,
                     created_at = ?,
                     updated_at = ?,
+                    ingest_seq = ?,
                     deleted_at = ?,
                     payload_json = ?,
                     utc_start = ?,
@@ -1331,6 +1434,7 @@ def _upsert_sync_payload_row(
                     device_id,
                     created_at,
                     updated_at,
+                    ingest_seq,
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
                     extracted_fields.get("utc_start"),
@@ -1345,6 +1449,7 @@ def _upsert_sync_payload_row(
                 ),
             )
         else:
+            ingest_seq = _next_sync_ingest_seq(conn)
             cursor.execute(
                 f"""
                 UPDATE {table_name}
@@ -1352,6 +1457,7 @@ def _upsert_sync_payload_row(
                     device_id = ?,
                     created_at = ?,
                     updated_at = ?,
+                    ingest_seq = ?,
                     deleted_at = ?,
                     payload_json = ?
                 WHERE user_id = ? AND uuid = ?
@@ -1361,6 +1467,7 @@ def _upsert_sync_payload_row(
                     device_id,
                     created_at,
                     updated_at,
+                    ingest_seq,
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
                     user_id,
@@ -1382,6 +1489,7 @@ def _upsert_sync_payload_row(
         return updated_at, row_uuid
 
     if table_name == "sync_daily_reflections":
+        ingest_seq = _next_sync_ingest_seq(conn)
         cursor.execute(
             f"""
             INSERT INTO {table_name} (
@@ -1391,10 +1499,11 @@ def _upsert_sync_payload_row(
                 date,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_uuid,
@@ -1403,11 +1512,13 @@ def _upsert_sync_payload_row(
                 date_value,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 json.dumps(payload, separators=(",", ":")),
             ),
         )
     elif is_session_table:
+        ingest_seq = _next_sync_ingest_seq(conn)
         cursor.execute(
             f"""
             INSERT INTO {table_name} (
@@ -1423,10 +1534,11 @@ def _upsert_sync_payload_row(
                 repo_name,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_uuid,
@@ -1441,11 +1553,13 @@ def _upsert_sync_payload_row(
                 extracted_fields.get("repo_name"),
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 json.dumps(payload, separators=(",", ":")),
             ),
         )
     else:
+        ingest_seq = _next_sync_ingest_seq(conn)
         cursor.execute(
             f"""
             INSERT INTO {table_name} (
@@ -1454,10 +1568,11 @@ def _upsert_sync_payload_row(
                 device_id,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_uuid,
@@ -1465,6 +1580,7 @@ def _upsert_sync_payload_row(
                 device_id,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 json.dumps(payload, separators=(",", ":")),
             ),
@@ -1577,23 +1693,28 @@ def _list_sync_union_rows(
     cursor_value: str | None,
     limit: int,
 ) -> list[sqlite3.Row]:
+    ingest_seq_cursor = _parse_ingest_seq_cursor(cursor_value)
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = """
-        SELECT entity, id, updated_at, deleted_at, payload_json
+        SELECT entity, id, updated_at, ingest_seq, deleted_at, payload_json
         FROM (
-            SELECT 'sessions' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
+            SELECT 'sessions' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
             FROM sync_sessions
             UNION ALL
-            SELECT 'journal_entries' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
+            SELECT 'journal_entries' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
             FROM sync_journal_entries
             UNION ALL
-            SELECT 'daily_reflections' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
+            SELECT 'daily_reflections' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
             FROM sync_daily_reflections
         )
         WHERE user_id = ?
     """
     params: list[str | int] = [user_id]
-    if updated_at_cursor is not None:
+    if ingest_seq_cursor is not None:
+        query += " AND COALESCE(ingest_seq, 0) > ?"
+        params.append(ingest_seq_cursor)
+        query += " ORDER BY COALESCE(ingest_seq, 0) ASC, id ASC LIMIT ?"
+    elif updated_at_cursor is not None:
         query += """
           AND (
                 updated_at > ?
@@ -1601,7 +1722,9 @@ def _list_sync_union_rows(
               )
         """
         params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
-    query += " ORDER BY updated_at ASC, id ASC LIMIT ?"
+        query += " ORDER BY updated_at ASC, id ASC LIMIT ?"
+    else:
+        query += " ORDER BY COALESCE(ingest_seq, 0) ASC, id ASC LIMIT ?"
     params.append(limit)
     return list(conn.execute(query, params).fetchall())
 
@@ -1612,20 +1735,24 @@ def _count_sync_union_rows_after_cursor(
     user_id: str,
     cursor_value: str | None,
 ) -> int:
+    ingest_seq_cursor = _parse_ingest_seq_cursor(cursor_value)
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = """
         SELECT COUNT(*) AS total_rows
         FROM (
-            SELECT uuid AS id, user_id, updated_at FROM sync_sessions
+            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_sessions
             UNION ALL
-            SELECT uuid AS id, user_id, updated_at FROM sync_journal_entries
+            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_journal_entries
             UNION ALL
-            SELECT uuid AS id, user_id, updated_at FROM sync_daily_reflections
+            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_daily_reflections
         )
         WHERE user_id = ?
     """
     params: list[str] = [user_id]
-    if updated_at_cursor is not None:
+    if ingest_seq_cursor is not None:
+        query += " AND COALESCE(ingest_seq, 0) > ?"
+        params.append(str(ingest_seq_cursor))
+    elif updated_at_cursor is not None:
         query += """
           AND (
                 updated_at > ?
@@ -1645,10 +1772,14 @@ def _count_sync_table_rows_after_cursor(
     user_id: str,
     cursor_value: str | None,
 ) -> int:
+    ingest_seq_cursor = _parse_ingest_seq_cursor(cursor_value)
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = f"SELECT COUNT(*) AS total_rows FROM {table_name} WHERE user_id = ?"
     params: list[str] = [user_id]
-    if updated_at_cursor is not None:
+    if ingest_seq_cursor is not None:
+        query += " AND COALESCE(ingest_seq, 0) > ?"
+        params.append(str(ingest_seq_cursor))
+    elif updated_at_cursor is not None:
         query += """
           AND (
                 updated_at > ?
@@ -5154,7 +5285,9 @@ async def sync_pull_changes(
         next_cursor = payload.cursor
         if rows:
             last_row = rows[-1]
-            next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
+            next_cursor = _build_ingest_seq_cursor(int(last_row["ingest_seq"] or 0))
+            if next_cursor is None:
+                next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
 
         total_after_cursor = _count_sync_union_rows_after_cursor(
             conn,
