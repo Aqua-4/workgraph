@@ -929,6 +929,11 @@ def _recompute_sync_daily_rollup(
           AND deleted_at IS NULL
           AND utc_start IS NOT NULL
           AND substr(utc_start, 1, 10) = ?
+          AND LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) NOT IN (
+              'lockapp', 'logonui', 'winlogon', 'loginwindow', 'screensaverengine',
+              'gnome-screensaver', 'xscreensaver', 'i3lock', 'slock', 'swaylock',
+              'xfce4-screensaver', 'gdm', 'gdm3', 'lightdm'
+          )
         """,
         (user_id, device_id, day_utc),
     ).fetchone()
@@ -960,6 +965,11 @@ def _recompute_sync_daily_rollup(
               AND deleted_at IS NULL
               AND utc_start IS NOT NULL
               AND substr(utc_start, 1, 10) = ?
+              AND LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) NOT IN (
+                  'lockapp', 'logonui', 'winlogon', 'loginwindow', 'screensaverengine',
+                  'gnome-screensaver', 'xscreensaver', 'i3lock', 'slock', 'swaylock',
+                  'xfce4-screensaver', 'gdm', 'gdm3', 'lightdm'
+              )
         )
         SELECT COUNT(*) AS switch_count
         FROM ordered

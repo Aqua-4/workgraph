@@ -14,6 +14,14 @@ class ActivityTagger:
 
     def __init__(self, config_path: Path | str | None = None) -> None:
         self.rules = self._load_rules(config_path)
+        self.system_idle_apps: frozenset[str] = self._load_system_idle_apps()
+
+    def is_system_idle(self, app_name: str | None, process_name: str | None = None) -> bool:
+        """Return True if app/process is a known lock-screen or login UI."""
+        for name in (app_name, process_name):
+            if name and name.lower() in self.system_idle_apps:
+                return True
+        return False
 
     def tag_session(self, session: ActivitySession) -> str | None:
         """Determine tag for a session based on repo, domain, and keywords."""
@@ -68,6 +76,24 @@ class ActivityTagger:
 
         default_rules.update(custom_rules)
         return default_rules
+
+    def _load_system_idle_apps(self) -> frozenset[str]:
+        """Load system_idle_apps from tags.yaml (and my-tags.yaml override)."""
+        config_dir = Path(__file__).parent.parent / "config"
+        apps: set[str] = set()
+        for path in [config_dir / "tags.yaml", config_dir / "my-tags.yaml"]:
+            if path.exists():
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        data = yaml.safe_load(f)
+                        if data:
+                            apps.update(
+                                a.lower()
+                                for a in (data.get("system_idle_apps") or [])
+                            )
+                except Exception:
+                    pass
+        return frozenset(apps)
 
     def _load_yaml_tags(self, path: Path) -> dict[str, dict[str, Any]]:
         config_path = Path(path)

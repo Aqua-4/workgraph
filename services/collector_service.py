@@ -89,14 +89,22 @@ class CollectorService:
             window_title=active_window.window_title,
         )
 
+        is_idle = idle_state.is_idle
+        idle_seconds = idle_state.idle_seconds
+        if self.activity_tagger.is_system_idle(
+            active_window.app_name, active_window.process_name
+        ):
+            is_idle = True
+            idle_seconds = max(idle_seconds, 1)
+
         sample = ActivitySample(
             observed_at=utc_now(),
             app_name=active_window.app_name,
             process_name=active_window.process_name,
             window_title=active_window.window_title,
             browser_domain=self.browser_tracker.get_domain(active_window),
-            is_idle=idle_state.is_idle,
-            idle_seconds=idle_state.idle_seconds,
+            is_idle=is_idle,
+            idle_seconds=idle_seconds,
             platform=active_window.platform,
             git_repo=git_activity.repo_name,
             git_branch=git_activity.branch,

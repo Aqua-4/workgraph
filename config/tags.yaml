@@ -1,3 +1,25 @@
+# Processes that should always be treated as idle/system time regardless of the
+# idle-threshold timer. Matched case-insensitively against app_name and process_name.
+# Override or extend in config/my-tags.yaml using the same key.
+system_idle_apps:
+  # Windows lock/login
+  - lockapp
+  - logonui
+  - winlogon
+  # macOS lock/login
+  - loginwindow
+  - ScreenSaverEngine
+  # Linux lock/screensaver
+  - gnome-screensaver
+  - xscreensaver
+  - i3lock
+  - slock
+  - swaylock
+  - xfce4-screensaver
+  - gdm
+  - gdm3
+  - lightdm
+
 tags:
   # NOTE: Keep this list limited to non-sensitive historical project aliases only.
   # Do NOT add current client names, repos, or internal identifiers here.
