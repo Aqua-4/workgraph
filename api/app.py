@@ -5297,7 +5297,12 @@ async def sync_push_changes(
                 accepted_count=int(
                     sum(
                         int(accepted.get(k, 0))
-                        for k in ["sessions", "journal_entries", "daily_reflections"]
+                        for k in [
+                            "sessions",
+                            "journal_entries",
+                            "daily_reflections",
+                            "work_events",
+                        ]
                     )
                 ),
                 conflict_count=int(len(replay_response.get("conflicts", []))),
@@ -5308,6 +5313,7 @@ async def sync_push_changes(
         sessions = payload.changes.get("sessions") or []
         journal_entries = payload.changes.get("journal_entries") or []
         reflections = payload.changes.get("daily_reflections") or []
+        work_events = payload.changes.get("work_events") or []
 
         cursors: list[tuple[str, str]] = []
         for row in sessions:
@@ -5340,6 +5346,16 @@ async def sync_push_changes(
             )
             if updated_at and row_uuid:
                 cursors.append((updated_at, row_uuid))
+        for row in work_events:
+            updated_at, row_uuid = _upsert_sync_payload_row(
+                conn,
+                table_name="sync_work_events",
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                payload=row,
+            )
+            if updated_at and row_uuid:
+                cursors.append((updated_at, row_uuid))
 
         now_iso = _now_iso()
         next_push_cursor = payload.client_cursor
@@ -5352,6 +5368,7 @@ async def sync_push_changes(
                 "sessions": len(sessions),
                 "journal_entries": len(journal_entries),
                 "daily_reflections": len(reflections),
+                "work_events": len(work_events),
             },
             "conflicts": [],
             "next_push_cursor": next_push_cursor,
@@ -5418,7 +5435,13 @@ async def sync_push_changes(
             device_id=payload.device_id,
             user_id=payload.user_id,
             batch_id=payload.batch_id,
-            accepted_count=len(sessions) + len(journal_entries) + len(reflections),
+            # Keep request metrics aligned with returned accepted counters.
+            accepted_count=(
+                len(sessions)
+                + len(journal_entries)
+                + len(reflections)
+                + len(work_events)
+            ),
             conflict_count=0,
         )
 
@@ -5499,6 +5522,7 @@ async def sync_pull_changes(
         active_sessions: list[dict] = []
         active_journal_entries: list[dict] = []
         active_daily_reflections: list[dict] = []
+        active_work_events: list[dict] = []
         tombstones: list[dict] = []
 
         for row in rows:
@@ -5527,6 +5551,8 @@ async def sync_pull_changes(
                 active_journal_entries.append(item)
             elif entity == "daily_reflections":
                 active_daily_reflections.append(item)
+            elif entity == "work_events":
+                active_work_events.append(item)
 
         next_cursor = payload.cursor
         if rows:
@@ -5582,7 +5608,8 @@ async def sync_pull_changes(
             user_id=payload.user_id,
             accepted_count=len(active_sessions)
             + len(active_journal_entries)
-            + len(active_daily_reflections),
+            + len(active_daily_reflections)
+            + len(active_work_events),
             has_more=has_more,
         )
         conn.commit()
@@ -5592,6 +5619,7 @@ async def sync_pull_changes(
                 "sessions": active_sessions,
                 "journal_entries": active_journal_entries,
                 "daily_reflections": active_daily_reflections,
+                "work_events": active_work_events,
                 "tombstones": tombstones,
             },
             "next_cursor": next_cursor,
