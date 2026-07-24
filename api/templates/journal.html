@@ -12,15 +12,15 @@
     }
 
     .journal-card {
-        border: 1px solid #e6e9ef;
+        border: 1px solid var(--bs-border-color);
         border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+        box-shadow: none;
     }
 
     .tag-panel {
-        border: 1px solid #d8e1ec;
+        border: 1px solid var(--bs-border-color);
         border-radius: 10px;
-        background: #f8fbff;
+        background: var(--bs-tertiary-bg);
         padding: 12px;
     }
 
@@ -28,13 +28,14 @@
         width: min(100%, 560px);
         padding: 0;
         border-radius: 10px;
-        border: 1px solid #d7dfea;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
         overflow: hidden;
     }
 
     .tag-dropdown-header {
-        border-bottom: 1px solid #e8edf3;
-        background: #f8fbff;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: var(--bs-tertiary-bg);
         padding: 10px;
     }
 
@@ -50,7 +51,7 @@
         align-items: center;
         gap: 8px;
         font-size: 0.92em;
-        color: #26313f;
+        color: var(--bs-body-color);
         padding: 6px 4px;
     }
 
@@ -84,10 +85,10 @@
         <h3 class="mb-1">Sync Health</h3>
         <p class="muted mb-2">Server sync status for connected devices.</p>
         <div class="d-flex gap-2 flex-wrap">
-            <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
-            <span class="badge text-bg-light border">Synced: {{ sync_health.synced_devices }}</span>
-            <span class="badge text-bg-light border">Active Tokens: {{ sync_health.active_tokens }}</span>
-            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
+            <span class="badge text-bg-secondary">Devices: {{ sync_health.registered_devices }}</span>
+            <span class="badge text-bg-secondary">Synced: {{ sync_health.synced_devices }}</span>
+            <span class="badge text-bg-secondary">Active Tokens: {{ sync_health.active_tokens }}</span>
+            <span class="badge text-bg-secondary">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
         </div>
         {% if sync_health.device_statuses %}
         <div class="muted mt-2" style="font-size: 0.85em;">
@@ -179,7 +180,7 @@
                                 </div>
                             </div>
                         </div>
-                        <span class="badge text-bg-light border" id="selected-tags-count">0 selected</span>
+                        <span class="badge text-bg-secondary" id="selected-tags-count">0 selected</span>
                     </div>
                     <div id="selected-tags-preview" class="d-flex gap-1 flex-wrap"></div>
                 </div>
@@ -306,7 +307,7 @@
                     <td class="time-small">
                         {{ (e.start_time or e.created_at)|human_datetime }}
                         {% if e.end_time %}
-                        <br><span style="color: #999;">to {{ e.end_time|human_datetime }}</span>
+                        <br><span class="text-body-secondary">to {{ e.end_time|human_datetime }}</span>
                         {% endif %}
                     </td>
                     <td><strong>{{ e.title }}</strong></td>
@@ -557,15 +558,15 @@
             <h3 style="margin-bottom: 10px;">Correlation Summary</h3>
             <p class="muted" style="margin-bottom: 12px;">Range: ${data.range.start_time} to ${data.range.end_time}</p>
             <div class="stats-grid" style="margin-bottom: 12px;">
-                <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                     <div class="stat-label">Active Hours</div>
                     <div class="stat-value">${summary.total_active_hours || 0}</div>
                 </div>
-                <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                     <div class="stat-label">Context Switches</div>
                     <div class="stat-value">${summary.total_context_switches || 0}</div>
                 </div>
-                <div class="stat-box" style="box-shadow: none; border: 1px solid #eee;">
+                <div class="stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                     <div class="stat-label">Sessions</div>
                     <div class="stat-value">${summary.session_count || 0}</div>
                 </div>
@@ -619,7 +620,7 @@
                 .join("");
             const overflow = selected.length - previewTags.length;
             const more = overflow > 0
-                ? `<span class="badge text-bg-light border">+${overflow} more</span>`
+                ? `<span class="badge text-bg-secondary">+${overflow} more</span>`
                 : "";
 
             selectedTagsPreview.innerHTML = chips + more;

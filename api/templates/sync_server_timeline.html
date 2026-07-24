@@ -14,13 +14,13 @@
     }
 
     .chart-caption {
-        color: #6b7280;
+        color: var(--bs-secondary-color);
         font-size: 0.85rem;
     }
 
     .timeline-hint {
         font-size: 0.85rem;
-        color: #6b7280;
+        color: var(--bs-secondary-color);
     }
 
     .pie-wrap {
@@ -34,7 +34,7 @@
         width: 160px;
         height: 160px;
         border-radius: 50%;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--bs-border-color);
         flex: 0 0 160px;
     }
 
@@ -54,7 +54,7 @@
         align-items: center;
         gap: 10px;
         font-size: 0.85rem;
-        color: #374151;
+        color: var(--bs-secondary-color);
     }
 
     .legend-name {
@@ -92,9 +92,9 @@
         <div class="d-flex flex-wrap gap-2 align-items-center">
             <span class="stat-label" style="margin: 0;">Configured Mode</span>
             <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
-            <span class="badge text-bg-light border">Users: {{ server_users|length }}</span>
-            <span class="badge text-bg-light border">Devices: {{ server_devices|length }}</span>
-            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
+            <span class="badge text-bg-secondary">Users: {{ server_users|length }}</span>
+            <span class="badge text-bg-secondary">Devices: {{ server_devices|length }}</span>
+            <span class="badge text-bg-secondary">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
         </div>
     </div>
 
@@ -236,7 +236,7 @@
                             {% if session.tag %}
                             <span class="tag-badge">{{ session.tag }}</span>
                             {% else %}
-                            <span style="color: #9ca3af; font-size: 0.85em;">untagged</span>
+                            <span class="text-body-secondary" style="font-size: 0.85em;">untagged</span>
                             {% endif %}
                         </td>
                         <td class="time-small">
@@ -245,7 +245,7 @@
                             {% elif session.window_title %}
                             {{ session.window_title[:64] }}{% if session.window_title|length > 64 %}...{% endif %}
                             {% else %}
-                            <em style="color: #ccc;">-</em>
+                            <em class="text-body-secondary">-</em>
                             {% endif %}
                         </td>
                     </tr>

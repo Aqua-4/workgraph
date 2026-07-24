@@ -17,7 +17,7 @@
         width: 170px;
         height: 170px;
         border-radius: 50%;
-        border: 1px solid #e5e7eb;
+        border: 1px solid var(--bs-border-color);
         flex: 0 0 170px;
     }
 
@@ -37,7 +37,7 @@
         align-items: center;
         gap: 10px;
         font-size: 0.85rem;
-        color: #374151;
+        color: var(--bs-secondary-color);
     }
 
     .legend-name {
@@ -78,12 +78,12 @@
     <div class="card" style="margin-bottom: 12px;">
         {% if dashboard_mode == "standalone" %}
         <div class="stat-label" style="margin-bottom: 8px;">Standalone Mode</div>
-        <div style="font-size: 0.95em; color: #4b5563;">
+        <div class="text-body-secondary" style="font-size: 0.95em;">
             Local-only dashboard and collection. No remote sync APIs are required.
         </div>
         {% else %}
         <div class="stat-label" style="margin-bottom: 8px;">Sync Server Mode</div>
-        <div style="font-size: 0.95em; color: #4b5563;">
+        <div class="text-body-secondary" style="font-size: 0.95em;">
             Server-hosted dashboard reads synced multi-device analytics and user-scoped rollups.
         </div>
         {% endif %}
@@ -92,15 +92,15 @@
     {% if dashboard_mode == "sync-client" and client_sync and client_sync.registered %}
     <div class="card" style="margin-bottom: 12px;">
         <h3 style="margin-top: 0;">Sync Client Status</h3>
-        <div class="stat-label" style="margin-bottom: 8px; color: #166534;">Device already registered</div>
-        <div style="font-size: 0.9em; color: #4b5563; line-height: 1.6;">
+        <div class="stat-label text-success-emphasis" style="margin-bottom: 8px;">Device already registered</div>
+        <div class="text-body-secondary" style="font-size: 0.9em; line-height: 1.6;">
             <div><strong>Last Synced:</strong> {{ client_sync.last_synced_at|human_datetime }}</div>
         </div>
     </div>
     {% else %}
     <div class="card" style="margin-bottom: 12px;">
         <h3 style="margin-top: 0;">Device Registration</h3>
-        <div style="font-size: 0.9em; color: #6b7280; margin-bottom: 10px;">
+        <div class="text-body-secondary" style="font-size: 0.9em; margin-bottom: 10px;">
             {% if dashboard_mode == "standalone" %}
             Register this device for local identity and auditing.
             {% elif dashboard_mode == "sync-client" %}
@@ -152,30 +152,30 @@
                     Register Standalone Device
                     {% endif %}
                 </button>
-                <span id="register-result" style="font-size: 0.9em; color: #374151;"></span>
+                <span id="register-result" class="text-body-secondary" style="font-size: 0.9em;"></span>
             </div>
         </form>
     </div>
     {% endif %}
 
     {% if dashboard_mode == "sync-client" and client_sync_debug %}
-    <div class="card" style="margin-bottom: 12px; border: 1px dashed #d1d5db;">
+    <div class="card" style="margin-bottom: 12px; border: 1px dashed var(--bs-border-color);">
         <h3 style="margin-top: 0;">Sync Client Debug</h3>
         <div class="row g-3" style="margin-bottom: 8px;">
-            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Synced Sessions</div>
                 <div class="stat-value">{{ client_sync_debug.session_count }}</div>
             </div>
-            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Distinct Synced Days</div>
                 <div class="stat-value">{{ client_sync_debug.distinct_days }}</div>
             </div>
-            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Earliest Synced</div>
                 <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.earliest_synced_at|human_datetime
                     }}</div>
             </div>
-            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-sm-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Latest Synced</div>
                 <div class="stat-value" style="font-size: 1.1em;">{{ client_sync_debug.latest_synced_at|human_datetime
                     }}</div>
@@ -183,22 +183,22 @@
         </div>
 
         <div class="row g-3" style="margin-bottom: 0;">
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Pending Sessions</div>
                 <div class="stat-value">{{ client_sync_debug.pending_sessions }}</div>
             </div>
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Pending Journal</div>
                 <div class="stat-value">{{ client_sync_debug.pending_journal_entries }}</div>
             </div>
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Pending Reflections</div>
                 <div class="stat-value">{{ client_sync_debug.pending_reflections }}</div>
             </div>
         </div>
 
         {% if client_sync_debug.days %}
-        <div style="margin-top: 12px; font-size: 0.85em; color: #6b7280;">
+        <div class="text-body-secondary" style="margin-top: 12px; font-size: 0.85em;">
             {% for day_row in client_sync_debug.days %}
             <div>{{ day_row.day_utc }}: {{ day_row.sessions }} sessions</div>
             {% endfor %}
@@ -211,7 +211,7 @@
     <h2>Sync Health</h2>
     <div class="card">
         {% if sync_health.registered_devices == 0 %}
-        <div class="stat-label" style="margin-bottom: 10px; color: #6b7280;">
+        <div class="stat-label text-body-secondary" style="margin-bottom: 10px;">
             No devices registered yet.
         </div>
         {% endif %}
@@ -222,21 +222,21 @@
             {% endif %}
         </div>
         <div class="row g-3" style="margin-bottom: 0;">
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Registered Devices</div>
                 <div class="stat-value">{{ sync_health.registered_devices }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     active sync clients
                 </div>
             </div>
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Active Tokens</div>
                 <div class="stat-value">{{ sync_health.active_tokens }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     valid device tokens
                 </div>
             </div>
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Last Sync</div>
                 <div class="stat-value" style="font-size: 1.1em;">{{ sync_health.last_sync_at|human_datetime }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -245,7 +245,7 @@
             </div>
         </div>
         {% if sync_health.device_statuses %}
-        <div style="margin-top: 12px; font-size: 0.85em; color: #6b7280;">
+        <div class="text-body-secondary" style="margin-top: 12px; font-size: 0.85em;">
             {% for item in sync_health.device_statuses %}
             <div>
                 <strong>{{ item.device_name or item.device_id }}</strong>
@@ -314,21 +314,21 @@
     <h2>Focus Quality</h2>
     <div class="card">
         <div class="row g-3" style="margin-bottom: 0;">
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Deep Work Blocks</div>
                 <div class="stat-value">{{ stats.deep_work_blocks }}</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     sessions >= 30 minutes
                 </div>
             </div>
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Longest Focus Block</div>
                 <div class="stat-value">{{ "%.1f"|format(stats.longest_focus_hours) }}h</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
                     max uninterrupted active block
                 </div>
             </div>
-            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid #eee;">
+            <div class="col-12 col-md-4 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
                 <div class="stat-label">Average Focus Block</div>
                 <div class="stat-value">{{ "%.0f"|format(stats.avg_focus_minutes) }}m</div>
                 <div class="stat-label" style="font-size: 0.8em; margin-top: 10px;">
@@ -407,7 +407,7 @@
         </div>
         <script id="tagPieData" type="application/json">{{ stats.tag_stats|tojson }}</script>
         {% else %}
-        <p style="color: #999; padding: 20px; text-align: center;">No tagged activities yet. Configure tags in
+        <p class="text-body-secondary" style="padding: 20px; text-align: center;">No tagged activities yet. Configure tags in
             config/tags.yaml</p>
         {% endif %}
     </div>
@@ -422,7 +422,7 @@
         </div>
         <script id="appPieData" type="application/json">{{ stats.app_stats|tojson }}</script>
         {% else %}
-        <p style="color: #999; padding: 20px; text-align: center;">No activity data yet. Run the collector.</p>
+        <p class="text-body-secondary" style="padding: 20px; text-align: center;">No activity data yet. Run the collector.</p>
         {% endif %}
     </div>
 
@@ -436,7 +436,7 @@
         </div>
         <script id="repoPieData" type="application/json">{{ stats.repo_stats|tojson }}</script>
         {% else %}
-        <p style="color: #999; padding: 20px; text-align: center;">No repository activity detected in this window.</p>
+        <p class="text-body-secondary" style="padding: 20px; text-align: center;">No repository activity detected in this window.</p>
         {% endif %}
     </div>
 
@@ -464,7 +464,7 @@
             </tbody>
         </table>
         {% else %}
-        <p style="color: #999; padding: 20px; text-align: center;">Not enough daily data yet.</p>
+        <p class="text-body-secondary" style="padding: 20px; text-align: center;">Not enough daily data yet.</p>
         {% endif %}
     </div>
 
@@ -594,7 +594,8 @@
             event.preventDefault();
             if (resultNode) {
                 resultNode.textContent = "Registering device...";
-                resultNode.style.color = "#374151";
+                resultNode.classList.remove("text-success-emphasis", "text-danger-emphasis");
+                resultNode.classList.add("text-body-secondary");
             }
 
             const payload = {
@@ -631,12 +632,14 @@
                 }
                 if (resultNode) {
                     resultNode.textContent = message;
-                    resultNode.style.color = "#166534";
+                    resultNode.classList.remove("text-body-secondary", "text-danger-emphasis");
+                    resultNode.classList.add("text-success-emphasis");
                 }
             } catch (error) {
                 if (resultNode) {
                     resultNode.textContent = error instanceof Error ? error.message : "Registration failed";
-                    resultNode.style.color = "#b91c1c";
+                    resultNode.classList.remove("text-body-secondary", "text-success-emphasis");
+                    resultNode.classList.add("text-danger-emphasis");
                 }
             }
         });

@@ -27,7 +27,7 @@
     }
 
     .tag-review-muted {
-        color: #64748b;
+        color: var(--bs-secondary-color);
         font-size: 0.92rem;
     }
 
@@ -83,7 +83,7 @@
     .tag-review-group-value {
         font-size: 1rem;
         font-weight: 700;
-        color: #0f172a;
+        color: var(--bs-emphasis-color);
         margin-top: 0.45rem;
         overflow-wrap: anywhere;
     }
@@ -104,7 +104,7 @@
         background: rgba(255, 255, 255, 0.72);
         border: 1px solid rgba(148, 163, 184, 0.3);
         font-size: 0.79rem;
-        color: #334155;
+        color: var(--bs-body-color);
     }
 
     .tag-review-samples {
@@ -118,19 +118,19 @@
     .tag-review-sample-item {
         padding: 0.6rem 0.75rem;
         border-radius: 0.8rem;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
+        background: var(--bs-tertiary-bg);
+        border: 1px solid var(--bs-border-color);
     }
 
     .tag-review-sample-title {
         font-weight: 600;
-        color: #0f172a;
+        color: var(--bs-emphasis-color);
     }
 
     .tag-review-sample-meta {
         margin-top: 0.2rem;
         font-size: 0.82rem;
-        color: #64748b;
+        color: var(--bs-secondary-color);
     }
 
     .tag-review-actions {
@@ -147,8 +147,8 @@
     }
 
     .tag-review-detail-panel {
-        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-        border: 1px solid #dbe4ee;
+        background: linear-gradient(180deg, var(--bs-tertiary-bg) 0%, var(--bs-body-bg) 100%);
+        border: 1px solid var(--bs-border-color);
         border-radius: 1rem;
         padding: 1rem;
         margin-top: 0.25rem;
@@ -156,7 +156,7 @@
 
     .tag-review-detail-status {
         font-size: 0.88rem;
-        color: #64748b;
+        color: var(--bs-secondary-color);
         margin-bottom: 0.75rem;
     }
 
@@ -168,8 +168,8 @@
     .tag-review-detail-item {
         padding: 0.8rem 0.9rem;
         border-radius: 0.9rem;
-        border: 1px solid #e2e8f0;
-        background: white;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
     }
 
     .tag-review-detail-header {
@@ -183,12 +183,12 @@
 
     .tag-review-detail-title {
         font-weight: 700;
-        color: #0f172a;
+        color: var(--bs-emphasis-color);
     }
 
     .tag-review-detail-time {
         font-size: 0.8rem;
-        color: #64748b;
+        color: var(--bs-secondary-color);
     }
 
     .tag-review-detail-tags {
@@ -201,8 +201,8 @@
     .tag-review-detail-tag {
         padding: 0.22rem 0.5rem;
         border-radius: 999px;
-        background: #eff6ff;
-        color: #1d4ed8;
+        background: color-mix(in srgb, var(--bs-primary) 24%, var(--bs-tertiary-bg));
+        color: var(--bs-primary-text-emphasis);
         font-size: 0.77rem;
         font-weight: 600;
     }
@@ -228,9 +228,9 @@
     <div class="card p-3">
         <h3 class="mb-1">Sync Health</h3>
         <div class="d-flex gap-2 flex-wrap">
-            <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
-            <span class="badge text-bg-light border">Synced: {{ sync_health.synced_devices }}</span>
-            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
+            <span class="badge text-bg-secondary">Devices: {{ sync_health.registered_devices }}</span>
+            <span class="badge text-bg-secondary">Synced: {{ sync_health.synced_devices }}</span>
+            <span class="badge text-bg-secondary">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
         </div>
     </div>
     {% endif %}
@@ -406,7 +406,7 @@
                 <div class="border rounded p-3 h-100">
                     <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
                         <strong>{{ tag_name }}</strong>
-                        <span class="badge text-bg-light border">{{ suggestion.total_reviewed }} reviewed</span>
+                        <span class="badge text-bg-secondary">{{ suggestion.total_reviewed }} reviewed</span>
                     </div>
                     <div class="mb-2">
                         <div class="tag-review-muted">Domains</div>
