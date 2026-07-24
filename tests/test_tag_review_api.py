@@ -534,6 +534,22 @@ class TagReviewApiTests(unittest.TestCase):
         self.assertIn("Browser Context", response.text)
         self.assertIn("YouTube Music", response.text)
 
+    def test_tag_review_page_includes_only_untagged_state_in_assign_payload(
+        self,
+    ) -> None:
+        response = self.client.get(
+            "/tag-review",
+            params={"days": 7, "app_name": "Unknown", "only_untagged": "false"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('id="tag-review-filter-form"', response.text)
+        self.assertIn(
+            'const currentOnlyUntagged = searchParams.get("only_untagged")',
+            response.text,
+        )
+        self.assertIn('only_untagged: currentOnlyUntagged === "true"', response.text)
+
     def test_legacy_per_session_tag_review_routes_are_removed(self) -> None:
         candidates = self.client.get("/api/tag-review/candidates")
         assign = self.client.post(
