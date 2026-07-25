@@ -192,13 +192,13 @@
                         <td class="time-small">{{ end_value|human_datetime }}</td>
                         <td class="time-small">{{ session.user_id or selected_user_id or '-' }}</td>
                         <td class="time-small">{{ session.device_id or selected_device_id or '-' }}</td>
-                        <td><span class="app-badge">{{ session.app_name }}</span></td>
+                        <td><span class="badge text-bg-secondary">{{ session.app_name }}</span></td>
                         <td class="duration">
                             {% set mins = (session.duration_sec / 60)|int %}
                             {% if mins < 60 %} {{ mins }}m {% else %} {{ "%.1f" |format(mins / 60) }}h {% endif %} </td>
                         <td>
                             {% if session.tag %}
-                            <span class="tag-badge">{{ session.tag }}</span>
+                            <span class="badge text-bg-secondary">{{ session.tag }}</span>
                             {% else %}
                             <span class="text-body-secondary" style="font-size: 0.85em;">untagged</span>
                             {% endif %}

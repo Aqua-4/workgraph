@@ -12,7 +12,7 @@
         <form method="get" action="/" class="row g-3 align-items-end">
             <div class="col-12 d-flex gap-2 flex-wrap align-items-center">
                 <span class="stat-label" style="margin: 0;">Configured Mode</span>
-                <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
+                <span class="badge text-bg-secondary" style="text-transform: none;">{{ dashboard_mode }}</span>
             </div>
             <div class="col-12 col-md-6">
                 <label for="sync-dashboard-user-id" class="form-label">User</label>
@@ -107,7 +107,7 @@
                     {% for item in sync_health.device_statuses %}
                     <tr>
                         <td>{{ item.device_name or item.device_id }}</td>
-                        <td><span class="tag-badge" style="text-transform: none;">{{ item.status }}</span></td>
+                        <td><span class="badge text-bg-secondary" style="text-transform: none;">{{ item.status }}</span></td>
                         <td>{{ item.last_sync_at|human_datetime }}</td>
                         <td>s:{{ item.pending_sessions }} j:{{ item.pending_journal_entries }} r:{{
                             item.pending_reflections }}</td>
@@ -258,7 +258,7 @@
                             {% set health_item = (sync_health.device_statuses | selectattr('device_id', 'equalto',
                             device.id) | list | first) %}
                             {% if health_item %}
-                            <span class="tag-badge" style="text-transform: none;">{{ health_item.status }}</span>
+                            <span class="badge text-bg-secondary" style="text-transform: none;">{{ health_item.status }}</span>
                             {% else %}
                             <span class="text-body-secondary">unknown</span>
                             {% endif %}

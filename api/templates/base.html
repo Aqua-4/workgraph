@@ -15,20 +15,8 @@
             box-sizing: border-box;
         }
 
-        :root {
-            --wg-border-subtle: color-mix(in srgb, var(--bs-border-color) 82%, transparent);
-            --wg-surface-muted: var(--bs-tertiary-bg);
-            --wg-surface-hover: color-mix(in srgb, var(--bs-emphasis-color) 5%, var(--bs-body-bg));
-            --wg-metric-bg-start: color-mix(in srgb, var(--bs-primary) 18%, var(--bs-tertiary-bg));
-            --wg-metric-bg-end: var(--bs-tertiary-bg);
-            --wg-context-bg-start: color-mix(in srgb, var(--bs-info) 22%, var(--bs-tertiary-bg));
-            --wg-context-bg-end: var(--bs-tertiary-bg);
-        }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: var(--bs-body-bg);
-            color: var(--bs-body-color);
         }
 
         .container {
@@ -38,8 +26,7 @@
         }
 
         header {
-            background: var(--bs-body-bg);
-            border-bottom: 1px solid var(--wg-border-subtle);
+            border-bottom: 1px solid var(--bs-border-color);
             padding: 20px 0;
             margin-bottom: 30px;
         }
@@ -78,7 +65,7 @@
         }
 
         nav a:hover {
-            background: var(--wg-surface-hover);
+            background: var(--bs-secondary-bg);
         }
 
         nav a.active {
@@ -87,12 +74,7 @@
         }
 
         .card {
-            background: var(--wg-surface-muted);
-            border: 1px solid var(--wg-border-subtle);
-            border-radius: 10px;
-            padding: 20px;
             margin-bottom: 20px;
-            box-shadow: none;
         }
 
         .stats-grid {
@@ -103,11 +85,10 @@
         }
 
         .stat-box {
-            background: var(--wg-surface-muted);
-            border: 1px solid var(--wg-border-subtle);
+            background: var(--bs-tertiary-bg);
+            border: 1px solid var(--bs-border-color);
             border-radius: 10px;
             padding: 20px;
-            box-shadow: none;
         }
 
         .stat-value {
@@ -125,11 +106,10 @@
         }
 
         .metric-card {
-            background: linear-gradient(180deg, var(--wg-metric-bg-start) 0%, var(--wg-metric-bg-end) 100%);
-            border: 1px solid var(--wg-border-subtle);
+            background: var(--bs-tertiary-bg);
+            border: 1px solid var(--bs-border-color);
             border-radius: 14px;
             padding: 18px 20px;
-            box-shadow: none;
         }
 
         .metric-card__label {
@@ -163,8 +143,8 @@
             margin-top: 18px;
             padding: 16px 18px;
             border-radius: 14px;
-            background: linear-gradient(135deg, var(--wg-context-bg-start) 0%, var(--wg-context-bg-end) 100%);
-            border: 1px solid var(--wg-border-subtle);
+            background: var(--bs-tertiary-bg);
+            border: 1px solid var(--bs-border-color);
         }
 
         .page-context__item {
@@ -223,7 +203,7 @@
 
         .bar {
             height: 100%;
-            background: linear-gradient(90deg, var(--bs-primary), color-mix(in srgb, var(--bs-primary) 84%, black));
+            background: var(--bs-primary);
             display: flex;
             align-items: center;
             padding-right: 10px;
@@ -258,38 +238,16 @@
             font-size: 0.85em;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            border-bottom: 1px solid var(--wg-border-subtle);
+            border-bottom: 1px solid var(--bs-border-color);
         }
 
         td {
             padding: 12px;
-            border-bottom: 1px solid var(--wg-border-subtle);
+            border-bottom: 1px solid var(--bs-border-color);
         }
 
         tr:hover {
-            background: var(--wg-surface-hover);
-        }
-
-        .app-badge {
-            display: inline-block;
-            background: color-mix(in srgb, var(--bs-primary) 24%, var(--bs-tertiary-bg));
-            color: var(--bs-primary-text-emphasis);
-            border: 1px solid color-mix(in srgb, var(--bs-primary) 42%, transparent);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 0.85em;
-            font-weight: 500;
-        }
-
-        .tag-badge {
-            display: inline-block;
-            background: color-mix(in srgb, var(--bs-info) 22%, var(--bs-tertiary-bg));
-            color: var(--bs-info-text-emphasis);
-            border: 1px solid color-mix(in srgb, var(--bs-info) 42%, transparent);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 0.85em;
-            font-weight: 500;
+            background: var(--bs-secondary-bg);
         }
 
         .duration {
@@ -337,7 +295,7 @@
         .field textarea,
         .field select {
             width: 100%;
-            border: 1px solid var(--wg-border-subtle);
+            border: 1px solid var(--bs-border-color);
             border-radius: 6px;
             padding: 10px;
             font: inherit;

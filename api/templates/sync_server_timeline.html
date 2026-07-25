@@ -91,7 +91,7 @@
     <div class="card mb-3">
         <div class="d-flex flex-wrap gap-2 align-items-center">
             <span class="stat-label" style="margin: 0;">Configured Mode</span>
-            <span class="tag-badge" style="text-transform: none;">{{ dashboard_mode }}</span>
+            <span class="badge text-bg-secondary" style="text-transform: none;">{{ dashboard_mode }}</span>
             <span class="badge text-bg-secondary">Users: {{ server_users|length }}</span>
             <span class="badge text-bg-secondary">Devices: {{ server_devices|length }}</span>
             <span class="badge text-bg-secondary">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
@@ -228,13 +228,13 @@
                         {% set device_id_value = session.device_id or selected_device_id %}
                         <td class="time-small">{{ device_name_map.get(device_id_value, device_id_value) if
                             device_id_value else '-' }}</td>
-                        <td><span class="app-badge">{{ session.app_name or 'Unknown' }}</span></td>
+                        <td><span class="badge text-bg-secondary">{{ session.app_name or 'Unknown' }}</span></td>
                         <td class="duration">
                             {% set mins = ((session.duration_sec or 0) / 60)|int %}
                             {% if mins < 60 %} {{ mins }}m {% else %} {{ "%.1f" |format(mins / 60) }}h {% endif %} </td>
                         <td>
                             {% if session.tag %}
-                            <span class="tag-badge">{{ session.tag }}</span>
+                            <span class="badge text-bg-secondary">{{ session.tag }}</span>
                             {% else %}
                             <span class="text-body-secondary" style="font-size: 0.85em;">untagged</span>
                             {% endif %}

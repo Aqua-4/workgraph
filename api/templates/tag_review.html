@@ -6,13 +6,6 @@
 
 {% block extra_styles %}
 <style>
-    :root {
-        --tag-review-repo: #0f766e;
-        --tag-review-domain: #0369a1;
-        --tag-review-browser-context: #b45309;
-        --tag-review-app: #6d28d9;
-    }
-
     .tag-review-shell {
         display: grid;
         gap: 1rem;
@@ -36,48 +29,16 @@
         vertical-align: top;
     }
 
-    .tag-review-row {
-        --tag-review-accent: #475569;
-    }
-
-    .tag-review-row[data-group-type="repo"] {
-        --tag-review-accent: var(--tag-review-repo);
-    }
-
-    .tag-review-row[data-group-type="domain"] {
-        --tag-review-accent: var(--tag-review-domain);
-    }
-
-    .tag-review-row[data-group-type="browser_context"] {
-        --tag-review-accent: var(--tag-review-browser-context);
-    }
-
-    .tag-review-row[data-group-type="app"] {
-        --tag-review-accent: var(--tag-review-app);
-    }
-
     .tag-review-group-card {
-        border-left: 4px solid var(--tag-review-accent);
+        border: 1px solid var(--bs-border-color);
         border-radius: 0.85rem;
-        background:
-            linear-gradient(135deg, color-mix(in srgb, var(--tag-review-accent) 10%, white), white 58%),
-            white;
+        background: var(--bs-tertiary-bg);
         padding: 0.8rem 0.9rem;
         min-height: 100%;
     }
 
     .tag-review-group-chip {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        padding: 0.24rem 0.55rem;
-        font-size: 0.72rem;
-        font-weight: 700;
         letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--tag-review-accent);
-        background: color-mix(in srgb, var(--tag-review-accent) 13%, white);
-        border: 1px solid color-mix(in srgb, var(--tag-review-accent) 22%, white);
     }
 
     .tag-review-group-value {
@@ -96,15 +57,7 @@
     }
 
     .tag-review-meta-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.3rem;
-        padding: 0.28rem 0.55rem;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(148, 163, 184, 0.3);
         font-size: 0.79rem;
-        color: var(--bs-body-color);
     }
 
     .tag-review-samples {
@@ -199,12 +152,7 @@
     }
 
     .tag-review-detail-tag {
-        padding: 0.22rem 0.5rem;
-        border-radius: 999px;
-        background: color-mix(in srgb, var(--bs-primary) 24%, var(--bs-tertiary-bg));
-        color: var(--bs-primary-text-emphasis);
         font-size: 0.77rem;
-        font-weight: 600;
     }
 
     .tag-review-toggle {
@@ -292,7 +240,7 @@
                                 data-group-value="{{ group.group_value }}">
                                 <td>
                                     <div class="tag-review-group-card">
-                                        <span class="tag-review-group-chip">{{ group.group_type.replace('_', ' ')|title
+                                        <span class="badge text-bg-secondary tag-review-group-chip text-uppercase">{{ group.group_type.replace('_', ' ')|title
                                             }}</span>
                                         <div class="tag-review-group-value">{{ group.group_value }}</div>
                                     </div>
@@ -300,8 +248,8 @@
                                 <td>
                                     <div class="tag-review-group-card">
                                         <div class="tag-review-meta-list">
-                                            <span class="tag-review-meta-pill">{{ group.session_count }} sessions</span>
-                                            <span class="tag-review-meta-pill">{{ "%.1f"|format((group.total_seconds /
+                                            <span class="badge text-bg-secondary tag-review-meta-pill">{{ group.session_count }} sessions</span>
+                                            <span class="badge text-bg-secondary tag-review-meta-pill">{{ "%.1f"|format((group.total_seconds /
                                                 3600) if group.total_seconds else 0) }}h active</span>
                                         </div>
                                         {% if group.dominant_apps %}
@@ -497,7 +445,7 @@
                     session.browser_domain,
                     session.git_repo,
                     session.tag ? `Tag: ${session.tag}` : null,
-                ].filter(Boolean).map((item) => `<span class="tag-review-detail-tag">${escapeHtml(item)}</span>`).join("");
+                ].filter(Boolean).map((item) => `<span class="badge text-bg-secondary tag-review-detail-tag">${escapeHtml(item)}</span>`).join("");
 
                 return `
                     <div class="tag-review-detail-item">
