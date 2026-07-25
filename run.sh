@@ -2,7 +2,7 @@
 # WorkGraph collector – Linux/macOS launcher
 #
 # Cron example (run at system boot):
-#   @reboot /path/to/workgraph/run.sh >> /path/to/workgraph/logs/cron.log 2>&1
+#   @reboot /bin/bash -lc 'sleep 45; export DISPLAY=:0; export XAUTHORITY=/run/user/1000/.Xauthority; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; export XDG_RUNTIME_DIR=/run/user/1000; /path/to/workgraph/run.sh >> /path/to/workgraph/logs/cron.log 2>&1'
 #
 # Cron example (restart every hour if not already running):
 #   0 * * * * pgrep -f "workgraph/main.py" > /dev/null || /path/to/workgraph/run.sh >> /path/to/workgraph/logs/cron.log 2>&1

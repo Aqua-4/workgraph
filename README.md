@@ -726,8 +726,14 @@ crontab -e
 Run at boot (continuous collector):
 
 ```cron
-@reboot /absolute/path/to/workgraph/run.sh >> /absolute/path/to/workgraph/logs/cron.log 2>&1
+@reboot /bin/bash -lc 'sleep 45; export DISPLAY=:0; export XAUTHORITY=/run/user/1000/.Xauthority; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; export XDG_RUNTIME_DIR=/run/user/1000; /absolute/path/to/workgraph/run.sh >> /absolute/path/to/workgraph/logs/cron.log 2>&1'
 ```
+
+Why this is needed on Linux:
+
+- `@reboot` jobs usually start before the desktop session is fully ready.
+- Without `DISPLAY`, `XAUTHORITY`, `DBUS_SESSION_BUS_ADDRESS`, and `XDG_RUNTIME_DIR`, focused-window capture can fail and sessions may appear as stale or `Unknown`.
+- Replace `1000` with your user id if different (`id -u`).
 
 Run a one-shot snapshot every hour:
 
