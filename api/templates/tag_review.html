@@ -7,8 +7,14 @@
 {% block extra_styles %}
 <style>
     .tag-review-shell {
-        display: grid;
+        display: flex;
+        flex-direction: column;
         gap: 1rem;
+        min-width: 0;
+    }
+
+    .tag-review-shell>* {
+        min-width: 0;
     }
 
     .tag-review-preview {
@@ -27,6 +33,13 @@
     .tag-review-table td,
     .tag-review-table th {
         vertical-align: top;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .tag-review-table {
+        width: 100%;
+        table-layout: fixed;
     }
 
     .tag-review-group-card {
