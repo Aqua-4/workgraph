@@ -348,6 +348,24 @@ tags:
       - reimbursement
       - timesheet
 
+  # OS-level utilities, file managers, and shell/system surfaces.
+  System:
+    repos: []
+    domains: []
+    keywords:
+      - system
+      - file-explorer
+      - explorer
+      - dolphin
+      - konsole
+      - lockapp
+      - searchhost
+      - plasmashell
+      - shellexperiencehost
+      - xdg-desktop-portal-kde
+      - shellhost
+      - applicationframehost
+
   # Entertainment, streaming, and media consumption.
   Entertainment:
     repos: []
