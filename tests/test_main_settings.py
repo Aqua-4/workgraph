@@ -1,11 +1,21 @@
 import os
+import sqlite3
+import sys
+import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import sqlite3
-import unittest
 from unittest.mock import patch
 
-from main import _count_sync_metadata_gaps, load_settings, run_sync_migrate_command
+from db.repository import ActivityRepository
+from main import (
+    _count_sync_metadata_gaps,
+    load_settings,
+    main,
+    retag_existing_sessions,
+    run_sync_migrate_command,
+)
+from workgraph.models import ActivitySession
 
 
 class MainSettingsTests(unittest.TestCase):
@@ -114,12 +124,16 @@ class MainSettingsTests(unittest.TestCase):
             self.assertEqual(before["activity_sessions"], 1)
 
             with patch("builtins.print") as mocked_print:
-                run_sync_migrate_command(type("Args", (), {"config": str(config_path)})())
+                run_sync_migrate_command(
+                    type("Args", (), {"config": str(config_path)})()
+                )
 
             after = _count_sync_metadata_gaps(db_path)
 
         self.assertEqual(after["activity_sessions"], 0)
-        printed_lines = "\n".join(str(call.args[0]) for call in mocked_print.call_args_list)
+        printed_lines = "\n".join(
+            str(call.args[0]) for call in mocked_print.call_args_list
+        )
         self.assertIn("Sync migration complete", printed_lines)
 
     def test_load_settings_prefers_my_settings_when_default_path_used(self) -> None:
@@ -157,7 +171,9 @@ class MainSettingsTests(unittest.TestCase):
         self.assertEqual(settings.database_path, "personal.db")
         self.assertEqual(settings.identity_path, "config/personal-identity.json")
 
-    def test_load_settings_uses_explicit_path_even_when_my_settings_exists(self) -> None:
+    def test_load_settings_uses_explicit_path_even_when_my_settings_exists(
+        self,
+    ) -> None:
         with TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             config_dir = temp / "config"
@@ -217,7 +233,9 @@ class MainSettingsTests(unittest.TestCase):
 
         self.assertEqual(settings.identity_path, "config/my-identity.json")
 
-    def test_load_settings_keeps_explicit_identity_path_even_when_my_identity_exists(self) -> None:
+    def test_load_settings_keeps_explicit_identity_path_even_when_my_identity_exists(
+        self,
+    ) -> None:
         with TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)
             config_dir = temp / "config"
@@ -245,6 +263,147 @@ class MainSettingsTests(unittest.TestCase):
                 os.chdir(original_cwd)
 
         self.assertEqual(settings.identity_path, "config/team-identity.json")
+
+    def test_retag_existing_sessions_safe_preserves_existing_tags(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            db_path = temp / "activity.db"
+            config_path = temp / "settings.yaml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        f"database_path: {db_path}",
+                        f"log_path: {temp / 'logs' / 'test.log'}",
+                        f"identity_path: {temp / 'identity.json'}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with ActivityRepository(
+                db_path,
+                identity_path=temp / "identity.json",
+            ) as repo:
+                start = datetime(2026, 7, 27, 10, 0, tzinfo=UTC)
+                end = datetime(2026, 7, 27, 10, 5, tzinfo=UTC)
+                repo.save_session(
+                    ActivitySession(
+                        start_time=start,
+                        end_time=end,
+                        duration_sec=300,
+                        app_name="brave",
+                        process_name="brave",
+                        window_title="example",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag=None,
+                    )
+                )
+                repo.save_session(
+                    ActivitySession(
+                        start_time=start,
+                        end_time=end,
+                        duration_sec=300,
+                        app_name="brave",
+                        process_name="brave",
+                        window_title="example",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag="Development",
+                    )
+                )
+
+            with patch("main.configure_logging"):
+                with patch("main.ActivityTagger") as mocked_tagger_cls:
+                    mocked_tagger = mocked_tagger_cls.return_value
+                    mocked_tagger.tag_session.return_value = "Collaboration"
+                    retag_existing_sessions(str(config_path), safe=True)
+
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    "SELECT tag FROM activity_sessions ORDER BY id ASC"
+                ).fetchall()
+
+        self.assertEqual(rows[0]["tag"], "Collaboration")
+        self.assertEqual(rows[1]["tag"], "Development")
+
+    def test_retag_existing_sessions_without_safe_overwrites_existing_tags(
+        self,
+    ) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            db_path = temp / "activity.db"
+            config_path = temp / "settings.yaml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        f"database_path: {db_path}",
+                        f"log_path: {temp / 'logs' / 'test.log'}",
+                        f"identity_path: {temp / 'identity.json'}",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            with ActivityRepository(
+                db_path,
+                identity_path=temp / "identity.json",
+            ) as repo:
+                start = datetime(2026, 7, 27, 10, 0, tzinfo=UTC)
+                end = datetime(2026, 7, 27, 10, 5, tzinfo=UTC)
+                repo.save_session(
+                    ActivitySession(
+                        start_time=start,
+                        end_time=end,
+                        duration_sec=300,
+                        app_name="brave",
+                        process_name="brave",
+                        window_title="example",
+                        browser_domain=None,
+                        is_idle=False,
+                        idle_seconds=0,
+                        platform="linux",
+                        git_repo=None,
+                        git_branch=None,
+                        context_switches=0,
+                        tag="Development",
+                    )
+                )
+
+            with patch("main.configure_logging"):
+                with patch("main.ActivityTagger") as mocked_tagger_cls:
+                    mocked_tagger = mocked_tagger_cls.return_value
+                    mocked_tagger.tag_session.return_value = "Collaboration"
+                    retag_existing_sessions(str(config_path), safe=False)
+
+            with sqlite3.connect(db_path) as conn:
+                updated_tag = conn.execute(
+                    "SELECT tag FROM activity_sessions LIMIT 1"
+                ).fetchone()[0]
+
+        self.assertEqual(updated_tag, "Collaboration")
+
+    def test_main_forwards_safe_flag_to_retag_existing_sessions(self) -> None:
+        with patch.object(
+            sys,
+            "argv",
+            ["main.py", "--config", "tmp-settings.yaml", "--retag-existing", "--safe"],
+        ):
+            with patch("main.retag_existing_sessions") as mocked_retag:
+                main()
+
+        mocked_retag.assert_called_once_with("tmp-settings.yaml", safe=True)
 
 
 if __name__ == "__main__":

@@ -352,6 +352,8 @@
                 <div class="d-flex gap-2 mt-3 flex-wrap">
                     <button id="tag-review-refresh-preview" type="button" class="btn btn-outline-primary">Refresh
                         Preview</button>
+                    <button id="tag-review-copy-preview" type="button" class="btn btn-outline-secondary">Copy
+                        YAML</button>
                     <button id="tag-review-download" type="button" class="btn btn-primary">Download YAML</button>
                 </div>
             </div>
@@ -445,6 +447,34 @@
             const payload = await response.json();
             if (previewNode) {
                 previewNode.value = payload.yaml || "";
+            }
+        }
+
+        async function copyPreviewText() {
+            if (!previewNode) {
+                setFeedback("YAML preview is not available.", "error");
+                return;
+            }
+
+            const previewText = previewNode.value || "";
+            if (!previewText.trim()) {
+                setFeedback("Nothing to copy. Refresh preview first.", "error");
+                return;
+            }
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(previewText);
+                } else {
+                    previewNode.focus();
+                    previewNode.select();
+                    document.execCommand("copy");
+                    previewNode.setSelectionRange(0, 0);
+                    previewNode.blur();
+                }
+                setFeedback("Copied YAML preview to clipboard.", "success");
+            } catch (error) {
+                setFeedback("Failed to copy YAML preview.", "error");
             }
         }
 
@@ -595,6 +625,7 @@
     });
 
     document.getElementById("tag-review-refresh-preview")?.addEventListener("click", refreshPreview);
+    document.getElementById("tag-review-copy-preview")?.addEventListener("click", copyPreviewText);
 
     document.getElementById("tag-review-download")?.addEventListener("click", async () => {
         const response = await fetch("/api/tag-review/yaml-download", {

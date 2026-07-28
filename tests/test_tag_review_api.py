@@ -550,6 +550,194 @@ class TagReviewApiTests(unittest.TestCase):
         )
         self.assertIn('only_untagged: currentOnlyUntagged === "true"', response.text)
 
+    def test_tag_review_groups_exclude_browser_sessions(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 16, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 16, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Brave - YouTube Music",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.get("/api/tag-review/groups", params={"days": 3650})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(
+            any(
+                item.get("group_type") == "browser_context"
+                and item.get("group_value") == "YouTube Music"
+                for item in payload["groups"]
+            )
+        )
+        self.assertFalse(
+            any(
+                item.get("group_type") == "app" and item.get("group_value") == "Brave"
+                for item in payload["groups"]
+            )
+        )
+
+    def test_browser_tag_review_page_renders(self) -> None:
+        response = self.client.get("/browser-tag-review")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Browser Tag Review", response.text)
+        self.assertIn("Browser Missing-Tag Queue", response.text)
+
+    def test_browser_tag_review_page_includes_yaml_preview_controls(self) -> None:
+        response = self.client.get("/browser-tag-review", params={"days": 30})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("YAML Preview", response.text)
+        self.assertIn('id="browser-tag-review-yaml-preview"', response.text)
+        self.assertIn("/api/tag-review/yaml-preview", response.text)
+        self.assertIn("/api/tag-review/yaml-download", response.text)
+
+    def test_browser_tag_review_groups_include_only_browser_untagged(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 18, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 18, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="Dashboard - WorkGraph - Brave",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 18, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 18, 50, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Code",
+                    process_name="code",
+                    window_title="main.py",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.get(
+            "/api/browser-tag-review/groups", params={"days": 3650}
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertGreaterEqual(payload["count"], 1)
+        group_values = {str(item["group_value"]) for item in payload["groups"]}
+        self.assertIn("WorkGraph", group_values)
+        self.assertNotIn("Code", group_values)
+
+    def test_browser_tag_review_assign_group_updates_matching_browser_sessions(
+        self,
+    ) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 19, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 19, 20, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="ChatGPT - Brave",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        response = self.client.post(
+            "/api/browser-tag-review/assign-group",
+            json={
+                "group_type": "browser_context",
+                "group_value": "ChatGPT",
+                "selected_tag": "AI Tools",
+                "source_signal": "browser_context",
+                "days": 3650,
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["affected_count"], 1)
+        self.assertEqual(payload["sessions"][0]["tag"], "AI Tools")
+
+    def test_browser_tag_review_assignment_surfaces_in_yaml_preview(self) -> None:
+        with ActivityRepository(self.db_path) as repository:
+            repository.save_session(
+                ActivitySession(
+                    start_time=datetime(2026, 7, 13, 19, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 13, 19, 50, tzinfo=UTC),
+                    duration_sec=1200,
+                    app_name="Brave",
+                    process_name="brave",
+                    window_title="ChatGPT - Brave",
+                    browser_domain=None,
+                    is_idle=False,
+                    idle_seconds=0,
+                    platform="linux",
+                    git_repo=None,
+                    git_branch=None,
+                    context_switches=0,
+                    tag=None,
+                )
+            )
+
+        assign_response = self.client.post(
+            "/api/browser-tag-review/assign-group",
+            json={
+                "group_type": "browser_context",
+                "group_value": "ChatGPT",
+                "selected_tag": "AI Tools",
+                "source_signal": "browser_context",
+                "days": 3650,
+            },
+        )
+        self.assertEqual(assign_response.status_code, 200)
+
+        preview_response = self.client.get(
+            "/api/tag-review/yaml-preview",
+            params={
+                "days": 3650,
+                "selected_tag": "AI Tools",
+                "min_domain_hits": 2,
+                "min_repo_hits": 2,
+            },
+        )
+        self.assertEqual(preview_response.status_code, 200)
+        self.assertIn("keywords:", preview_response.json()["yaml"])
+        self.assertIn("ChatGPT", preview_response.json()["yaml"])
+
     def test_legacy_per_session_tag_review_routes_are_removed(self) -> None:
         candidates = self.client.get("/api/tag-review/candidates")
         assign = self.client.post(

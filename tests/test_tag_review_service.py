@@ -8,6 +8,7 @@ from services.tag_review import (
     build_yaml_preview,
     derive_browser_context,
     find_rule_conflicts,
+    load_browser_context_patterns,
     load_custom_tag_rules,
     normalize_domain_candidate,
     normalize_repo_candidate,
@@ -136,10 +137,53 @@ tags:
 
         self.assertEqual(suggestions["Development"]["keywords"], ["code", "Obsidian"])
 
+    def test_build_tag_review_suggestions_adds_browser_context_assignments_to_keywords(
+        self,
+    ) -> None:
+        existing_rules = {
+            "Development": {
+                "repos": [],
+                "domains": [],
+                "keywords": ["code"],
+            }
+        }
+        review_actions = [
+            {
+                "selected_tag": "Development",
+                "source_signal": "browser_context",
+                "app_name": "Brave",
+                "process_name": "brave",
+                "window_title": "Dashboard - Workgraph - Brave",
+                "browser_domain": None,
+                "git_repo": None,
+            },
+            {
+                "selected_tag": "Development",
+                "source_signal": "browser_context",
+                "app_name": "Brave",
+                "process_name": "brave",
+                "window_title": "Journal - Workgraph - Brave",
+                "browser_domain": None,
+                "git_repo": None,
+            },
+        ]
+
+        suggestions = build_tag_review_suggestions(
+            review_actions,
+            existing_rules,
+            min_domain_hits=2,
+            min_repo_hits=2,
+        )
+
+        self.assertEqual(suggestions["Development"]["keywords"], ["code", "WorkGraph"])
+
     def test_derive_browser_context_extracts_known_browser_titles(self) -> None:
         self.assertEqual(
             derive_browser_context(
-                "Brave - compare text and find differences online or offline - Diffchecker - Brave",
+                (
+                    "Brave - compare text and find differences online or offline - "
+                    "Diffchecker - Brave"
+                ),
                 "Brave",
             ),
             "Diffchecker",
@@ -153,6 +197,59 @@ tags:
             "New Tab",
         )
         self.assertIsNone(derive_browser_context("README.md", "Code"))
+
+    def test_load_browser_context_patterns_reads_tag_review_section(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "tags.yaml"
+            config_path.write_text(
+                """
+tag_review:
+  browser_context_patterns:
+    - pattern: "custom dashboard"
+      label: "Custom Dashboard"
+""".strip(),
+                encoding="utf-8",
+            )
+
+            patterns = load_browser_context_patterns(config_path)
+
+        self.assertEqual(patterns, (("custom dashboard", "Custom Dashboard"),))
+
+    def test_derive_browser_context_supports_pipe_separated_pattern_alternatives(
+        self,
+    ) -> None:
+        self.assertEqual(
+            derive_browser_context(
+                "Pipelines - CodePipeline - AWS",
+                "Brave",
+                patterns=(("pipelines | codepipeline", "AWS Console"),),
+            ),
+            "AWS Console",
+        )
+
+    def test_derive_browser_context_prefers_longer_patterns_before_broader_ones(
+        self,
+    ) -> None:
+        self.assertEqual(
+            derive_browser_context(
+                "Brave - YouTube Music",
+                "Brave",
+                patterns=(("youtube", "YouTube"), ("youtube music", "YouTube Music")),
+            ),
+            "YouTube Music",
+        )
+
+    def test_derive_browser_context_normalizes_punctuation_for_pattern_matching(
+        self,
+    ) -> None:
+        self.assertEqual(
+            derive_browser_context(
+                "Brave - Google Chat - Team",
+                "Brave",
+                patterns=(("google-chat", "Google Chat"),),
+            ),
+            "Google Chat",
+        )
 
     def test_resolve_tag_review_group_prefers_domain_then_browser_context_then_app(
         self,

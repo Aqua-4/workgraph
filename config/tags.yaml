@@ -20,6 +20,136 @@ system_idle_apps:
   - gdm3
   - lightdm
 
+# Browser-title context buckets used by Tag Review when browser_domain is missing.
+# Matching is case-insensitive substring matching against normalized window titles.
+tag_review:
+  browser_context_patterns:
+    # Local product/work dashboards
+    - pattern: "dashboard - workgraph"
+      label: "WorkGraph"
+    - pattern: "journal - workgraph"
+      label: "WorkGraph"
+    - pattern: "timeline - workgraph"
+      label: "WorkGraph"
+
+    # Collaboration and meetings
+    - pattern: "google chat"
+      label: "Google Chat"
+    - pattern: "google meet"
+      label: "Google Meet"
+    - pattern: "meet - "
+      label: "Google Meet"
+    - pattern: "meet – "
+      label: "Google Meet"
+    - pattern: "teams"
+      label: "Microsoft Teams"
+    - pattern: "zoom"
+      label: "Zoom"
+    - pattern: "webex"
+      label: "Webex"
+
+    # Email and office tools
+    - pattern: "gmail"
+      label: "Gmail"
+    - pattern: "inbox"
+      label: "Gmail"
+    - pattern: "outlook"
+      label: "Outlook"
+    - pattern: "calendar"
+      label: "Calendar"
+    - pattern: "google docs"
+      label: "Google Docs"
+    - pattern: "google sheets"
+      label: "Google Sheets"
+    - pattern: "google drive"
+      label: "Google Drive"
+
+    # AI tools
+    - pattern: "gemini notebook"
+      label: "Gemini Notebook"
+    - pattern: "chatgpt"
+      label: "ChatGPT"
+    - pattern: "claude"
+      label: "Claude"
+    - pattern: "perplexity"
+      label: "Perplexity"
+    - pattern: "copilot"
+      label: "Copilot"
+
+    # Engineering platforms
+    - pattern: "github"
+      label: "GitHub"
+    - pattern: "gitlab"
+      label: "GitLab"
+    - pattern: "bitbucket"
+      label: "Bitbucket"
+    - pattern: "stackoverflow"
+      label: "Stack Overflow"
+    - pattern: "readthedocs"
+      label: "Read the Docs"
+    - pattern: "developer.mozilla.org"
+      label: "MDN"
+    - pattern: "diffchecker"
+      label: "Diffchecker"
+    - pattern: "compare text and find differences"
+      label: "Diffchecker"
+
+    # Cloud and infra consoles
+    - pattern: "elastic container service"
+      label: "AWS Console"
+    - pattern: "pipelines | codepipeline"
+      label: "AWS Console"
+    - pattern: "aws"
+      label: "AWS Console"
+    - pattern: "azure"
+      label: "Azure Portal"
+    - pattern: "gcp"
+      label: "Google Cloud"
+
+    # Social, media, and content
+    - pattern: "linkedin"
+      label: "LinkedIn"
+    - pattern: "reddit"
+      label: "Reddit"
+    - pattern: "twitter"
+      label: "X/Twitter"
+    - pattern: "x.com"
+      label: "X/Twitter"
+    - pattern: "youtube music"
+      label: "YouTube Music"
+    - pattern: "youtube"
+      label: "YouTube"
+    - pattern: "spotify"
+      label: "Spotify"
+    - pattern: "netflix"
+      label: "Netflix"
+    - pattern: "prime video"
+      label: "Prime Video"
+
+    # Work portals and recruiting
+    - pattern: "darwinbox"
+      label: "Darwinbox"
+    - pattern: "omnissa horizon"
+      label: "Omnissa Horizon"
+    - pattern: "instahyre"
+      label: "Instahyre"
+    - pattern: "naukri"
+      label: "Naukri"
+
+    # Learning and interview prep
+    - pattern: "udemy"
+      label: "Udemy"
+    - pattern: "coursera"
+      label: "Coursera"
+    - pattern: "leetcode"
+      label: "LeetCode"
+    - pattern: "hackerrank"
+      label: "HackerRank"
+
+    # Generic browser states
+    - pattern: "new tab"
+      label: "New Tab"
+
 tags:
   # NOTE: Keep this list limited to non-sensitive historical project aliases only.
   # Do NOT add current client names, repos, or internal identifiers here.

@@ -71,6 +71,11 @@ def main() -> None:
         action="store_true",
         help="Recompute tags for all existing sessions using current config/tags.yaml rules.",
     )
+    parser.add_argument(
+        "--safe",
+        action="store_true",
+        help="Use with --retag-existing to only fill untagged sessions and preserve existing tags.",
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     export_parser = subparsers.add_parser(
@@ -507,7 +512,7 @@ def main() -> None:
     elif args.command == "sync" and args.sync_command == "verify":
         run_sync_verify_command(args)
     elif args.retag_existing:
-        retag_existing_sessions(args.config)
+        retag_existing_sessions(args.config, safe=args.safe)
     elif args.web:
         start_web_dashboard(args.port)
     else:
@@ -1935,8 +1940,11 @@ def _count_broken_sync_state_refs(conn: sqlite3.Connection) -> int:
     return int(row["broken_count"] if row is not None else 0)
 
 
-def retag_existing_sessions(config_path: str) -> None:
-    """Retag all existing sessions in DB with current tagging rules."""
+def retag_existing_sessions(config_path: str, *, safe: bool = False) -> None:
+    """Retag existing sessions in DB with current tagging rules.
+
+    When safe=True, only sessions with an empty tag are eligible for updates.
+    """
     settings = load_settings(config_path)
     configure_logging(settings.log_path)
 
@@ -1949,16 +1957,28 @@ def retag_existing_sessions(config_path: str) -> None:
         rows = repository.all_sessions()
         total = len(rows)
         updated = 0
+        eligible = 0
 
         for row in rows:
+            old_tag = row["tag"]
+            if safe and old_tag not in (None, ""):
+                continue
+
+            eligible += 1
             session = _session_from_row(row)
             new_tag = tagger.tag_session(session)
-            old_tag = row["tag"]
             if new_tag != old_tag:
                 repository.update_session_tag(int(row["id"]), new_tag)
                 updated += 1
 
-        print(f"Retag complete: updated {updated} of {total} sessions")
+        if safe:
+            print(
+                "Retag complete (safe mode): "
+                f"updated {updated} of {eligible} eligible sessions "
+                f"({total} total)"
+            )
+        else:
+            print(f"Retag complete: updated {updated} of {total} sessions")
     finally:
         repository.close()
 

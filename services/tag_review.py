@@ -4,6 +4,7 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -33,12 +34,77 @@ _GENERIC_BROWSER_DOMAINS = {
     "newtab-page",
 }
 
-_BROWSER_CONTEXT_PATTERNS: tuple[tuple[str, str], ...] = (
+_DEFAULT_BROWSER_CONTEXT_PATTERNS: tuple[tuple[str, str], ...] = (
     ("youtube music", "YouTube Music"),
     ("diffchecker", "Diffchecker"),
     ("compare text and find differences", "Diffchecker"),
     ("new tab", "New Tab"),
+    ("workgraph", "Workgraph"),
+    ("google chat", "Google Chat"),
+    ("google meet", "Google Meet"),
+    ("meet", "Google Meet"),
+    ("straive.com mail", "Work Gmail"),
+    ("inbox", "Work Gmail"),
+    ("chatgpt", "ChatGPT"),
+    ("gemini notebook", "Gemini Notebook"),
+    ("darwinbox", "Darwinbox"),
+    ("horizon", "Horizon"),
+    ("linkedin", "LinkedIn"),
 )
+
+
+@lru_cache(maxsize=1)
+def _runtime_browser_context_patterns() -> tuple[tuple[str, str], ...]:
+    return load_browser_context_patterns()
+
+
+def load_browser_context_patterns(
+    config_path: Path | str | None = None,
+) -> tuple[tuple[str, str], ...]:
+    if config_path is None:
+        config_dir = Path(__file__).parent.parent / "config"
+        config_files = [config_dir / "tags.yaml", config_dir / "my-tags.yaml"]
+    else:
+        resolved_path = Path(config_path)
+        if resolved_path.is_file():
+            config_files = [resolved_path]
+        else:
+            config_files = [resolved_path / "tags.yaml", resolved_path / "my-tags.yaml"]
+
+    merged_patterns: dict[str, str] = {}
+    for file_path in config_files:
+        if not file_path.exists():
+            continue
+
+        try:
+            data = yaml.safe_load(file_path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            continue
+
+        raw_tag_review = data.get("tag_review")
+        if not isinstance(raw_tag_review, Mapping):
+            continue
+
+        raw_patterns = raw_tag_review.get("browser_context_patterns")
+        if not isinstance(raw_patterns, Iterable) or isinstance(raw_patterns, str):
+            continue
+
+        for item in raw_patterns:
+            if not isinstance(item, Mapping):
+                continue
+            raw_pattern = _as_optional_string(item.get("pattern"))
+            label = _as_optional_string(item.get("label"))
+            if not raw_pattern or not label:
+                continue
+            normalized_pattern = _normalize_match_text(raw_pattern)
+            if not normalized_pattern:
+                continue
+            merged_patterns[normalized_pattern] = label
+
+    if not merged_patterns:
+        return _DEFAULT_BROWSER_CONTEXT_PATTERNS
+
+    return tuple((pattern, label) for pattern, label in merged_patterns.items())
 
 
 def normalize_repo_candidate(git_repo: str | None) -> str | None:
@@ -84,6 +150,7 @@ def derive_browser_context(
     window_title: str | None,
     app_name: str | None,
     process_name: str | None = None,
+    patterns: Iterable[tuple[str, str]] | None = None,
 ) -> str | None:
     if not is_browser_app(app_name, process_name):
         return None
@@ -92,8 +159,11 @@ def derive_browser_context(
     if not normalized_title:
         return None
 
-    for pattern, label in _BROWSER_CONTEXT_PATTERNS:
-        if pattern in normalized_title:
+    candidate_patterns = list(patterns or _runtime_browser_context_patterns())
+    candidate_patterns = _sort_browser_context_patterns(candidate_patterns)
+
+    for pattern, label in candidate_patterns:
+        if _browser_pattern_matches_title(pattern, normalized_title):
             return label
 
     return None
@@ -123,6 +193,64 @@ def resolve_tag_review_group(session: Mapping[str, object]) -> dict[str, str] | 
         return {"group_type": "app", "group_value": app_name}
 
     return None
+
+
+def resolve_browser_tag_review_group(
+    session: Mapping[str, object],
+) -> dict[str, str] | None:
+    app_name = _as_optional_string(session.get("app_name"))
+    process_name = _as_optional_string(session.get("process_name"))
+    if not is_browser_app(app_name, process_name):
+        return None
+
+    domain_value = normalize_domain_candidate(
+        _as_optional_string(session.get("browser_domain"))
+    )
+    if domain_value and _is_meaningful_browser_domain(domain_value):
+        return {"group_type": "domain", "group_value": domain_value}
+
+    browser_context = derive_browser_context(
+        _as_optional_string(session.get("window_title")),
+        app_name,
+        process_name,
+    )
+    if browser_context:
+        return {"group_type": "browser_context", "group_value": browser_context}
+
+    title_bucket = derive_browser_title_bucket(
+        _as_optional_string(session.get("window_title")),
+        app_name,
+        process_name,
+    )
+    if title_bucket:
+        return {"group_type": "title_bucket", "group_value": title_bucket}
+
+    if app_name:
+        return {"group_type": "app", "group_value": app_name}
+    return None
+
+
+def derive_browser_title_bucket(
+    window_title: str | None,
+    app_name: str | None,
+    process_name: str | None = None,
+) -> str | None:
+    if not is_browser_app(app_name, process_name):
+        return None
+
+    normalized_title = _normalize_browser_title(window_title)
+    if not normalized_title:
+        return None
+
+    normalized_title = re.sub(r"\s*\([0-9]+\)\s*", " ", normalized_title)
+    normalized_title = " ".join(normalized_title.split())
+    if not normalized_title:
+        return None
+
+    max_len = 96
+    if len(normalized_title) <= max_len:
+        return normalized_title
+    return normalized_title[:max_len].rstrip()
 
 
 def build_tag_review_groups(
@@ -211,6 +339,15 @@ def build_tag_review_suggestions(
         app_name = _as_optional_string(action.get("app_name"))
         if source_signal == "app" and app_name:
             grouped_keywords[selected_tag][app_name] += 1
+
+        if source_signal in {"browser_context", "title_bucket"}:
+            browser_keyword = derive_browser_context(
+                _as_optional_string(action.get("window_title")),
+                app_name,
+                _as_optional_string(action.get("process_name")),
+            )
+            if browser_keyword:
+                grouped_keywords[selected_tag][browser_keyword] += 1
 
     conflicts = find_rule_conflicts(
         existing_rules,
@@ -429,22 +566,56 @@ def _as_optional_string(value: object) -> str | None:
 
 
 def _normalize_browser_title(value: str | None) -> str:
+    return _normalize_match_text(value)
+
+
+def _normalize_match_text(value: str | None) -> str:
     if not value:
         return ""
 
-    normalized = re.sub(
+    text = str(value).strip()
+    if not text:
+        return ""
+
+    text = re.sub(r"[|–—]+", " - ", text)
+    text = re.sub(
         r"\s+-\s+(Brave|Google Chrome|Microsoft Edge|Mozilla Firefox|Firefox|Chrome)$",
         "",
-        value,
+        text,
         flags=re.IGNORECASE,
     )
-    normalized = re.sub(
+    text = re.sub(
         r"^(Brave|Google Chrome|Microsoft Edge|Mozilla Firefox|Firefox|Chrome)\s+-\s+",
         "",
-        normalized,
+        text,
         flags=re.IGNORECASE,
     )
-    return " ".join(normalized.casefold().split())
+    text = re.sub(r"[^a-z0-9]+", " ", text.casefold())
+    return " ".join(text.split())
+
+
+def _sort_browser_context_patterns(
+    patterns: Iterable[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    ranked = []
+    for index, (pattern, label) in enumerate(patterns):
+        normalized_pattern = _normalize_match_text(pattern)
+        if normalized_pattern:
+            ranked.append((index, len(normalized_pattern), pattern, label))
+    ranked.sort(key=lambda item: (item[1], item[0]), reverse=True)
+    return [(pattern, label) for _, _, pattern, label in ranked]
+
+
+def _browser_pattern_matches_title(pattern: str, normalized_title: str) -> bool:
+    normalized_pattern = _normalize_match_text(pattern)
+    if not normalized_pattern:
+        return False
+
+    for token in normalized_pattern.split("|"):
+        token = _normalize_match_text(token)
+        if token and token in normalized_title:
+            return True
+    return False
 
 
 def _is_meaningful_browser_domain(value: str) -> bool:

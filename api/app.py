@@ -1207,9 +1207,16 @@ class TagReviewGroupAssignRequest(BaseModel):
     @classmethod
     def validate_group_type(cls, value: str) -> str:
         trimmed = value.strip().lower()
-        if trimmed not in {"repo", "domain", "browser_context", "app"}:
+        if trimmed not in {
+            "repo",
+            "domain",
+            "browser_context",
+            "title_bucket",
+            "app",
+        }:
             raise ValueError(
-                "group_type must be one of: repo, domain, browser_context, app"
+                "group_type must be one of: repo, domain, browser_context, "
+                "title_bucket, app"
             )
         return trimmed
 
@@ -4172,6 +4179,68 @@ async def tag_review_page(
     )
 
 
+@app.get("/browser-tag-review", response_class=HTMLResponse)
+async def browser_tag_review_page(
+    days: int = Query(7, ge=1, le=3650),
+    app_name: str | None = Query(None),
+    domain: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    dashboard_mode = _configured_dashboard_mode()
+    available_tags = get_available_tags()
+    sync_health = get_sync_health(db_path) if db_path.exists() else None
+
+    groups: list[dict[str, object]] = []
+    group_count = 0
+    preview_text = ""
+    warnings: list[dict[str, str]] = []
+    if db_path.exists():
+        from db.repository import ActivityRepository
+
+        with ActivityRepository(db_path) as repository:
+            groups = repository.list_browser_tag_review_groups(
+                days=days,
+                app_name=app_name,
+                domain=domain,
+                limit=limit,
+                offset=0,
+            )
+            group_count = repository.count_browser_tag_review_groups(
+                days=days,
+                app_name=app_name,
+                domain=domain,
+            )
+        _, preview_text, warnings = _build_tag_review_payload(
+            db_path=db_path,
+            days=days,
+            selected_tag=None,
+            min_domain_hits=2,
+            min_repo_hits=2,
+        )
+
+    template = jinja_env.get_template("browser_tag_review.html")
+    return template.render(
+        groups=groups,
+        group_count=group_count,
+        days=days,
+        filter_app_name=app_name,
+        filter_domain=domain,
+        limit=limit,
+        available_tags=available_tags,
+        yaml_preview=preview_text,
+        warnings=warnings,
+        sync_health=sync_health,
+        dashboard_mode=dashboard_mode,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source="local",
+            days=days,
+        ),
+    )
+
+
 @app.get("/api/tag-review/groups")
 async def api_tag_review_groups(
     days: int = Query(7, ge=1, le=3650),
@@ -4235,6 +4304,59 @@ async def api_tag_review_groups(
     }
 
 
+@app.get("/api/browser-tag-review/groups")
+async def api_browser_tag_review_groups(
+    days: int = Query(7, ge=1, le=3650),
+    app_name: str | None = Query(None),
+    domain: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+
+    if not db_path.exists():
+        return {
+            "groups": [],
+            "count": 0,
+            "filters": {
+                "days": days,
+                "app_name": app_name,
+                "domain": domain,
+                "limit": limit,
+                "offset": offset,
+            },
+        }
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        groups = repository.list_browser_tag_review_groups(
+            days=days,
+            app_name=app_name,
+            domain=domain,
+            limit=limit,
+            offset=offset,
+        )
+        count = repository.count_browser_tag_review_groups(
+            days=days,
+            app_name=app_name,
+            domain=domain,
+        )
+
+    return {
+        "groups": groups,
+        "count": count,
+        "filters": {
+            "days": days,
+            "app_name": app_name,
+            "domain": domain,
+            "limit": limit,
+            "offset": offset,
+        },
+    }
+
+
 @app.get("/api/tag-review/groups/{group_type}/{group_value}")
 async def api_tag_review_group_detail(
     group_type: str,
@@ -4280,6 +4402,49 @@ async def api_tag_review_group_detail(
     }
 
 
+@app.get("/api/browser-tag-review/groups/{group_type}/{group_value}")
+async def api_browser_tag_review_group_detail(
+    group_type: str,
+    group_value: str,
+    days: int = Query(7, ge=1, le=3650),
+    limit: int = Query(100, ge=1, le=500),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {
+            "group_type": group_type,
+            "group_value": group_value,
+            "sessions": [],
+            "count": 0,
+        }
+
+    if group_type not in {"domain", "browser_context", "title_bucket", "app"}:
+        raise HTTPException(status_code=400, detail="Invalid group_type")
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        sessions = [
+            dict(row)
+            for row in repository.list_browser_tag_review_group_sessions(
+                group_type=group_type,
+                group_value=group_value,
+                days=days,
+                limit=limit,
+            )
+        ]
+
+    total_seconds = sum(int(item.get("duration_sec") or 0) for item in sessions)
+    return {
+        "group_type": group_type,
+        "group_value": group_value,
+        "sessions": sessions,
+        "count": len(sessions),
+        "total_seconds": total_seconds,
+    }
+
+
 @app.post("/api/tag-review/assign-group")
 async def api_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
     _ensure_tag_review_features_enabled()
@@ -4300,6 +4465,59 @@ async def api_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
         if not sessions:
             raise HTTPException(
                 status_code=404, detail="No matching sessions found for group"
+            )
+
+        session_ids: list[int] = []
+        for session in sessions:
+            session_ids.append(int(session["id"]))
+            repository.create_tag_review_action(
+                session_id=int(session["id"]),
+                original_tag=session["tag"],
+                selected_tag=payload.selected_tag,
+                reason=payload.reason,
+                source_signal=payload.source_signal or payload.group_type,
+            )
+        affected_count = repository.update_session_tags(
+            session_ids, payload.selected_tag
+        )
+        updated_sessions = [
+            dict(repository.get_session(session_id))
+            for session_id in session_ids[:20]
+            if repository.get_session(session_id) is not None
+        ]
+
+    return {
+        "ok": True,
+        "group_type": payload.group_type,
+        "group_value": payload.group_value,
+        "selected_tag": payload.selected_tag,
+        "affected_count": affected_count,
+        "sessions": updated_sessions,
+    }
+
+
+@app.post("/api/browser-tag-review/assign-group")
+async def api_browser_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail="No activity database found")
+
+    from db.repository import ActivityRepository
+
+    if payload.group_type not in {"domain", "browser_context", "title_bucket", "app"}:
+        raise HTTPException(status_code=400, detail="Invalid group_type")
+
+    with ActivityRepository(db_path) as repository:
+        sessions = repository.list_browser_tag_review_group_sessions(
+            group_type=payload.group_type,
+            group_value=payload.group_value,
+            days=payload.days,
+            limit=5000,
+        )
+        if not sessions:
+            raise HTTPException(
+                status_code=404, detail="No matching browser sessions found for group"
             )
 
         session_ids: list[int] = []

@@ -1,0 +1,497 @@
+{% extends "base.html" %}
+
+{% block title %}Browser Tag Review - WorkGraph{% endblock %}
+
+{% block nav_browser_tag_review %}active{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .browser-review-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-width: 0;
+    }
+
+    .browser-review-shell>* {
+        min-width: 0;
+    }
+
+    .browser-review-muted {
+        color: var(--bs-secondary-color);
+        font-size: 0.92rem;
+    }
+
+    .browser-review-preview {
+        width: 100%;
+        min-height: 18rem;
+        height: 100%;
+        font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+        resize: vertical;
+    }
+
+    .browser-review-table td,
+    .browser-review-table th {
+        vertical-align: top;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .browser-review-table {
+        width: 100%;
+        table-layout: fixed;
+    }
+
+    .browser-review-chip {
+        letter-spacing: 0.04em;
+    }
+
+    .browser-review-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+        margin-top: 0.45rem;
+        overflow-wrap: anywhere;
+    }
+
+    .browser-review-card {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.85rem;
+        background: var(--bs-tertiary-bg);
+        padding: 0.8rem 0.9rem;
+        min-height: 100%;
+    }
+
+    .browser-review-actions {
+        display: grid;
+        gap: 0.6rem;
+    }
+
+    .browser-review-detail-row {
+        display: none;
+    }
+
+    .browser-review-detail-row.is-open {
+        display: table-row;
+    }
+
+    .browser-review-detail-panel {
+        background: linear-gradient(180deg, var(--bs-tertiary-bg) 0%, var(--bs-body-bg) 100%);
+        border: 1px solid var(--bs-border-color);
+        border-radius: 1rem;
+        padding: 1rem;
+        margin-top: 0.25rem;
+    }
+
+    .browser-review-detail-status {
+        font-size: 0.88rem;
+        color: var(--bs-secondary-color);
+        margin-bottom: 0.75rem;
+    }
+
+    .browser-review-detail-list {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .browser-review-detail-item {
+        padding: 0.8rem 0.9rem;
+        border-radius: 0.9rem;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="browser-review-shell">
+    <div class="d-flex justify-content-between align-items-end flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1">Browser Tag Review</h2>
+            <p class="browser-review-muted mb-0">Review missing tags for browser activity only and assign in bulk.</p>
+        </div>
+        <span class="badge text-bg-secondary">{{ group_count }} groups</span>
+    </div>
+
+    <div class="card p-3 p-md-4">
+        <h3 class="mb-3">Filters</h3>
+        <form method="get" class="row g-3 align-items-end" id="browser-tag-review-filter-form">
+            <div class="col-12 col-md-3">
+                <label for="days" class="form-label">Past Days</label>
+                <input type="number" class="form-control" id="days" name="days" min="1" max="3650" value="{{ days }}">
+            </div>
+            <div class="col-12 col-md-4">
+                <label for="app_name" class="form-label">Browser App (optional)</label>
+                <input type="text" class="form-control" id="app_name" name="app_name"
+                    value="{{ filter_app_name or '' }}">
+            </div>
+            <div class="col-12 col-md-3">
+                <label for="domain" class="form-label">Domain (optional)</label>
+                <input type="text" class="form-control" id="domain" name="domain" value="{{ filter_domain or '' }}">
+            </div>
+            <div class="col-12 col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Apply</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="row g-3">
+
+        <div class="col-12 col-xl-8">
+
+
+            <div class="card p-3 p-md-4">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <h3 class="m-0">Browser Missing-Tag Queue</h3>
+                    <span class="browser-review-muted">Only untagged browser sessions are included.</span>
+                </div>
+                <div id="browser-tag-review-feedback" style="display: none;"></div>
+                {% if groups %}
+                <div class="table-responsive">
+                    <table class="table table-sm browser-review-table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Group</th>
+                                <th>Coverage</th>
+                                <th>Samples</th>
+                                <th>Assign</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for group in groups %}
+                            <tr class="browser-review-row" data-group-type="{{ group.group_type }}"
+                                data-group-value="{{ group.group_value }}">
+                                <td>
+                                    <div class="browser-review-card">
+                                        <span class="badge text-bg-secondary browser-review-chip text-uppercase">{{
+                                            group.group_type.replace('_', ' ')|title }}</span>
+                                        <div class="browser-review-value">{{ group.group_value }}</div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="browser-review-card">
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            <span class="badge text-bg-secondary">{{ group.session_count }}
+                                                sessions</span>
+                                            <span class="badge text-bg-secondary">{{ "%.1f"|format((group.total_seconds
+                                                / 3600) if group.total_seconds else 0) }}h active</span>
+                                        </div>
+                                        {% if group.dominant_apps %}
+                                        <div class="browser-review-muted mt-2">Apps: {{ group.dominant_apps|join(', ')
+                                            }}</div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if group.sample_sessions %}
+                                    <div class="browser-review-card">
+                                        {% for sample in group.sample_sessions %}
+                                        <div class="mb-2">
+                                            <div><strong>{{ sample.app_name }}</strong></div>
+                                            {% if sample.window_title %}
+                                            <div class="browser-review-muted">{{ sample.window_title }}</div>
+                                            {% endif %}
+                                            {% if sample.browser_domain %}
+                                            <div class="browser-review-muted">{{ sample.browser_domain }}</div>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <span class="browser-review-muted">No sample sessions available.</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="browser-review-actions">
+                                        <button type="button"
+                                            class="btn btn-sm btn-outline-secondary browser-review-toggle"
+                                            aria-expanded="false">Inspect Sessions</button>
+                                        <div class="d-flex gap-2 flex-wrap align-items-start">
+                                            <select class="form-select form-select-sm browser-review-select"
+                                                style="min-width: 180px;">
+                                                <option value="">Choose tag</option>
+                                                {% for tag in available_tags %}
+                                                <option value="{{ tag }}">{{ tag }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <button type="button"
+                                                class="btn btn-sm btn-primary browser-review-assign-btn">Assign</button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr class="browser-review-detail-row"
+                                data-detail-for="{{ group.group_type }}::{{ group.group_value }}">
+                                <td colspan="4">
+                                    <div class="browser-review-detail-panel">
+                                        <div class="browser-review-detail-status">Expand a bucket to inspect the
+                                            matching sessions.</div>
+                                        <div class="browser-review-detail-list"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No matching browser groups in this range.</p>
+                {% endif %}
+            </div>
+
+        </div>
+
+
+        <div class="col-12 col-xl-4">
+
+
+            <div class="card p-3 p-md-4 h-100">
+                <h3 class="mb-2">YAML Preview</h3>
+                <p class="browser-review-muted">Browser assignments feed the same reusable YAML suggestion flow as the
+                    main Tag Review page.</p>
+                {% if warnings %}
+                <div class="error mb-3">
+                    {% for warning in warnings %}
+                    <div>{{ warning.field }} conflict for {{ warning.value }} (owned by {{ warning.owner }})</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <textarea id="browser-tag-review-yaml-preview" class="browser-review-preview form-control"
+                    readonly>{{ yaml_preview }}</textarea>
+                <div class="d-flex gap-2 mt-3 flex-wrap">
+                    <button id="browser-tag-review-refresh-preview" type="button"
+                        class="btn btn-outline-primary">Refresh Preview</button>
+                    <button id="browser-tag-review-copy-preview" type="button"
+                        class="btn btn-outline-secondary">Copy YAML</button>
+                    <button id="browser-tag-review-download" type="button" class="btn btn-primary">Download
+                        YAML</button>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+
+</div>
+
+<script>
+    (() => {
+        const filterForm = document.getElementById("browser-tag-review-filter-form");
+        const feedbackNode = document.getElementById("browser-tag-review-feedback");
+        const previewNode = document.getElementById("browser-tag-review-yaml-preview");
+        const searchParams = new URLSearchParams(window.location.search);
+
+        function setFeedback(message, type) {
+            if (!feedbackNode) {
+                return;
+            }
+            feedbackNode.className = type === "error" ? "error" : "success";
+            feedbackNode.textContent = message;
+            feedbackNode.style.display = "block";
+        }
+
+        function groupKey(groupType, groupValue) {
+            return `${groupType}::${groupValue}`;
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#39;");
+        }
+
+        async function refreshPreview() {
+            const params = new URLSearchParams();
+            params.set("days", searchParams.get("days") || "{{ days }}");
+            const response = await fetch(`/api/tag-review/yaml-preview?${params.toString()}`);
+            if (!response.ok) {
+                setFeedback("Failed to refresh YAML preview.", "error");
+                return;
+            }
+
+            const payload = await response.json();
+            if (previewNode) {
+                previewNode.value = payload.yaml || "";
+            }
+        }
+
+        async function copyPreviewText() {
+            if (!previewNode) {
+                setFeedback("YAML preview is not available.", "error");
+                return;
+            }
+
+            const previewText = previewNode.value || "";
+            if (!previewText.trim()) {
+                setFeedback("Nothing to copy. Refresh preview first.", "error");
+                return;
+            }
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(previewText);
+                } else {
+                    previewNode.focus();
+                    previewNode.select();
+                    document.execCommand("copy");
+                    previewNode.setSelectionRange(0, 0);
+                    previewNode.blur();
+                }
+                setFeedback("Copied YAML preview to clipboard.", "success");
+            } catch (error) {
+                setFeedback("Failed to copy YAML preview.", "error");
+            }
+        }
+
+        function renderDetailSessions(sessions) {
+            if (!sessions.length) {
+                return '<div class="browser-review-detail-status">No matching sessions found for this bucket.</div>';
+            }
+            return sessions.map((session) => `
+                <div class="browser-review-detail-item">
+                    <div><strong>${escapeHtml(session.app_name || "Unknown App")}</strong> <span class="browser-review-muted">${escapeHtml(session.start_time || "")}</span></div>
+                    <div>${escapeHtml(session.window_title || "No window title")}</div>
+                    <div class="browser-review-muted">${escapeHtml(session.browser_domain || "")}</div>
+                </div>
+            `).join("");
+        }
+
+        filterForm?.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const formData = new FormData(filterForm);
+            const params = new URLSearchParams();
+            for (const [key, value] of formData.entries()) {
+                if (typeof value === "string" && value.trim() !== "") {
+                    params.set(key, value);
+                }
+            }
+            window.location.search = params.toString();
+        });
+
+        async function toggleDetails(row, button) {
+            const groupType = row?.getAttribute("data-group-type");
+            const groupValue = row?.getAttribute("data-group-value");
+            const detailRow = document.querySelector(`[data-detail-for="${CSS.escape(groupKey(groupType, groupValue))}"]`);
+            if (!groupType || !groupValue || !detailRow) {
+                return;
+            }
+
+            const detailStatus = detailRow.querySelector(".browser-review-detail-status");
+            const detailList = detailRow.querySelector(".browser-review-detail-list");
+            const isOpen = detailRow.classList.contains("is-open");
+            if (isOpen) {
+                detailRow.classList.remove("is-open");
+                button?.setAttribute("aria-expanded", "false");
+                button.textContent = "Inspect Sessions";
+                return;
+            }
+
+            detailRow.classList.add("is-open");
+            button?.setAttribute("aria-expanded", "true");
+            button.textContent = "Hide Sessions";
+
+            if (detailRow.dataset.loaded === "true") {
+                return;
+            }
+
+            if (detailStatus) {
+                detailStatus.textContent = "Loading matching sessions...";
+            }
+
+            const params = new URLSearchParams();
+            params.set("days", searchParams.get("days") || "{{ days }}");
+            params.set("limit", "50");
+
+            const response = await fetch(`/api/browser-tag-review/groups/${encodeURIComponent(groupType)}/${encodeURIComponent(groupValue)}?${params.toString()}`);
+            if (!response.ok) {
+                if (detailStatus) {
+                    detailStatus.textContent = "Failed to load matching sessions.";
+                }
+                return;
+            }
+
+            const payload = await response.json();
+            if (detailStatus) {
+                detailStatus.textContent = `${payload.count} matching sessions, ${((payload.total_seconds || 0) / 3600).toFixed(1)}h total.`;
+            }
+            if (detailList) {
+                detailList.innerHTML = renderDetailSessions(payload.sessions || []);
+            }
+            detailRow.dataset.loaded = "true";
+        }
+
+        document.querySelectorAll(".browser-review-assign-btn").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const row = button.closest("tr");
+                const select = row?.querySelector(".browser-review-select");
+                const groupType = row?.getAttribute("data-group-type");
+                const groupValue = row?.getAttribute("data-group-value");
+                const selectedTag = select?.value || "";
+                if (!groupType || !groupValue || !selectedTag) {
+                    setFeedback("Choose a tag before assigning.", "error");
+                    return;
+                }
+
+                const response = await fetch("/api/browser-tag-review/assign-group", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        group_type: groupType,
+                        group_value: groupValue,
+                        selected_tag: selectedTag,
+                        source_signal: groupType,
+                        days: Number(searchParams.get("days") || "{{ days }}"),
+                        only_untagged: true,
+                    }),
+                });
+                if (!response.ok) {
+                    setFeedback("Failed to assign tag.", "error");
+                    return;
+                }
+
+                setFeedback(`Assigned ${selectedTag} to ${groupType} group. Refreshing page...`, "success");
+                window.location.reload();
+            });
+        });
+
+        document.querySelectorAll(".browser-review-toggle").forEach((button) => {
+            button.addEventListener("click", async () => {
+                const row = button.closest("tr");
+                await toggleDetails(row, button);
+            });
+        });
+
+        document.getElementById("browser-tag-review-refresh-preview")?.addEventListener("click", refreshPreview);
+        document.getElementById("browser-tag-review-copy-preview")?.addEventListener("click", copyPreviewText);
+
+        document.getElementById("browser-tag-review-download")?.addEventListener("click", async () => {
+            const response = await fetch("/api/tag-review/yaml-download", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    days: Number(searchParams.get("days") || "{{ days }}"),
+                }),
+            });
+            if (!response.ok) {
+                setFeedback("Failed to download YAML.", "error");
+                return;
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "tag-review-preview.yaml";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        });
+
+    })();
+</script>
+{% endblock %}

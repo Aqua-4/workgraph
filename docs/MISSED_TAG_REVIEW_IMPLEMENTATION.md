@@ -94,6 +94,11 @@ Browser edge case handling:
 - Do not treat the browser app name itself, for example Brave or Chrome, as the main grouping key when a stronger browsing signal exists.
 - Prefer browser_domain when present because a single browser can span multiple categories.
 - When browser_domain is missing, empty, or too generic, derive a browser_context bucket from window_title.
+- Browser_context pattern matching should be deterministic and normalization-based:
+  - case-insensitive comparison
+  - apply the same normalization to both title and pattern
+  - support explicit alternatives using the pipe separator in patterns
+  - evaluate longest normalized patterns first so specific rules win before broad rules
 - Example outcomes:
   - "Brave - compare text and find differences online or offline - Diffchecker - Brave" -> Development-oriented browser_context or diffchecker.com domain if available
   - "Brave - New Tab - Brave" -> generic browser bucket, usually skipped or deprioritized
@@ -271,6 +276,9 @@ Browser context fallback:
 - If browser_domain is unavailable but the bucket came from a browser_context derived from window_title, use that only for review UX, not as a reusable YAML rule source.
 - Do not generate new YAML rules directly from raw browser window titles in MVP.
 - Instead, use browser_context buckets to help the user bulk-tag sessions, then rely on future domain captures or explicit YAML edits for reusable rules.
+- For matching quality, use two passes:
+  - Pass A: strict normalized substring match.
+  - Pass B: punctuation-tolerant fallback only if Pass A produces no match.
 
 App-only fallback:
 
@@ -385,6 +393,8 @@ Implementation note:
 - collision detection
 - YAML merge idempotency and dedupe
 - browser grouping precedence, including browser_domain versus browser_context fallback
+- browser_context matcher precedence where longest pattern wins over shorter overlapping patterns
+- browser_context matcher alternatives using pipe-separated pattern values
 
 2. API tests
 
