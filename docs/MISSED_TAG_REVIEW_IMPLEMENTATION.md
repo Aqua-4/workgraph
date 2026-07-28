@@ -1,4 +1,4 @@
-# Missed Tag Review Page - Implementation Proposal
+# Missed Tag Review Page - Implementation Notes
 
 ## Goal
 
@@ -10,7 +10,8 @@ This improves long-term tagging quality and reduces repeated manual cleanup.
 
 - Tags are loaded by ActivityTagger from config/tags.yaml plus config/my-tags.yaml, with custom tags overriding defaults by tag name.
 - Dashboard and timeline already display tags and show untagged sessions.
-- There is no workflow to discover missed entries and promote manual tagging decisions into new rule definitions.
+- The grouped review workflow is implemented, including the main Tag Review page and the browser-only review page.
+- Safe retag exists so rule changes can be applied without overwriting existing tagged sessions.
 
 ## Proposed User Experience
 
@@ -19,6 +20,10 @@ This improves long-term tagging quality and reduces repeated manual cleanup.
 Add a new nav entry: Tag Review.
 
 - Visible only in standalone and sync-client modes.
+
+Related navigation:
+
+- Browser Tag Review is available as a separate browser-only queue.
 
 ### Page: Tag Review
 
@@ -71,6 +76,11 @@ Sections:
 - Download generated YAML file instead of direct write.
 - Apply to config/my-tags.yaml in a later phase after preview/export behavior is validated.
 
+Current implementation note:
+
+- YAML preview and download are implemented.
+- Direct YAML file mutation is intentionally still deferred.
+
 ## High-Level Architecture
 
 ### Data Source
@@ -110,6 +120,11 @@ Recommended browser grouping precedence:
 2. browser_domain
 3. browser_context from window_title
 4. app_name fallback
+
+Current implementation note:
+
+- The browser-aware path is implemented with config-driven browser_context patterns in `config/my-tags.yaml`.
+- Matching is normalized, case-insensitive, pipe-aware, and sorted longest-pattern-first.
 
 ### New Persistence for Review Workflow
 
@@ -601,8 +616,11 @@ Status legend:
 
 - [x] Audit table, grouped repository helpers, and grouped bulk tag updates are implemented.
 - [x] Tag Review page, grouped APIs, YAML preview/download, and focused tests are implemented.
+- [x] Browser Tag Review page, browser-only grouped APIs, YAML preview/download, and clipboard copy are implemented.
 - [x] Sync manual-override propagation is covered by a focused sync test.
 - [x] Browser edge-case handling is now implemented with browser_context-aware grouping and focused tests.
+- [x] Config-driven browser title matching is implemented with normalized, longest-pattern-first precedence.
+- [x] A System tag category exists for OS utilities and shell/file-manager style apps.
 - [x] Legacy per-session tag-review endpoints have been removed so the grouped workflow is the only supported path.
 
 ### Database and repository
@@ -683,15 +701,20 @@ Status legend:
 - [x] YAML download returns valid YAML without mutating config/my-tags.yaml.
 - [x] Sync-server mode returns a clear unsupported response for page and API routes.
 
+Additional current-state note:
+
+- The main Tag Review page stays focused on non-browser buckets, while Browser Tag Review is browser-only.
+- The copy YAML button is present on both review pages.
+
 ## Recommended First Slice
 
-Start with a low-risk first slice:
+This slice is complete in the running implementation:
 
-- Add Tag Review page in standalone and sync-client.
-- Support grouped tagging by repo, domain, and app, with reusable suggestions generated from repo/domain and explicit app assignments merged as keywords.
-- Include browser-aware grouping so mixed browser usage is split by domain or title-derived browser context rather than collapsing into one browser-app bucket.
-- Provide YAML preview and download.
-- Defer direct YAML file mutation until after user validates quality.
+- Tag Review exists in standalone and sync-client modes.
+- Grouped tagging works by repo, domain, browser context, and app fallback.
+- Browser-aware grouping splits mixed browser usage by domain or title-derived browser context rather than collapsing into one browser-app bucket.
+- YAML preview and download are available.
+- Direct YAML file mutation remains deferred so review stays read-only.
 
 ## Browser Edge Case Recommendation
 

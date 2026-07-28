@@ -4,20 +4,30 @@
 
 Document a safe, reviewable approach to reduce unknown or untagged activity at high impact, without overwriting trusted manual tagging decisions.
 
+## Current Implementation Status
+
+The main pieces described in this document are now implemented locally:
+
+1. Safe retag is available as `uv run python main.py --retag-existing --safe` and only fills empty tags.
+2. Browser Tag Review exists as a dedicated browser-only queue with YAML preview, download, and copy-to-clipboard support.
+3. Browser context matching is config-driven through `config/my-tags.yaml` and uses normalized, longest-pattern-first matching.
+4. A `System` tag category now covers OS utilities, shells, and file-manager-style apps.
+
+At this point, the remaining unknown-like sessions are dominated by browser activity, especially Brave, rather than system apps.
+
 ## Current Baseline
 
-Observed from recent local checks:
+Recent local checks after safe retag show:
 
-- Total sessions: about 10.6k
-- Untagged: about 2.3k to 2.5k
-- Unknown app and untagged: near zero
-- Untagged Brave sessions with no domain: dominant share (about 75%+ of untagged)
-- Untagged sessions with no repo and no domain: very high share
+- Total active sessions: about 11.3k
+- Unknown-like sessions: about 1.2k
+- Explicit `unknown` tag rows: zero
+- Untagged Brave sessions still make up most remaining unknown-like rows
 
 Interpretation:
 
-- The primary problem is not truly Unknown app rows.
-- The primary problem is low-signal browser sessions with weak domain or repo evidence.
+- The primary problem is no longer system apps.
+- The primary remaining problem is low-signal browser sessions with weak domain or repo evidence.
 
 ## Top Untagged Items (GROUP BY + COUNT)
 
@@ -275,7 +285,8 @@ Benefits:
 
 Decision:
 
-- Add a separate browser-only missing-tags tab in Phase 1.
+- The separate browser-only missing-tags tab is implemented at `/browser-tag-review`.
+- The generic `/tag-review` page is focused on non-browser review buckets.
 
 Tab scope:
 
@@ -356,7 +367,9 @@ Success definition for first pass:
 
 ### Stream A: Browser Context Enrichment for Review Buckets
 
-Improve browser title grouping in tag review so large app buckets (for example Brave) split into meaningful browser_context buckets.
+Implemented in `services/tag_review.py` and `config/my-tags.yaml`.
+
+Large app buckets such as Brave now split into meaningful browser_context buckets when browser_domain is missing.
 
 Target files:
 

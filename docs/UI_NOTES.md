@@ -69,6 +69,12 @@ This section defines where Bootstrap grid and responsive utilities are applied t
 - Filter panel and queue actions:
 	- Standardize to Bootstrap form rows and button groups for mobile stacking.
 
+### 4b) Browser Tag Review
+
+- File: `api/templates/browser_tag_review.html`
+- Keep the same overall preview/actions layout as Tag Review, but limit the queue to browser-only buckets.
+- Include the YAML preview, copy, refresh, and download actions in the right-hand panel so browser cleanup can stay local to the browser workflow.
+
 ### 5) Journal
 
 - File: `api/templates/journal.html`
