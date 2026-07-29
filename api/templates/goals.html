@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Goals - WorkGraph{% endblock %}
+
+{% block nav_goals %}active{% endblock %}
+
+{% block content %}
+<div>
+    <h2>Goal Allocation</h2>
+    <div class="card">
+        <div class="row g-3" style="margin-bottom: 0;">
+            <div class="col-12 col-md-4 metric-card">
+                <div class="metric-card__label">Time Range</div>
+                <div class="metric-card__value">Last {{ days }} days</div>
+                <div class="metric-card__subtext">Uses the current activity database and configured goals file.</div>
+            </div>
+            <div class="col-12 col-md-4 metric-card">
+                <div class="metric-card__label">Drift Score</div>
+                <div class="metric-card__value">{{ "%.1f"|format(drift_score) }}%</div>
+                <div class="metric-card__subtext">Average absolute mismatch across goals.</div>
+            </div>
+            <div class="col-12 col-md-4 metric-card">
+                <div class="metric-card__label">Goals File</div>
+                <div class="metric-card__value" style="font-size: 1.1rem;">{{ goals_path }}</div>
+                <div class="metric-card__subtext">Resolved from your personal goals config when present.</div>
+            </div>
+        </div>
+    </div>
+
+    {% if goals %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Goal</th>
+                        {% if use_hours %}
+                        <th>Target Hours</th>
+                        <th>Actual Hours</th>
+                        <th>Progress</th>
+                        <th>Status</th>
+                        <th>Match</th>
+                        {% else %}
+                        <th>Planned</th>
+                        <th>Actual</th>
+                        <th>Delta</th>
+                        <th>Status</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for goal in goals %}
+                    <tr>
+                        <td>{{ goal.goal }}</td>
+                        {% if use_hours %}
+                        <td>{{ "%.1f"|format(goal.target_hours) }}h</td>
+                        <td>{{ "%.1f"|format(goal.actual_hours) }}h</td>
+                        <td>{{ "%.0f"|format(goal.progress_pct) }}%</td>
+                        <td>{% if goal.progress_pct < 90 %}Under{% elif goal.progress_pct > 110 %}Over{% else %}On track{% endif %}</td>
+                        <td>{{ goal.match_reason or (goal.matched_intents|join(', ')) or '-' }}</td>
+                        {% else %}
+                        <td>{{ "%.1f"|format(goal.planned_pct) }}%</td>
+                        <td>{{ "%.1f"|format(goal.actual_pct) }}%</td>
+                        <td>{{ "+" if goal.delta_pct_points > 0 else "" }}{{ "%.1f"|format(goal.delta_pct_points) }} pts</td>
+                        <td>{% if goal.delta_pct_points <= -5 %}Under{% elif goal.delta_pct_points >= 5 %}Over{% else %}On track{% endif %}</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card">
+        <p class="text-body-secondary mb-0">No goals are configured yet. Add a goals YAML file to start tracking progress.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

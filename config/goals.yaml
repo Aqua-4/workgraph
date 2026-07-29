@@ -1,5 +1,54 @@
 goals:
-  Client Delivery: 70
-  Learning: 10
-  Strategic Planning: 10
-  Personal Projects: 10
+  Client Delivery:
+    display_name: Client Delivery
+    target:
+      hours: 40
+      period: week
+    planned_pct: 45
+    intents:
+      - delivery_work
+      - client_meeting
+    intent_ids:
+      - client_delivery
+      - meetings
+      - planning
+
+  Learning:
+    display_name: Learning
+    target:
+      hours: 10
+      period: week
+    planned_pct: 20
+    intents:
+      - learning
+      - interview_prep
+    intent_ids:
+      - learning
+      - study
+
+  Strategic Planning:
+    display_name: Strategic Planning
+    target:
+      hours: 8
+      period: week
+    planned_pct: 15
+    intents:
+      - planning
+      - research
+    intent_ids:
+      - planning
+      - research
+      - strategy
+
+  Personal Projects:
+    display_name: Personal Projects
+    target:
+      hours: 8
+      period: week
+    planned_pct: 20
+    intents:
+      - personal_coding
+      - side_project
+    intent_ids:
+      - personal_coding
+      - side_project

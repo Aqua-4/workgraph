@@ -35,23 +35,23 @@ This section defines where Bootstrap grid and responsive utilities are applied t
 - File: `api/templates/base.html`
 - Use Bootstrap containers and responsive spacing tokens as the default shell for every page.
 - Navigation:
-	- Keep nav links in a wrapping flex row using Bootstrap utility classes.
-	- Preserve clear active state while allowing links to stack on narrow screens.
+  - Keep nav links in a wrapping flex row using Bootstrap utility classes.
+  - Preserve clear active state while allowing links to stack on narrow screens.
 - Header context block:
-	- Render mode/source/user/device/time fields as a responsive grid using `row` + `col-*` classes.
-	- Collapse from multi-column desktop to single-column mobile cleanly.
+  - Render mode/source/user/device/time fields as a responsive grid using `row` + `col-*` classes.
+  - Collapse from multi-column desktop to single-column mobile cleanly.
 
 ### 2) Dashboard Surfaces
 
 - Files: `api/templates/dashboard.html`, `api/templates/sync_server_dashboard.html`
 - Convert metric clusters to Bootstrap row/column cards:
-	- `row g-3` for spacing.
-	- `col-12 col-sm-6 col-xl-4` or `col-12 col-md-6 col-xl-3` depending on card density.
+  - `row g-3` for spacing.
+  - `col-12 col-sm-6 col-xl-4` or `col-12 col-md-6 col-xl-3` depending on card density.
 - Forms and filters:
-	- Replace custom inline form widths with responsive `col-*` field widths.
-	- Keep primary action buttons full-width on mobile and inline on desktop.
+  - Replace custom inline form widths with responsive `col-*` field widths.
+  - Keep primary action buttons full-width on mobile and inline on desktop.
 - Secondary detail blocks (device status, sync health, errors):
-	- Use table wrappers with `table-responsive` and stacked card sections for smaller widths.
+  - Use table wrappers with `table-responsive` and stacked card sections for smaller widths.
 
 ### 3) Timeline Views
 
@@ -64,10 +64,10 @@ This section defines where Bootstrap grid and responsive utilities are applied t
 
 - File: `api/templates/tag_review.html`
 - Main 2-column layout becomes Bootstrap grid driven:
-	- `row g-3` with `col-12 col-xl-8` (review queue) + `col-12 col-xl-4` (rule preview/actions).
-	- Maintain current visual accents (repo/domain/app grouping) while improving breakpoint behavior.
+  - `row g-3` with `col-12 col-xl-8` (review queue) + `col-12 col-xl-4` (rule preview/actions).
+  - Maintain current visual accents (repo/domain/app grouping) while improving breakpoint behavior.
 - Filter panel and queue actions:
-	- Standardize to Bootstrap form rows and button groups for mobile stacking.
+  - Standardize to Bootstrap form rows and button groups for mobile stacking.
 
 ### 4b) Browser Tag Review
 

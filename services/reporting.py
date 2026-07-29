@@ -11,7 +11,6 @@ import yaml
 
 from api.app import get_sync_health
 
-
 MEETING_SQL_PREDICATE = """
 (
     LOWER(COALESCE(app_name, '')) LIKE '%teams%'
@@ -36,6 +35,11 @@ class GoalDrift:
     actual_pct: float
     delta_pct_points: float
     relative_gap_pct: float
+    target_hours: float | None = None
+    actual_hours: float = 0.0
+    progress_pct: float = 0.0
+    matched_intents: tuple[str, ...] = ()
+    match_reason: str | None = None
 
 
 def default_goals_path() -> Path:
@@ -60,7 +64,11 @@ def export_activity_sessions(
 
     rows = _query_sessions(db_path=db_path, days=days, include_idle=include_idle)
 
-    target = Path(output_path) if output_path is not None else _default_export_path(export_format, now=now)
+    target = (
+        Path(output_path)
+        if output_path is not None
+        else _default_export_path(export_format, now=now)
+    )
     target.parent.mkdir(parents=True, exist_ok=True)
 
     if export_format == "json":
@@ -141,7 +149,9 @@ def _generate_activity_report_markdown(
             (since.isoformat(),),
         )
 
-        context_switches = _count_context_switches(conn=conn, since_iso=since.isoformat())
+        context_switches = _count_context_switches(
+            conn=conn, since_iso=since.isoformat()
+        )
 
         top_projects = _rows_to_named_seconds(
             conn,
@@ -183,7 +193,9 @@ def _generate_activity_report_markdown(
     lines.append("Top Projects")
     if top_projects:
         for idx, item in enumerate(top_projects, start=1):
-            lines.append(f"{idx}. {item['name']} ({_format_hours(item['total_seconds'])})")
+            lines.append(
+                f"{idx}. {item['name']} ({_format_hours(item['total_seconds'])})"
+            )
     else:
         lines.append("1. None")
 
@@ -191,7 +203,9 @@ def _generate_activity_report_markdown(
     lines.append("Top Tags")
     if top_tags:
         for idx, item in enumerate(top_tags, start=1):
-            lines.append(f"{idx}. {item['name']} ({_format_hours(item['total_seconds'])})")
+            lines.append(
+                f"{idx}. {item['name']} ({_format_hours(item['total_seconds'])})"
+            )
     else:
         lines.append("1. None")
 
@@ -312,22 +326,111 @@ def analyze_goal_allocation(
         conn.row_factory = sqlite3.Row
         cursor = conn.execute(
             """
-            SELECT COALESCE(tag, 'Untagged') as tag_name, SUM(duration_sec) as total_seconds
+            SELECT app_name, browser_domain, window_title, COALESCE(tag, 'Untagged') as tag_name, duration_sec
             FROM activity_sessions
             WHERE start_time >= ?
               AND is_idle = 0
-            GROUP BY COALESCE(tag, 'Untagged')
+            ORDER BY start_time
             """,
             (since.isoformat(),),
         )
         rows = list(cursor.fetchall())
 
-    total_seconds = sum((int(row["total_seconds"] or 0) for row in rows))
-    actual_by_tag = {str(row["tag_name"]): int(row["total_seconds"] or 0) for row in rows}
+    tag_intents = _load_tag_intent_metadata()
+    total_seconds = sum(int(row["duration_sec"] or 0) for row in rows)
+    actual_by_tag = {}
+    for row in rows:
+        tag_name = str(row["tag_name"] or "Untagged")
+        actual_by_tag[tag_name] = actual_by_tag.get(tag_name, 0) + int(
+            row["duration_sec"] or 0
+        )
 
     drifts: list[GoalDrift] = []
-    for goal, planned_pct in goals.items():
-        actual_pct = ((actual_by_tag.get(goal, 0) / total_seconds) * 100.0) if total_seconds else 0.0
+    for goal, config in goals.items():
+        if isinstance(config, dict):
+            target_hours = config.get("target_hours")
+            intents = config.get("intents") or []
+            if target_hours is not None:
+                matched_rows = [
+                    row
+                    for row in rows
+                    if _session_matches_goal_intents(row, intents, tag_intents)
+                ]
+                actual_seconds = sum(
+                    int(row["duration_sec"] or 0) for row in matched_rows
+                )
+                actual_hours = actual_seconds / 3600.0
+                progress_pct = (
+                    (actual_hours / target_hours * 100.0) if target_hours > 0 else 0.0
+                )
+                actual_pct = (
+                    (actual_seconds / total_seconds * 100.0) if total_seconds else 0.0
+                )
+                planned_pct = 100.0
+                delta = actual_pct - planned_pct
+                relative_gap = (
+                    ((planned_pct - actual_pct) / planned_pct * 100.0)
+                    if planned_pct > 0
+                    else 0.0
+                )
+                matched_intents = tuple(
+                    sorted(
+                        {
+                            normalized
+                            for normalized in {
+                                str(intent).strip().lower()
+                                for intent in intents
+                                if intent
+                            }
+                            if normalized
+                        }
+                    )
+                )
+                match_reason = _describe_goal_match(matched_rows, matched_intents)
+                drifts.append(
+                    GoalDrift(
+                        goal=goal,
+                        planned_pct=round(planned_pct, 2),
+                        actual_pct=round(actual_pct, 2),
+                        delta_pct_points=round(delta, 2),
+                        relative_gap_pct=round(relative_gap, 2),
+                        target_hours=round(float(target_hours), 2),
+                        actual_hours=round(actual_hours, 2),
+                        progress_pct=round(progress_pct, 2),
+                        matched_intents=matched_intents,
+                        match_reason=match_reason,
+                    )
+                )
+                continue
+
+            planned_pct = float(config.get("planned_pct", 0.0) or 0.0)
+            actual_pct = (
+                ((actual_by_tag.get(goal, 0) / total_seconds) * 100.0)
+                if total_seconds
+                else 0.0
+            )
+            delta = actual_pct - planned_pct
+            relative_gap = 0.0
+            if planned_pct > 0:
+                relative_gap = ((planned_pct - actual_pct) / planned_pct) * 100.0
+
+            drifts.append(
+                GoalDrift(
+                    goal=goal,
+                    planned_pct=round(planned_pct, 2),
+                    actual_pct=round(actual_pct, 2),
+                    delta_pct_points=round(delta, 2),
+                    relative_gap_pct=round(relative_gap, 2),
+                )
+            )
+            continue
+
+        planned_pct = float(config)
+        actual_pct = (
+            ((actual_by_tag.get(goal, 0) / total_seconds) * 100.0)
+            if total_seconds
+            else 0.0
+        )
         delta = actual_pct - planned_pct
         relative_gap = 0.0
         if planned_pct > 0:
@@ -368,16 +471,32 @@ def _goal_drift_section(drifts: list[GoalDrift]) -> list[str]:
         lines.append("No goals configured or no tracked data.")
         return lines
 
-    lines.append("| Goal | Planned % | Actual % | Delta (pp) | Status |")
-    lines.append("|---|---:|---:|---:|---|")
-
-    for drift in drifts:
-        status = _status_for_drift(drift.delta_pct_points)
+    uses_hours = any(drift.target_hours is not None for drift in drifts)
+    if uses_hours:
         lines.append(
-            f"| {drift.goal} | {drift.planned_pct:.1f} | {drift.actual_pct:.1f} | {drift.delta_pct_points:+.1f} | {status} |"
+            "| Goal | Target Hours | Actual Hours | Progress | Status | Match |"
         )
+        lines.append("|---|---:|---:|---:|---|---|")
 
-    under_allocated = [d for d in drifts if d.delta_pct_points <= -5 and d.planned_pct > 0]
+        for drift in drifts:
+            status = _status_for_progress(drift.progress_pct)
+            match_text = drift.match_reason or ", ".join(drift.matched_intents) or "-"
+            lines.append(
+                f"| {drift.goal} | {drift.target_hours:.1f} | {drift.actual_hours:.1f} | {drift.progress_pct:.0f}% | {status} | {match_text} |"
+            )
+    else:
+        lines.append("| Goal | Planned % | Actual % | Delta (pp) | Status |")
+        lines.append("|---|---:|---:|---:|---|")
+
+        for drift in drifts:
+            status = _status_for_drift(drift.delta_pct_points)
+            lines.append(
+                f"| {drift.goal} | {drift.planned_pct:.1f} | {drift.actual_pct:.1f} | {drift.delta_pct_points:+.1f} | {status} |"
+            )
+
+    under_allocated = [
+        d for d in drifts if d.delta_pct_points <= -5 and d.planned_pct > 0
+    ]
     if under_allocated:
         lines.append("")
         lines.append("Key Alerts")
@@ -397,7 +516,154 @@ def _status_for_drift(delta_pct_points: float) -> str:
     return "On track"
 
 
-def _load_goals(goals_path: str | Path) -> dict[str, float]:
+def _status_for_progress(progress_pct: float) -> str:
+    if progress_pct < 90:
+        return "Under"
+    if progress_pct > 110:
+        return "Over"
+    return "On track"
+
+
+def _describe_goal_match(
+    rows: list[sqlite3.Row], matched_intents: tuple[str, ...]
+) -> str:
+    if not rows:
+        return "no matching sessions"
+
+    intents_text = ", ".join(matched_intents) if matched_intents else "intent metadata"
+    sample_tags = sorted({str(row["tag_name"] or "Untagged") for row in rows[:3]})
+    if sample_tags:
+        return f"{intents_text} via {', '.join(sample_tags)}"
+    return intents_text
+
+
+def _session_matches_goal_intents(
+    row: sqlite3.Row,
+    intents: list[str],
+    tag_intents: dict[str, set[str]],
+) -> bool:
+    if not intents:
+        return False
+
+    normalized_intents = {str(intent).strip().lower() for intent in intents if intent}
+    if not normalized_intents:
+        return False
+
+    session_intents = _infer_session_intents(row, tag_intents)
+    if any(intent in session_intents for intent in normalized_intents):
+        return True
+
+    fallback_text = " ".join(
+        [
+            str(row["tag_name"] or "").lower(),
+            str(row["app_name"] or "").lower(),
+            str(row["window_title"] or "").lower(),
+            str(row["browser_domain"] or "").lower(),
+        ]
+    )
+
+    for intent in normalized_intents:
+        if intent in fallback_text:
+            return True
+
+    return False
+
+
+def _infer_session_intents(
+    row: sqlite3.Row,
+    tag_intents: dict[str, set[str]],
+) -> set[str]:
+    session_intents: set[str] = set()
+
+    tag_name = str(row["tag_name"] or "").strip().lower()
+    if tag_name in tag_intents:
+        session_intents.update(tag_intents[tag_name])
+
+    text = " ".join(
+        [
+            str(row["tag_name"] or "").lower(),
+            str(row["app_name"] or "").lower(),
+            str(row["window_title"] or "").lower(),
+            str(row["browser_domain"] or "").lower(),
+        ]
+    )
+
+    if any(
+        keyword in text
+        for keyword in [
+            "learning",
+            "lesson",
+            "course",
+            "udemy",
+            "certification",
+            "study",
+        ]
+    ):
+        session_intents.add("learning")
+
+    if any(keyword in text for keyword in ["delivery", "client", "work", "project"]):
+        session_intents.add("delivery_work")
+
+    if any(
+        keyword in text
+        for keyword in [
+            "meeting",
+            "standup",
+            "huddle",
+            "teams",
+            "zoom",
+            "webex",
+            "slack",
+        ]
+    ):
+        session_intents.add("client_meeting")
+
+    return session_intents
+
+
+def _load_tag_intent_metadata() -> dict[str, set[str]]:
+    config_dir = Path(__file__).parent.parent / "config"
+    tag_intents: dict[str, set[str]] = {}
+
+    for path in [config_dir / "tags.yaml", config_dir / "my-tags.yaml"]:
+        if not path.exists():
+            continue
+        try:
+            with path.open(encoding="utf-8") as handle:
+                parsed = yaml.safe_load(handle) or {}
+        except Exception:
+            continue
+
+        tags_config = parsed.get("tags") if isinstance(parsed, dict) else None
+        if not isinstance(tags_config, dict):
+            continue
+
+        for tag_name, tag_config in tags_config.items():
+            if not isinstance(tag_config, dict):
+                continue
+            for key in ("intent", "intents"):
+                raw_values = tag_config.get(key)
+                if not isinstance(raw_values, list):
+                    if raw_values is not None:
+                        raw_values = [raw_values]
+                    else:
+                        continue
+
+                normalized_values = {
+                    str(value).strip().lower()
+                    for value in raw_values
+                    if str(value).strip()
+                }
+                if normalized_values:
+                    normalized_tag_name = str(tag_name).strip().lower()
+                    tag_intents.setdefault(normalized_tag_name, set()).update(
+                        normalized_values
+                    )
+
+    return tag_intents
+
+
+def _load_goals(goals_path: str | Path) -> dict[str, object]:
     path = Path(goals_path)
     if not path.exists():
         return {}
@@ -409,15 +675,53 @@ def _load_goals(goals_path: str | Path) -> dict[str, float]:
     if not isinstance(goals_obj, dict):
         return {}
 
-    goals: dict[str, float] = {}
+    goals: dict[str, object] = {}
     for key, value in goals_obj.items():
         if value is None:
             continue
+
+        if isinstance(value, dict):
+            target = (
+                value.get("target") if isinstance(value.get("target"), dict) else None
+            )
+            target_hours = None
+            if target is not None:
+                target_hours_value = target.get("hours")
+                try:
+                    target_hours = float(target_hours_value)
+                except (TypeError, ValueError):
+                    target_hours = None
+
+            raw_intents = value.get("intents")
+            raw_intent_ids = value.get("intent_ids")
+            intents: list[str] = []
+            if isinstance(raw_intents, list):
+                intents = [str(item) for item in raw_intents if item is not None]
+            if isinstance(raw_intent_ids, list):
+                intents.extend(str(item) for item in raw_intent_ids if item is not None)
+
+            goals[str(key)] = {
+                "planned_pct": _coerce_number(value.get("planned_pct")),
+                "target_hours": target_hours,
+                "intents": intents,
+            }
+            continue
+
         try:
             goals[str(key)] = float(value)
         except (TypeError, ValueError):
             continue
+
     return goals
+
+
+def _coerce_number(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _query_sessions(
@@ -449,7 +753,10 @@ def _query_sessions(
 
 def _default_export_path(export_format: str, now: datetime | None) -> Path:
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%d-%H%M%S")
-    return Path("exports") / f"activity-export-{stamp}.{_file_extension_for_format(export_format)}"
+    return (
+        Path("exports")
+        / f"activity-export-{stamp}.{_file_extension_for_format(export_format)}"
+    )
 
 
 def _file_extension_for_format(export_format: str) -> str:
@@ -530,7 +837,9 @@ def _scalar(conn: sqlite3.Connection, query: str, params: tuple) -> int:
     return int(value or 0)
 
 
-def _rows_to_named_seconds(conn: sqlite3.Connection, query: str, params: tuple) -> list[dict[str, int | str]]:
+def _rows_to_named_seconds(
+    conn: sqlite3.Connection, query: str, params: tuple
+) -> list[dict[str, int | str]]:
     cursor = conn.execute(query, params)
     return [
         {"name": str(row["name"]), "total_seconds": int(row["total_seconds"] or 0)}

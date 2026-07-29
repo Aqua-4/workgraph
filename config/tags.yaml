@@ -159,10 +159,61 @@ tags:
       - compass
       - tenet
       - atlas
-    domains: []
+    domains:
+      - teams.microsoft.com
+      - meet.google.com
+      - zoom.us
+      - webex.com
     keywords:
       - client
       - delivery
+      - delivery_work
+      - meeting
+      - standup
+      - huddle
+      - review
+      - sprint
+      - roadmap
+      - workstream
+      - project
+    intent:
+      - client_delivery
+      - meetings
+      - planning
+
+  Strategic Planning:
+    repos: []
+    domains: []
+    keywords:
+      - planning
+      - roadmap
+      - strategy
+      - research
+      - analysis
+      - architecture
+      - design
+      - investigation
+    intent:
+      - planning
+      - research
+      - strategy
+
+  Personal Projects:
+    repos: []
+    domains: []
+    keywords:
+      - personal
+      - personal_coding
+      - side project
+      - side-project
+      - prototype
+      - hobby
+      - passion project
+      - pet project
+      - self project
+    intent:
+      - personal_coding
+      - side_project
 
   # Active coding work in repos and IDE/editor windows.
   Development:
@@ -303,6 +354,9 @@ tags:
       - learn
       - lecture
       - certification
+    intent:
+      - learning
+      - study
 
   # Online meetings, chats, and team communication.
   Collaboration:

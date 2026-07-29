@@ -3864,6 +3864,64 @@ async def dashboard(
     )
 
 
+@app.get("/goals", response_class=HTMLResponse)
+async def goals_page(
+    days: int = Query(7, ge=1, le=3650),
+    source: str | None = Query(None),
+    user_id: str | None = Query(None),
+    device_id: str | None = Query(None),
+):
+    """Goals view showing configured goal targets, actual progress, and drift."""
+    db_path = get_db_path()
+    dashboard_mode = _configured_dashboard_mode()
+    default_source = _source_for_dashboard_mode(dashboard_mode)
+    normalized_source = _normalize_source(source or default_source)
+
+    from services.reporting import analyze_goal_allocation
+
+    goals_path = _resolve_goals_path()
+    goals: list[object] = []
+    if db_path.exists():
+        goals = analyze_goal_allocation(
+            db_path=db_path,
+            goals_path=goals_path,
+            days=days,
+        )
+
+    use_hours = any(getattr(goal, "target_hours", None) is not None for goal in goals)
+    drift_score = (
+        round(
+            sum(abs(float(getattr(goal, "delta_pct_points", 0.0))) for goal in goals)
+            / 2.0,
+            2,
+        )
+        if goals
+        else 0.0
+    )
+    template = jinja_env.get_template("goals.html")
+    return template.render(
+        goals=goals,
+        use_hours=use_hours,
+        days=days,
+        drift_score=drift_score,
+        goals_path=str(goals_path),
+        dashboard_mode=dashboard_mode,
+        source=normalized_source,
+        selected_user_id=user_id,
+        selected_device_id=device_id,
+        sync_health=get_sync_health(db_path) if db_path.exists() else None,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source=normalized_source,
+            days=days,
+            selected_user_id=user_id,
+            selected_device_id=device_id,
+            selected_user_name=user_id,
+            selected_device_name=device_id,
+        ),
+    )
+
+
 @app.get("/timeline", response_class=HTMLResponse)
 async def timeline(
     days: int = Query(7, ge=1, le=30),
