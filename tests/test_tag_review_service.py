@@ -373,6 +373,23 @@ tag_review:
         self.assertIn("tradingview.com", preview_text)
         self.assertEqual(warnings, [])
 
+    def test_build_yaml_preview_preserves_intent_keys(self) -> None:
+        existing_rules = {
+            "Development": {
+                "repos": [],
+                "domains": [],
+                "keywords": [],
+                "intent": ["personal_coding", "learning"],
+            }
+        }
+
+        preview_text, warnings = build_yaml_preview(existing_rules, {})
+
+        self.assertIn("intent:", preview_text)
+        self.assertIn("personal_coding", preview_text)
+        self.assertIn("learning", preview_text)
+        self.assertEqual(warnings, [])
+
 
 if __name__ == "__main__":
     unittest.main()

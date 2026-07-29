@@ -302,6 +302,7 @@ def load_custom_tag_rules(config_path: Path | str | None = None) -> TagRuleMap:
             "repos": _normalize_string_list(rule.get("repos")),
             "domains": _normalize_string_list(rule.get("domains")),
             "keywords": _normalize_string_list(rule.get("keywords")),
+            "intent": _normalize_string_list(rule.get("intent")),
         }
     return normalized
 
@@ -450,7 +451,7 @@ def build_yaml_preview(
 
     for tag_name, suggestion in selected_suggestions.items():
         target_rule = merged_rules.setdefault(
-            str(tag_name), {"repos": [], "domains": [], "keywords": []}
+            str(tag_name), {"repos": [], "domains": [], "keywords": [], "intent": []}
         )
         target_rule["repos"] = _merge_unique(
             target_rule.get("repos", []),
@@ -464,6 +465,16 @@ def build_yaml_preview(
             target_rule.get("keywords", []),
             _normalize_string_list(suggestion.get("keywords")),
         )
+        existing_intent_values = target_rule.get("intent", [])
+        if (
+            existing_intent_values
+            or isinstance(suggestion.get("intent"), Iterable)
+            and not isinstance(suggestion.get("intent"), str)
+        ):
+            target_rule["intent"] = _merge_unique(
+                existing_intent_values,
+                _normalize_string_list(suggestion.get("intent")),
+            )
 
     preview_text = yaml.safe_dump(
         {"tags": merged_rules},
@@ -542,6 +553,7 @@ def _coerce_rule_map(
             "repos": _normalize_string_list(rule.get("repos", [])),
             "domains": _normalize_string_list(rule.get("domains", [])),
             "keywords": _normalize_string_list(rule.get("keywords", [])),
+            "intent": _normalize_string_list(rule.get("intent", [])),
         }
     return normalized
 
