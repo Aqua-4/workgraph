@@ -201,14 +201,14 @@ goals:
     target:
       hours: 2
       period: week
-    intents:
-      - delivery_work
-      - client_meeting
+    activity_intent_ids:
+      - client_delivery
+      - meetings
   Learning:
     target:
       hours: 1
       period: week
-    intents:
+    activity_intent_ids:
       - learning
 """.strip()
                 + "\n",
@@ -247,7 +247,7 @@ goals:
     target:
       hours: 1
       period: week
-    intent_ids:
+    activity_intent_ids:
       - client_delivery
 """.strip()
                 + "\n",
@@ -265,6 +265,37 @@ goals:
         client_goal = next(item for item in drift if item.goal == "Client Delivery")
         self.assertGreater(client_goal.actual_hours, 0)
         self.assertGreater(client_goal.progress_pct, 0)
+
+    def test_goal_allocation_ignores_legacy_intents_key(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            db_path = temp / "activity.db"
+            goals_path = temp / "goals.yaml"
+            goals_path.write_text(
+                """
+goals:
+  Client Delivery:
+    target:
+      hours: 1
+      period: week
+    intents:
+      - delivery_work
+""".strip()
+                + "\n",
+                encoding="utf-8",
+            )
+            self._seed_sessions(db_path)
+
+            drift = analyze_goal_allocation(
+                db_path=db_path,
+                goals_path=goals_path,
+                days=7,
+                now=datetime(2026, 7, 11, 0, 0, tzinfo=UTC),
+            )
+
+        client_goal = next(item for item in drift if item.goal == "Client Delivery")
+        self.assertEqual(client_goal.actual_hours, 0)
+        self.assertEqual(client_goal.progress_pct, 0)
 
     def test_sync_report_summarizes_device_health(self) -> None:
         with TemporaryDirectory() as temp_dir:

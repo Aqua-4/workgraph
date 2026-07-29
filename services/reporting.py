@@ -692,13 +692,12 @@ def _load_goals(goals_path: str | Path) -> dict[str, object]:
                 except (TypeError, ValueError):
                     target_hours = None
 
-            raw_intents = value.get("intents")
-            raw_intent_ids = value.get("intent_ids")
+            raw_activity_intent_ids = value.get("activity_intent_ids")
             intents: list[str] = []
-            if isinstance(raw_intents, list):
-                intents = [str(item) for item in raw_intents if item is not None]
-            if isinstance(raw_intent_ids, list):
-                intents.extend(str(item) for item in raw_intent_ids if item is not None)
+            if isinstance(raw_activity_intent_ids, list):
+                intents.extend(
+                    str(item) for item in raw_activity_intent_ids if item is not None
+                )
 
             goals[str(key)] = {
                 "planned_pct": _coerce_number(value.get("planned_pct")),

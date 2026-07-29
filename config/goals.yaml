@@ -5,10 +5,7 @@ goals:
       hours: 40
       period: week
     planned_pct: 45
-    intents:
-      - delivery_work
-      - client_meeting
-    intent_ids:
+    activity_intent_ids:
       - client_delivery
       - meetings
       - planning
@@ -19,10 +16,7 @@ goals:
       hours: 10
       period: week
     planned_pct: 20
-    intents:
-      - learning
-      - interview_prep
-    intent_ids:
+    activity_intent_ids:
       - learning
       - study
 
@@ -32,10 +26,7 @@ goals:
       hours: 8
       period: week
     planned_pct: 15
-    intents:
-      - planning
-      - research
-    intent_ids:
+    activity_intent_ids:
       - planning
       - research
       - strategy
@@ -46,9 +37,6 @@ goals:
       hours: 8
       period: week
     planned_pct: 20
-    intents:
-      - personal_coding
-      - side_project
-    intent_ids:
+    activity_intent_ids:
       - personal_coding
       - side_project

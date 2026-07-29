@@ -208,7 +208,7 @@ Use a simple, deterministic pipeline:
 
 ### Suggested configuration shape
 
-Using the current YAML structure, a practical example looks like this. Goals keep the target, planned allocation, and a list of intent names, while tags can also carry explicit intent metadata to make the intent layer visible in configuration:
+Using the current YAML structure, a practical example looks like this. Goals keep the target, planned allocation, and a list of activity-intent IDs, while tags can also carry explicit intent metadata to make the intent layer visible in configuration:
 
 ```yaml
 goals:
@@ -218,10 +218,7 @@ goals:
       hours: 40
       period: week
     planned_pct: 45
-    intents:
-      - delivery_work
-      - client_meeting
-    intent_ids:
+    activity_intent_ids:
       - client_delivery
       - meetings
       - planning
@@ -232,10 +229,7 @@ goals:
       hours: 10
       period: week
     planned_pct: 20
-    intents:
-      - learning
-      - interview_prep
-    intent_ids:
+    activity_intent_ids:
       - learning
       - study
 ```
