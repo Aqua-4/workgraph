@@ -65,6 +65,19 @@ def test_time_announcements_respect_activity_and_hours() -> None:
     assert len(spoken) == 1
 
 
+def test_time_announcements_continue_when_idle_detection_is_unavailable() -> None:
+    spoken: list[str] = []
+    service = WellbeingService(
+        WellbeingSettings(time_announcements_enabled=True),
+        lambda text: None,
+        spoken.append,
+    )
+    now = datetime(2026, 11, 15, 9, 29, 55)
+    service.update(0, now, 0, False, False)
+    service.update(5, now + timedelta(seconds=5), 0, False, False)
+    assert spoken == ["It's 9:30 AM."]
+
+
 def test_sleep_gap_does_not_count_as_work_or_announce() -> None:
     notifications: list[str] = []
     spoken: list[str] = []
@@ -245,6 +258,62 @@ def test_collector_wires_samples_and_controls(tmp_path: Path) -> None:
     collector.wellbeing_delivery.close()
 
 
+def test_collector_announcements_survive_idle_and_break_failures(
+    tmp_path: Path,
+) -> None:
+    settings = CollectorSettings(
+        database_path=str(tmp_path / "activity.db"),
+        identity_path=str(tmp_path / "identity.json"),
+        log_path=str(tmp_path / "workgraph.log"),
+        wellbeing=WellbeingSettings(
+            break_reminders_enabled=True,
+            time_announcements_enabled=True,
+        ),
+    )
+    collector = CollectorService(settings)
+    collector.window_tracker.get_active_window = lambda: ActiveWindow(
+        "code", "code", "work", None, "linux"
+    )
+
+    def fail_idle_detection() -> IdleState:
+        raise RuntimeError("idle tracking failed")
+
+    collector.idle_tracker.get_idle_state = fail_idle_detection
+    collector.git_tracker.get_activity = lambda **kwargs: GitActivity(
+        None, None, None, []
+    )
+    collector.browser_tracker.get_domain = lambda window: None
+    now = (
+        datetime.now().astimezone().replace(hour=9, minute=29, second=55, microsecond=0)
+    )
+    try:
+        with (
+            patch("services.collector_service.time.monotonic", side_effect=[0, 5]),
+            patch(
+                "services.collector_service.utc_now",
+                side_effect=[
+                    now,
+                    now,
+                    now + timedelta(seconds=5),
+                    now + timedelta(seconds=5),
+                ],
+            ),
+            patch.object(
+                collector.wellbeing,
+                "update_break_reminders",
+                side_effect=RuntimeError("break reminders failed"),
+            ),
+            patch.object(collector.wellbeing, "speak") as speak,
+        ):
+            collector.collect_once()
+            collector.collect_once()
+        speak.assert_called_once_with("It's 9:30 AM.")
+        assert collector.session_builder.current is not None
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
+
+
 @pytest.mark.parametrize("mode", ["standalone", "sync-client", "sync-server"])
 @pytest.mark.parametrize(
     "feature", ["break_reminders_enabled", "time_announcements_enabled"]
@@ -271,9 +340,20 @@ def test_collector_wellbeing_is_only_available_on_clients(
     )
     collector.browser_tracker.get_domain = lambda window: None
     try:
-        with patch.object(collector.wellbeing, "update") as update:
+        with (
+            patch.object(collector.wellbeing, "update_break_reminders") as breaks,
+            patch.object(
+                collector.wellbeing, "update_time_announcements"
+            ) as announcements,
+        ):
             collector.collect_once()
-        assert update.call_count == (0 if mode == "sync-server" else 1)
+        expected_calls = 0 if mode == "sync-server" else 1
+        assert breaks.call_count == (
+            expected_calls if feature == "break_reminders_enabled" else 0
+        )
+        assert announcements.call_count == (
+            expected_calls if feature == "time_announcements_enabled" else 0
+        )
         assert collector.session_builder.current is not None
     finally:
         collector.repository.close()

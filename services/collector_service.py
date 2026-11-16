@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from collector.browser_tracker import BrowserTracker
 from collector.git_tracker import GitTracker
-from collector.idle_tracker import IdleTracker
+from collector.idle_tracker import IdleState, IdleTracker
 from collector.window_tracker import WindowTracker
 from db.repository import ActivityRepository
 from processor.session_builder import SessionBuilder
@@ -107,7 +107,19 @@ class CollectorService:
 
     def collect_once(self) -> None:
         active_window = self.window_tracker.get_active_window()
-        idle_state = self.idle_tracker.get_idle_state()
+        try:
+            idle_state = self.idle_tracker.get_idle_state()
+        except Exception:
+            idle_state = IdleState(False, 0, available=False)
+            if (
+                self.settings.wellbeing.break_reminders_enabled
+                and not self._idle_unavailable_warned
+            ):
+                LOGGER.warning(
+                    "Wellbeing idle detection failed; break timing is paused",
+                    exc_info=True,
+                )
+                self._idle_unavailable_warned = True
         git_activity = self.git_tracker.get_activity(
             pid=active_window.process_id,
             app_name=active_window.app_name,
@@ -123,35 +135,52 @@ class CollectorService:
             is_idle = True
             idle_seconds = max(idle_seconds, 1)
 
-        if self.settings.dashboard_mode in {"standalone", "sync-client"} and (
-            self.settings.wellbeing.break_reminders_enabled
-            or self.settings.wellbeing.time_announcements_enabled
-        ):
-            if not idle_state.available and not system_idle:
-                if not self._idle_unavailable_warned:
-                    LOGGER.warning(
-                        "Wellbeing idle detection unavailable; "
-                        "activity timing is paused"
-                    )
-                    self._idle_unavailable_warned = True
-            else:
-                self._idle_unavailable_warned = False
-            for action in (
-                *self.wellbeing_delivery.read_actions(),
-                *read_control_commands(self.settings.log_path),
+        if self.settings.dashboard_mode in {"standalone", "sync-client"}:
+            if self.settings.wellbeing.break_reminders_enabled:
+                if not idle_state.available and not system_idle:
+                    if not self._idle_unavailable_warned:
+                        LOGGER.warning(
+                            "Wellbeing idle detection unavailable; "
+                            "break timing is paused"
+                        )
+                        self._idle_unavailable_warned = True
+                else:
+                    self._idle_unavailable_warned = False
+            if (
+                self.settings.wellbeing.break_reminders_enabled
+                or self.settings.wellbeing.time_announcements_enabled
             ):
-                if action == "break":
-                    self.wellbeing.take_break()
-                elif action == "snooze":
-                    self.wellbeing.snooze()
-            self.wellbeing.update(
-                tick=time.monotonic(),
-                now=utc_now().astimezone(),
-                idle_seconds=idle_seconds,
-                idle_available=idle_state.available,
-                is_idle=is_idle,
-                system_idle=system_idle,
-            )
+                tick = time.monotonic()
+                now = utc_now().astimezone()
+            if self.settings.wellbeing.break_reminders_enabled:
+                try:
+                    for action in (
+                        *self.wellbeing_delivery.read_actions(),
+                        *read_control_commands(self.settings.log_path),
+                    ):
+                        if action == "break":
+                            self.wellbeing.take_break()
+                        elif action == "snooze":
+                            self.wellbeing.snooze()
+                    self.wellbeing.update_break_reminders(
+                        tick=tick,
+                        idle_seconds=idle_seconds,
+                        idle_available=idle_state.available,
+                        is_idle=is_idle,
+                        system_idle=system_idle,
+                    )
+                except Exception:
+                    LOGGER.exception("Wellbeing break reminder update failed")
+            if self.settings.wellbeing.time_announcements_enabled:
+                try:
+                    self.wellbeing.update_time_announcements(
+                        tick=tick,
+                        now=now,
+                        idle_available=idle_state.available,
+                        is_idle=is_idle,
+                    )
+                except Exception:
+                    LOGGER.exception("Wellbeing time announcement update failed")
 
         sample = ActivitySample(
             observed_at=utc_now(),
