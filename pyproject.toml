@@ -16,6 +16,8 @@ dependencies = [
     "fastapi>=0.104",
     "uvicorn>=0.24",
     "jinja2>=3.1",
+    "pyttsx3>=2.98",
+    "winotify>=1.1.0; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

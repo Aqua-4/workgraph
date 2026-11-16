@@ -5,8 +5,9 @@ import signal
 import time
 from dataclasses import replace
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from collector.browser_tracker import BrowserTracker
 from collector.git_tracker import GitTracker
@@ -15,6 +16,8 @@ from collector.window_tracker import WindowTracker
 from db.repository import ActivityRepository
 from processor.session_builder import SessionBuilder
 from services.activity_tagger import ActivityTagger
+from services.wellbeing import WellbeingService, WellbeingSettings
+from services.wellbeing_delivery import WellbeingDelivery, read_control_commands
 from workgraph.models import ActivitySample, utc_now
 
 LOGGER = logging.getLogger(__name__)
@@ -30,6 +33,13 @@ class CollectorSettings(BaseModel):
     browser_history_lookback_seconds: int = 600
     log_path: str = "logs/workgraph.log"
     identity_path: str = "config/identity.json"
+    dashboard_mode: Literal["standalone", "sync-client", "sync-server"] = "standalone"
+    wellbeing: WellbeingSettings = Field(default_factory=WellbeingSettings)
+
+    @field_validator("dashboard_mode", mode="before")
+    @classmethod
+    def normalize_dashboard_mode(cls, value: str) -> str:
+        return value.strip().lower()
 
     @field_validator("poll_interval_seconds")
     @classmethod
@@ -63,6 +73,14 @@ class CollectorService:
             settings.database_path,
             identity_path=settings.identity_path,
         )
+        self.wellbeing_delivery = WellbeingDelivery()
+        self.wellbeing = WellbeingService(
+            settings.wellbeing,
+            self.wellbeing_delivery.notify,
+            self.wellbeing_delivery.speak,
+            max_sample_gap=max(60, settings.poll_interval_seconds * 3),
+        )
+        self._idle_unavailable_warned = False
         self._running = False
 
     def run_forever(self) -> None:
@@ -72,12 +90,19 @@ class CollectorService:
         LOGGER.info("WorkGraph collector started")
 
         try:
+            announced = False
             while self._running:
                 self.collect_once()
+                if not announced:
+                    self.wellbeing_delivery.speak(
+                        "WorkGraph activity tracking started.", error_on_failure=True
+                    )
+                    announced = True
                 time.sleep(self.settings.poll_interval_seconds)
         finally:
             self.flush()
             self.repository.close()
+            self.wellbeing_delivery.close()
             LOGGER.info("WorkGraph collector stopped")
 
     def collect_once(self) -> None:
@@ -91,11 +116,42 @@ class CollectorService:
 
         is_idle = idle_state.is_idle
         idle_seconds = idle_state.idle_seconds
-        if self.activity_tagger.is_system_idle(
+        system_idle = self.activity_tagger.is_system_idle(
             active_window.app_name, active_window.process_name
-        ):
+        )
+        if system_idle:
             is_idle = True
             idle_seconds = max(idle_seconds, 1)
+
+        if self.settings.dashboard_mode in {"standalone", "sync-client"} and (
+            self.settings.wellbeing.break_reminders_enabled
+            or self.settings.wellbeing.time_announcements_enabled
+        ):
+            if not idle_state.available and not system_idle:
+                if not self._idle_unavailable_warned:
+                    LOGGER.warning(
+                        "Wellbeing idle detection unavailable; "
+                        "activity timing is paused"
+                    )
+                    self._idle_unavailable_warned = True
+            else:
+                self._idle_unavailable_warned = False
+            for action in (
+                *self.wellbeing_delivery.read_actions(),
+                *read_control_commands(self.settings.log_path),
+            ):
+                if action == "break":
+                    self.wellbeing.take_break()
+                elif action == "snooze":
+                    self.wellbeing.snooze()
+            self.wellbeing.update(
+                tick=time.monotonic(),
+                now=utc_now().astimezone(),
+                idle_seconds=idle_seconds,
+                idle_available=idle_state.available,
+                is_idle=is_idle,
+                system_idle=system_idle,
+            )
 
         sample = ActivitySample(
             observed_at=utc_now(),

@@ -7,6 +7,8 @@ import sys
 import time
 from pathlib import Path
 
+from services.wellbeing_delivery import error_beep
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -38,27 +40,38 @@ def run_unified(
     LOGGER.info("Press Ctrl+C to stop everything")
     LOGGER.info("=" * 70)
 
-    collector_process = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "services.collector_supervisor",
-            "--config",
-            collector_config,
-        ]
-    )
-
-    time.sleep(1)
-
-    dashboard_process = _start_dashboard(dashboard_port)
-    sync_process: subprocess.Popen[None] | None = None
-    if enable_sync and _has_sync_config(collector_config):
-        sync_process = _start_sync_daemon(collector_config)
-    elif enable_sync:
-        LOGGER.warning(
-            "sync_base_url/sync_token not found in %s. Sync daemon not started.",
-            _resolve_settings_path(collector_config),
+    try:
+        collector_process = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "services.collector_supervisor",
+                "--config",
+                collector_config,
+            ]
         )
+    except OSError:
+        error_beep()
+        raise
+
+    dashboard_process: subprocess.Popen[None] | None = None
+    sync_process: subprocess.Popen[None] | None = None
+    try:
+        time.sleep(1)
+        dashboard_process = _start_dashboard(dashboard_port)
+        if enable_sync and _has_sync_config(collector_config):
+            sync_process = _start_sync_daemon(collector_config)
+        elif enable_sync:
+            LOGGER.warning(
+                "sync_base_url/sync_token not found in %s. Sync daemon not started.",
+                _resolve_settings_path(collector_config),
+            )
+    except Exception:
+        error_beep()
+        collector_process.terminate()
+        if dashboard_process is not None:
+            dashboard_process.terminate()
+        raise
 
     LOGGER.info(f"✓ Collector started (PID: {collector_process.pid})")
     LOGGER.info(f"✓ Dashboard started (PID: {dashboard_process.pid})")
@@ -74,6 +87,7 @@ def run_unified(
             dashboard_poll = dashboard_process.poll()
 
             if collector_poll is not None:
+                error_beep()
                 LOGGER.error(
                     "Collector supervisor exited with code %s. Restarting in 2s.",
                     collector_poll,
@@ -93,6 +107,7 @@ def run_unified(
                 )
 
             if dashboard_poll is not None:
+                error_beep()
                 LOGGER.warning(
                     "Dashboard exited with code %s. Restarting in 2s.",
                     dashboard_poll,
@@ -104,6 +119,7 @@ def run_unified(
             if sync_process is not None:
                 sync_poll = sync_process.poll()
                 if sync_poll is not None:
+                    error_beep()
                     LOGGER.warning(
                         "Sync daemon exited with code %s. Restarting in 2s.",
                         sync_poll,

@@ -9,6 +9,8 @@ import subprocess
 import sys
 import time
 
+from services.wellbeing_delivery import error_beep
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -29,8 +31,10 @@ class CollectorSupervisor:
 
         restart_count = 0
         backoff_seconds = 2
+        error_signaled = False
 
         while not self._stopping:
+            started_at = time.monotonic()
             self._collector = subprocess.Popen(
                 [
                     sys.executable,
@@ -48,6 +52,11 @@ class CollectorSupervisor:
             if self._stopping:
                 break
 
+            if time.monotonic() - started_at >= 30:
+                error_signaled = False
+            if not error_signaled:
+                error_beep()
+                error_signaled = True
             restart_count += 1
             LOGGER.error(
                 "Collector exited unexpectedly (code=%s). Restart #%s in %ss.",

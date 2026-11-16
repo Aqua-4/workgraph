@@ -2,7 +2,6 @@
 agent: agent
 description: Summarise, search, or draw insights from workgraph journal entries and daily reflections.
 ---
-
 You have access to the user's journal from the workgraph activity database
 (`activity.db`). Use the schema below to retrieve, summarise, or find themes
 across entries. Always present data in a clear, empathetic tone.
@@ -16,39 +15,46 @@ repos, context-switch density, and focused minutes).
 ## Relevant tables
 
 ### journal_entries
+
 Free-form notes linked to an optional time window.
 
-| Column | Notes |
-|--------|-------|
-| `created_at` | ISO-8601 UTC |
+
+| Column                    | Notes                                   |
+| --------------------------- | ----------------------------------------- |
+| `created_at`              | ISO-8601 UTC                            |
 | `start_time` / `end_time` | optional session range this note covers |
-| `title` | short heading (may be NULL) |
-| `notes` | free-text body |
-| `metadata` | JSON blob |
-| `deleted_at` | NULL = active |
+| `title`                   | short heading (may be NULL)             |
+| `notes`                   | free-text body                          |
+| `metadata`                | JSON blob                               |
+| `deleted_at`              | NULL = active                           |
 
 ### daily_reflections
+
 Structured end-of-day entries.
 
-| Column | Notes |
-|--------|-------|
-| `date` | `YYYY-MM-DD` (UNIQUE) |
-| `wins` | what went well |
+
+| Column     | Notes                   |
+| ------------ | ------------------------- |
+| `date`     | `YYYY-MM-DD` (UNIQUE)   |
+| `wins`     | what went well          |
 | `problems` | blockers / frustrations |
-| `tomorrow` | plans for next day |
-| `energy` | 1–5 self-rating |
-| `stress` | 1–5 self-rating |
+| `tomorrow` | plans for next day      |
+|            |                         |
+| `energy`   | 1–5 self-rating        |
+| `stress`   | 1–5 self-rating        |
 
 ### work_events
+
 Structured events with contextual business impact.
 
-| Column | Notes |
-|--------|-------|
-| `event_time` | point-in-time timestamp |
+
+| Column       | Notes                                               |
+| -------------- | ----------------------------------------------------- |
+| `event_time` | point-in-time timestamp                             |
 | `event_type` | e.g. Achievement, Incident, Decision, Risk, Blocker |
-| `impact` | Low/Medium/High/Critical |
-| `project` | optional project label |
-| `notes` | free text details |
+| `impact`     | Low/Medium/High/Critical                            |
+| `project`    | optional project label                              |
+| `notes`      | free text details                                   |
 
 ## Correlation-first analysis guidance
 

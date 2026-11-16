@@ -19,6 +19,52 @@ from workgraph.models import ActivitySession
 
 
 class MainSettingsTests(unittest.TestCase):
+    def test_load_wellbeing_settings_from_flat_config(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "settings.yaml"
+            config_path.write_text(
+                "break_reminders_enabled: true\n"
+                "break_work_minutes: 45\n"
+                "time_announcements_enabled: true\n"
+                "time_announcement_active_only: false\n"
+                'wellbeing_start_time: "08:30"\n',
+                encoding="utf-8",
+            )
+            settings = load_settings(str(config_path))
+
+        self.assertTrue(settings.wellbeing.break_reminders_enabled)
+        self.assertEqual(settings.wellbeing.break_work_minutes, 45)
+        self.assertTrue(settings.wellbeing.time_announcements_enabled)
+        self.assertFalse(settings.wellbeing.time_announcement_active_only)
+        self.assertEqual(settings.wellbeing.wellbeing_start_time.hour, 8)
+        self.assertEqual(settings.wellbeing.wellbeing_start_time.minute, 30)
+
+    def test_wellbeing_controls_rejected_in_sync_server_mode(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "settings.yaml"
+            config_path.write_text("dashboard_mode: sync-server\n", encoding="utf-8")
+            for action in ("snooze", "break"):
+                with self.subTest(action=action):
+                    with (
+                        patch.object(
+                            sys,
+                            "argv",
+                            [
+                                "main.py",
+                                "--config",
+                                str(config_path),
+                                "wellbeing",
+                                action,
+                            ],
+                        ),
+                        patch("main.send_control_command") as send_command,
+                        self.assertRaisesRegex(
+                            SystemExit, "unavailable in sync-server"
+                        ),
+                    ):
+                        main()
+                    send_command.assert_not_called()
+
     def test_load_settings_reads_identity_path(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "settings.yaml"

@@ -6,6 +6,15 @@ browser_history_lookback_seconds: 600
 log_path: logs/workgraph.log
 identity_path: config/identity.json
 dashboard_mode: standalone
+break_reminders_enabled: true
+break_work_minutes: 50
+break_idle_minutes: 5
+break_snooze_minutes: 10
+time_announcements_enabled: true
+time_announcement_interval_minutes: 30
+time_announcement_active_only: true
+wellbeing_start_time: "09:00"
+wellbeing_end_time: "18:00"
 sync_base_url: http://127.0.0.1:9000
 sync_token: ""
 sync_batch_size: 100

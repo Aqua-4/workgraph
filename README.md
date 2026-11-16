@@ -785,6 +785,8 @@ Run a one-shot snapshot every hour:
 * [ ] Focus session detection (advanced)
 * [ ] Monthly reports
 * [ ] Burnout risk detection
+* [ ] Configurable break reminders with stretch and eye-exercise suggestions (initial implementation; desktop verification pending)
+* [ ] Offline spoken time announcements for Linux and Windows (initial implementation; audio verification pending)
 
 ### v3.0
 

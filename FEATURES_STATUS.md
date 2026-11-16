@@ -66,6 +66,24 @@ Verification basis:
 | Burnout risk indicators | Planned     | No burnout model/heuristics yet                                                                         |
 | Trend analysis          | Partial     | 7-day trend rows implemented in dashboard stats                                                         |
 
+## Wellbeing Features
+
+| Feature | Status | Notes |
+| ------- | ------ | ----- |
+| Break reminders | Partial | Opt-in collector reminders, Linux notification actions, and CLI fallback; desktop delivery needs platform testing |
+| Spoken time announcements | Partial | Opt-in offline speech via `pyttsx3`; audio delivery needs platform testing |
+
+Implementation and remaining verification:
+
+- Both features run in the collector in standalone and sync-client modes only, independently of the dashboard, with per-device settings and opt-in defaults.
+- Default break reminders to 50 minutes of activity, resetting after five continuous minutes idle or manual confirmation; support snooze and configurable intervals.
+- Treat unavailable idle detection as unknown rather than active. Linux currently depends on `xprintidle`, and idle time alone does not confirm that a break was taken.
+- Use `pyttsx3` for offline speech on Linux and Windows. Linux requires a working eSpeak installation and audio setup; Windows uses SAPI5 voices.
+- Run speech outside the collector loop, support active-only announcements and quiet hours, and skip missed announcements after sleep or restart.
+- Linux notification actions and CLI fallback support snoozing or confirming a break; Windows notifications use the CLI fallback. Missing notification or speech dependencies must not interrupt collection.
+- Keep reminder state in memory initially, resetting on collector restart. Test scheduling, idle failures, snooze, configuration, and unavailable dependencies.
+- Verify real desktop notifications and speech on Linux and Windows with the required dependencies installed.
+
 ## v3.0 Intelligence
 
 | Feature                      | Status  | Notes                                       |

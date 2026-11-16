@@ -27,6 +27,8 @@ from services.reporting import (
 )
 from services.sync_daemon import SyncDaemon, SyncDaemonSettings
 from services.sync_worker import HttpSyncClient, SyncWorker, SyncWorkerSettings
+from services.wellbeing import WellbeingSettings
+from services.wellbeing_delivery import send_control_command
 from workgraph.models import ActivitySession
 
 DEFAULT_SETTINGS_PATH = Path("config/settings.yaml")
@@ -77,6 +79,11 @@ def main() -> None:
         help="Use with --retag-existing to only fill untagged sessions and preserve existing tags.",
     )
     subparsers = parser.add_subparsers(dest="command")
+
+    wellbeing_parser = subparsers.add_parser(
+        "wellbeing", help="Control break reminders in the running collector."
+    )
+    wellbeing_parser.add_argument("action", choices=["snooze", "break"])
 
     export_parser = subparsers.add_parser(
         "export", help="Export activity sessions as csv, json, or markdown."
@@ -479,7 +486,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.command == "export":
+    if args.command == "wellbeing":
+        settings = load_settings(args.config)
+        if settings.dashboard_mode == "sync-server":
+            raise SystemExit("Wellbeing controls are unavailable in sync-server mode.")
+        send_control_command(settings.log_path, args.action)
+        print(f"Wellbeing {args.action} request queued for the collector.")
+    elif args.command == "export":
         run_export_command(args)
     elif args.command == "report" and args.report_command == "weekly":
         run_weekly_report_command(args)
@@ -524,6 +537,7 @@ def main() -> None:
             service.collect_once()
             service.flush()
             service.repository.close()
+            service.wellbeing_delivery.close()
         else:
             service.run_forever()
 
@@ -2047,6 +2061,14 @@ def load_settings(path: str) -> CollectorSettings:
         ),
         log_path=str(values["log_path"]),
         identity_path=resolved_identity_path,
+        dashboard_mode=str(values.get("dashboard_mode", "standalone")),
+        wellbeing=WellbeingSettings(
+            **{
+                key: values[key]
+                for key in WellbeingSettings.model_fields
+                if key in values
+            }
+        ),
     )
 
 

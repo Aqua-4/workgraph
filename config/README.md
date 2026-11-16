@@ -65,6 +65,62 @@ poll_interval_seconds: 10  # Sample every 10 seconds instead of 5
 idle_threshold_seconds: 600  # 10 minutes
 ```
 
+#### Wellbeing reminders
+
+Break reminders and spoken time announcements are disabled by default.
+Their Python dependencies are installed with `uv sync`. On Linux,
+install `xprintidle`, `notify-send`, and a working eSpeak library and audio setup.
+On Debian-based Linux distributions, install `xprintidle` with:
+
+```bash
+sudo apt install xprintidle
+```
+
+Windows uses SAPI5 voices and the Windows notification package. Desktop
+notifications and audio require a working user session; a headless service may not
+be able to display or play them. Both features and their CLI controls are unavailable
+when `dashboard_mode` is `sync-server`, even if the features are enabled in settings.
+
+The collector also announces when its first activity sample succeeds, independently
+of the wellbeing settings. If startup speech or a supervised process fails, WorkGraph tries
+to play an error sound. On Linux this uses `canberra-gtk-play` when available,
+otherwise a terminal bell; terminal bells may be muted or unavailable.
+
+Add the desired flat settings to `config/my-settings.yaml`:
+
+```yaml
+break_reminders_enabled: true
+break_work_minutes: 50
+break_idle_minutes: 5
+break_snooze_minutes: 10
+time_announcements_enabled: true
+time_announcement_interval_minutes: 30
+time_announcement_active_only: true
+wellbeing_start_time: "09:00"
+wellbeing_end_time: "18:00"
+```
+
+Restart the collector to apply changes. Announcements run on local clock boundaries
+within the configured hours, including overnight ranges; equal start and end times
+allow announcements all day. They are skipped when the user is idle by default,
+or when idle detection is unavailable. Break reminders operate outside these hours
+too. A long idle interval or locked screen counts as a break, but cannot confirm a
+physical break was taken. Short pauses do not reset accumulated activity.
+
+Linux notification actions support snoozing or marking a break taken when the
+desktop supports them. On any platform, use these commands as a fallback, with
+the same configuration and working directory as the collector:
+
+```bash
+uv run workgraph wellbeing snooze
+uv run workgraph wellbeing break
+```
+
+Requests are processed on the collector's next sample. The snooze interval counts
+active time; reminder state is local and resets when the collector restarts. If idle
+detection fails, the work timer pauses and the collector logs a warning. Failed
+notifications or speech also produce warnings without stopping collection.
+
 ---
 
 ### `tags.yaml` — Activity Categorization
