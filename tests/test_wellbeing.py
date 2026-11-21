@@ -1,7 +1,9 @@
+import json
 import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from queue import Queue
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -10,12 +12,13 @@ from collector.git_tracker import GitActivity
 from collector.idle_tracker import IdleState
 from main import load_settings
 from services.collector_service import CollectorService, CollectorSettings
-from services.wellbeing import WellbeingService, WellbeingSettings
+from services.wellbeing import WellbeingPrompt, WellbeingService, WellbeingSettings
 from services.wellbeing_delivery import (
     WellbeingDelivery,
     read_control_commands,
     send_control_command,
 )
+from services.wellbeing_ui import TkWellbeingUI
 from workgraph.models import ActiveWindow
 
 
@@ -144,11 +147,176 @@ def test_linux_notification_actions_and_fallback() -> None:
     assert "--action=snooze=Snooze" not in run.call_args.args[0]
 
 
+def test_macos_reminder_notification_fallback() -> None:
+    delivery = WellbeingDelivery()
+    result = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+    with (
+        patch("services.wellbeing_delivery.platform.system", return_value="Darwin"),
+        patch(
+            "services.wellbeing_delivery.shutil.which",
+            return_value="/usr/bin/osascript",
+        ),
+        patch("services.wellbeing_delivery.subprocess.run", return_value=result) as run,
+    ):
+        delivery._notify_reminder("Stay hydrated", "Take a few sips of water.")
+
+    args = run.call_args.args[0]
+    assert args[0] == "/usr/bin/osascript"
+    assert args[-2:] == ["Stay hydrated", "Take a few sips of water."]
+
+
 def test_invalid_wellbeing_settings_rejected() -> None:
     with pytest.raises(ValidationError):
         WellbeingSettings(break_work_minutes=0)
     with pytest.raises(ValidationError):
         WellbeingSettings(time_announcement_interval_minutes=1441)
+    with pytest.raises(ValidationError):
+        WellbeingSettings(idle_check_minutes=0)
+    with pytest.raises(ValidationError):
+        WellbeingSettings(workout_exercises=({"name": "No prescription"},))
+
+
+def test_new_wellbeing_settings_defaults() -> None:
+    settings = WellbeingSettings()
+    assert not settings.idle_check_enabled
+    assert settings.idle_check_minutes == 10
+    assert settings.idle_check_snooze_minutes == 5
+    assert not settings.workout_reminders_enabled
+    assert settings.workout_interval_minutes == 90
+    assert settings.workout_snooze_minutes == 15
+    assert not settings.water_reminders_enabled
+    assert settings.water_interval_minutes == 60
+    assert settings.water_snooze_minutes == 15
+    assert settings.wellbeing_start_time.isoformat() == "09:00:00"
+    assert settings.wellbeing_end_time.isoformat() == "17:00:00"
+    assert len(settings.workout_exercises) == 4
+
+
+def test_idle_check_requires_available_idle_measurement() -> None:
+    settings = WellbeingSettings(idle_check_enabled=True, idle_check_minutes=10)
+    service = WellbeingService(settings, lambda text: None, lambda text: None)
+    now = datetime(2026, 11, 15, 10)
+
+    assert service.next_prompt(0, now, 600, False) is None
+    prompt = service.next_prompt(5, now, 600, True)
+    assert prompt is not None
+    assert prompt.kind == "idle"
+
+    assert service.apply_action("idle_working", 5, now)
+    assert service.next_prompt(6, now, 600, True) is None
+    assert service.next_prompt(305, now, 600, True) is not None
+
+
+def test_workout_timer_runs_through_os_idle_and_actions_reset_it() -> None:
+    settings = WellbeingSettings(
+        workout_reminders_enabled=True, workout_interval_minutes=1
+    )
+    service = WellbeingService(settings, lambda text: None, lambda text: None)
+    now = datetime(2026, 11, 15, 10)
+
+    assert service.next_prompt(0, now, 0, True) is None
+    prompt = service.next_prompt(60, now, 3600, True)
+    assert prompt is not None
+    assert prompt.kind == "workout"
+    assert len(prompt.exercises) == 4
+    assert not service.apply_action("workout_complete", 60, now)
+    assert service.apply_action("workout_complete", 60, now, exercise_name="Push-ups")
+    assert service.next_prompt(119, now, 3600, True) is None
+    assert service.next_prompt(120, now, 3600, True) is not None
+
+
+def test_legacy_idle_break_does_not_reset_scheduled_workout() -> None:
+    settings = WellbeingSettings(
+        break_reminders_enabled=True,
+        break_idle_minutes=1,
+        workout_reminders_enabled=True,
+        workout_interval_minutes=1,
+    )
+    service = WellbeingService(settings, lambda text: None, lambda text: None)
+    now = datetime(2026, 11, 15, 10)
+    service.next_prompt(0, now, 60, True)
+    service.update_break_reminders(0, 60, True, True)
+    service.update_break_reminders(60, 60, True, True)
+
+    prompt = service.next_prompt(60, now, 60, True)
+    assert prompt is not None and prompt.kind == "workout"
+
+
+def test_due_prompts_are_prioritized_and_snoozes_recur() -> None:
+    settings = WellbeingSettings(
+        workout_reminders_enabled=True,
+        workout_interval_minutes=1,
+        workout_snooze_minutes=1,
+        water_reminders_enabled=True,
+        water_interval_minutes=1,
+        water_snooze_minutes=1,
+    )
+    service = WellbeingService(settings, lambda text: None, lambda text: None)
+    now = datetime(2026, 11, 15, 10)
+    service.next_prompt(0, now, 0, True)
+
+    prompt = service.next_prompt(60, now, 0, True)
+    assert prompt is not None and prompt.kind == "water"
+    assert service.apply_action("water_snooze", 60, now)
+    prompt = service.next_prompt(60, now, 0, True)
+    assert prompt is not None and prompt.kind == "workout"
+    assert service.apply_action("workout_snooze", 60, now)
+    assert service.next_prompt(119, now, 0, True) is None
+    prompt = service.next_prompt(120, now, 0, True)
+    assert prompt is not None and prompt.kind == "water"
+
+
+def test_scheduled_reminders_defer_until_wellbeing_hours() -> None:
+    settings = WellbeingSettings(
+        water_reminders_enabled=True,
+        water_interval_minutes=1,
+        wellbeing_start_time="09:00",
+        wellbeing_end_time="17:00",
+    )
+    service = WellbeingService(settings, lambda text: None, lambda text: None)
+    service.next_prompt(0, datetime(2026, 11, 15, 8), 0, True)
+
+    assert service.next_prompt(60, datetime(2026, 11, 15, 8, 1), 0, True) is None
+    prompt = service.next_prompt(61, datetime(2026, 11, 15, 9), 0, True)
+    assert prompt is not None and prompt.kind == "water"
+    assert service.apply_action("water_snooze", 61, datetime(2026, 11, 15, 9))
+    assert service.next_prompt(62, datetime(2026, 11, 15, 17), 0, True) is None
+
+
+def test_wellbeing_ui_hands_actions_off_and_ignores_close() -> None:
+    ui = object.__new__(TkWellbeingUI)
+    ui.action_queue = Queue(maxsize=1)
+    ui._window = None
+    ui._prompt = None
+    ui._selected_exercise = None
+
+    assert ui._ignore_close() == "break"
+    assert ui._submit_action("water_snooze")
+    assert ui.action_queue.get_nowait() == ("water_snooze", None)
+
+    ui.action_queue.put_nowait(("idle_break", None))
+    assert not ui._submit_action("workout_snooze")
+
+
+def test_water_popup_has_only_snooze_and_ignores_close_controls() -> None:
+    window = MagicMock()
+    with (
+        patch("tkinter.Toplevel", return_value=window),
+        patch("tkinter.ttk.Frame", return_value=MagicMock()),
+        patch("tkinter.ttk.Label"),
+        patch("tkinter.ttk.Button") as button,
+    ):
+        actions: Queue[tuple[str, str | None]] = Queue(maxsize=2)
+        ui = TkWellbeingUI(MagicMock(), actions, WellbeingSettings())
+        ui.show(WellbeingPrompt("water", "Stay hydrated", "Take a few sips."))
+
+    window.protocol.assert_called_once_with("WM_DELETE_WINDOW", ui._ignore_close)
+    window.bind.assert_any_call("<Escape>", ui._ignore_close)
+    assert ui._ignore_close() == "break"
+    button.assert_called_once()
+    assert button.call_args.kwargs["text"] == "Snooze 15m"
+    button.call_args.kwargs["command"]()
+    assert actions.get_nowait() == ("water_snooze", None)
 
 
 def test_speech_process_failure_does_not_raise(
@@ -355,6 +523,132 @@ def test_collector_wellbeing_is_only_available_on_clients(
             expected_calls if feature == "time_announcements_enabled" else 0
         )
         assert collector.session_builder.current is not None
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
+
+
+def test_server_mode_disables_new_wellbeing_prompts_and_startup_speech(
+    tmp_path: Path,
+) -> None:
+    collector = CollectorService(
+        CollectorSettings(
+            database_path=str(tmp_path / "activity.db"),
+            identity_path=str(tmp_path / "identity.json"),
+            dashboard_mode="sync-server",
+            wellbeing=WellbeingSettings(
+                idle_check_enabled=True,
+                workout_reminders_enabled=True,
+                water_reminders_enabled=True,
+            ),
+        )
+    )
+    collector.window_tracker.get_active_window = lambda: ActiveWindow(
+        "code", "code", "work", None, "linux"
+    )
+    collector.idle_tracker.get_idle_state = lambda: IdleState(False, 0)
+    collector.git_tracker.get_activity = lambda **kwargs: GitActivity(
+        None, None, None, []
+    )
+    collector.browser_tracker.get_domain = lambda window: None
+    try:
+        with (
+            patch.object(collector.wellbeing, "next_prompt") as next_prompt,
+            patch.object(collector.wellbeing_delivery, "notify_reminder") as notify,
+            patch.object(collector.wellbeing_delivery, "speak") as speak,
+            patch.object(collector, "collect_once", side_effect=collector.stop),
+            patch("services.collector_service.signal.signal"),
+            patch("services.collector_service.time.sleep"),
+        ):
+            collector.collect_once()
+            collector.run_forever()
+        next_prompt.assert_not_called()
+        notify.assert_not_called()
+        speak.assert_not_called()
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
+
+
+def test_collector_persists_water_snooze_action(tmp_path: Path) -> None:
+    now = datetime(2026, 11, 15, 10)
+    collector = CollectorService(
+        CollectorSettings(
+            database_path=str(tmp_path / "activity.db"),
+            identity_path=str(tmp_path / "identity.json"),
+            wellbeing=WellbeingSettings(
+                water_reminders_enabled=True,
+                water_interval_minutes=1,
+                water_snooze_minutes=15,
+            ),
+        )
+    )
+    collector.window_tracker.get_active_window = lambda: ActiveWindow(
+        "code", "code", "work", None, "linux"
+    )
+    collector.idle_tracker.get_idle_state = lambda: IdleState(False, 0)
+    collector.git_tracker.get_activity = lambda **kwargs: GitActivity(
+        None, None, None, []
+    )
+    collector.browser_tracker.get_domain = lambda window: None
+    collector._running = True
+    try:
+        with (
+            patch(
+                "services.collector_service.time.monotonic",
+                side_effect=[0, 60, 61],
+            ),
+            patch("services.collector_service.utc_now", return_value=now),
+            patch.object(collector.wellbeing_delivery, "notify_reminder") as notify,
+        ):
+            collector.collect_once()
+            collector.collect_once()
+            assert collector.wellbeing.active_prompt is not None
+            assert collector.wellbeing.active_prompt.kind == "water"
+            collector._wellbeing_actions.put_nowait(("water_snooze", None))
+            collector.collect_once()
+
+        events = collector.repository.recent_wellbeing_events()
+        assert len(events) == 1
+        assert events[0]["reminder_type"] == "water"
+        assert events[0]["action"] == "water_snooze"
+        assert json.loads(events[0]["metadata"]) == {"snooze_minutes": 15}
+        notify.assert_called_once_with("Stay hydrated", "Take a few sips of water.")
+    finally:
+        collector._running = False
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
+
+
+def test_failed_water_popup_retries_notification_without_closing_tk_loop(
+    tmp_path: Path,
+) -> None:
+    collector = CollectorService(
+        CollectorSettings(
+            database_path=str(tmp_path / "activity.db"),
+            identity_path=str(tmp_path / "identity.json"),
+            wellbeing=WellbeingSettings(
+                water_reminders_enabled=True, water_interval_minutes=1
+            ),
+        )
+    )
+    now = datetime(2026, 11, 15, 10)
+    prompt = collector.wellbeing.next_prompt(0, now, 0, True)
+    assert prompt is None
+    prompt = collector.wellbeing.next_prompt(60, now, 0, True)
+    assert prompt is not None and prompt.kind == "water"
+    failing_ui = MagicMock()
+    failing_ui.show.side_effect = RuntimeError("popup failed")
+    collector._wellbeing_ui = failing_ui
+    collector._tk_root = MagicMock()
+    try:
+        with patch.object(collector.wellbeing_delivery, "notify_reminder") as notify:
+            collector._present_wellbeing_prompt(prompt, 60, now)
+            collector._present_wellbeing_prompt(prompt, 90, now)
+            collector._present_wellbeing_prompt(prompt, 120, now)
+        assert notify.call_count == 2
+        failing_ui.close.assert_called_once()
+        collector._tk_root.destroy.assert_not_called()
     finally:
         collector.repository.close()
         collector.wellbeing_delivery.close()

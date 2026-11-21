@@ -39,6 +39,28 @@ class MainSettingsTests(unittest.TestCase):
         self.assertEqual(settings.wellbeing.wellbeing_start_time.hour, 8)
         self.assertEqual(settings.wellbeing.wellbeing_start_time.minute, 30)
 
+    def test_load_wellbeing_exercises_from_yaml(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "settings.yaml"
+            config_path.write_text(
+                "workout_reminders_enabled: true\n"
+                "workout_interval_minutes: 75\n"
+                "workout_exercises:\n"
+                "  - name: Push-ups\n"
+                "    reps: 12\n"
+                "  - name: Walk\n"
+                "    duration_seconds: 60\n",
+                encoding="utf-8",
+            )
+            settings = load_settings(str(config_path))
+
+        self.assertTrue(settings.wellbeing.workout_reminders_enabled)
+        self.assertEqual(settings.wellbeing.workout_interval_minutes, 75)
+        self.assertEqual(
+            [exercise.name for exercise in settings.wellbeing.workout_exercises],
+            ["Push-ups", "Walk"],
+        )
+
     def test_wellbeing_controls_rejected_in_sync_server_mode(self) -> None:
         with TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "settings.yaml"

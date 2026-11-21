@@ -1533,6 +1533,45 @@ class ActivityRepository:
         )
         return list(cursor.fetchall())
 
+    def save_wellbeing_event(
+        self,
+        *,
+        created_at: datetime,
+        reminder_type: str,
+        action: str,
+        exercise_name: str | None = None,
+        metadata: dict | None = None,
+    ) -> int:
+        cursor = self._connection.execute(
+            """
+            INSERT INTO wellbeing_events (
+                created_at, reminder_type, action, exercise_name, metadata
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                _format_datetime(created_at),
+                reminder_type,
+                action,
+                exercise_name,
+                json.dumps(metadata) if metadata is not None else None,
+            ),
+        )
+        self._connection.commit()
+        return int(cursor.lastrowid)
+
+    def recent_wellbeing_events(self, limit: int = 50) -> list[sqlite3.Row]:
+        cursor = self._connection.execute(
+            """
+            SELECT *
+            FROM wellbeing_events
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return list(cursor.fetchall())
+
     def backup_database(self, backup_dir: str | Path = "backups") -> Path:
         backup_directory = Path(backup_dir)
         backup_directory.mkdir(parents=True, exist_ok=True)

@@ -29,6 +29,9 @@ Load order used by the app:
 1. `config/my-settings.yaml` (if present)
 2. `config/settings.yaml` (fallback)
 
+The app selects one file; it does not merge the personal file with the shared file.
+Keys omitted from `my-settings.yaml` use application defaults.
+
 This keeps user-specific config and secrets out of shared settings while preserving a simple default.
 
 Example:
@@ -67,10 +70,50 @@ idle_threshold_seconds: 600  # 10 minutes
 
 #### Wellbeing reminders
 
-Break reminders and spoken time announcements are disabled by default.
-Their Python dependencies are installed with `uv sync`. On Linux,
-install `xprintidle`, `notify-send`, and a working eSpeak library and audio setup.
-On Debian-based Linux distributions, install `xprintidle` with:
+Idle, workout, and water prompts are disabled by default. The defaults are a
+10-minute idle threshold, 90-minute workout interval, 60-minute water interval,
+15-minute water snooze, and a local 09:00-17:00 operating window. Workout and water
+intervals continue through meetings, reading, and OS idle; prompts due outside the
+window wait until it opens again. Existing break reminders and time announcements
+remain controlled by their own settings.
+
+Add personal reminder values to `config/my-settings.yaml`:
+
+```yaml
+idle_check_enabled: true
+idle_check_minutes: 10
+idle_check_snooze_minutes: 5
+workout_reminders_enabled: true
+workout_interval_minutes: 90
+workout_snooze_minutes: 15
+water_reminders_enabled: true
+water_interval_minutes: 60
+water_snooze_minutes: 15
+wellbeing_start_time: "09:00"
+wellbeing_end_time: "17:00"
+workout_exercises:
+  - name: Push-ups
+    reps: 10
+  - name: Squats
+    reps: 15
+  - name: Jumping jacks
+    duration_seconds: 30
+  - name: Gyroball wrist workout
+    duration_seconds: 60
+```
+
+Tkinter popups require a graphical desktop session. If Tk cannot open, WorkGraph
+uses desktop notifications; these fallback notifications do not offer interactive
+actions. The water prompt retries during the operating window and its Tk popup has
+only a Snooze action. Idle prompts require available OS idle data; the existing
+detector does not provide it on macOS.
+
+All wellbeing reminders, controls, notifications, Tk UI, and startup wellbeing
+speech are disabled in `sync-server` mode. Reminder actions are stored locally in
+the `wellbeing_events` table and are not synced or shown in the dashboard.
+
+For Linux idle detection, install `xprintidle`. Desktop notifications and audio
+require a working user session; on Debian-based distributions install it with:
 
 ```bash
 sudo apt install xprintidle
@@ -78,8 +121,7 @@ sudo apt install xprintidle
 
 Windows uses SAPI5 voices and the Windows notification package. Desktop
 notifications and audio require a working user session; a headless service may not
-be able to display or play them. Both features and their CLI controls are unavailable
-when `dashboard_mode` is `sync-server`, even if the features are enabled in settings.
+be able to display or play them.
 
 The collector also announces when its first activity sample succeeds, independently
 of the wellbeing settings. If startup speech or a supervised process fails, WorkGraph tries

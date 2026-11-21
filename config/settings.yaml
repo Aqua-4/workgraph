@@ -13,8 +13,37 @@ break_snooze_minutes: 10
 time_announcements_enabled: true
 time_announcement_interval_minutes: 30
 time_announcement_active_only: true
+# Local operating window in HH:MM; due prompts wait for the next opening.
 wellbeing_start_time: "09:00"
-wellbeing_end_time: "18:00"
+wellbeing_end_time: "17:00"
+# Enable the idle intent prompt (default: false).
+idle_check_enabled: false
+# Inactivity before prompting (minutes; default: 10).
+idle_check_minutes: 10
+# Delay after Still working or Snooze (minutes; default: 5).
+idle_check_snooze_minutes: 5
+# Enable scheduled movement prompts (default: false).
+workout_reminders_enabled: false
+# Elapsed-time interval, including meetings and reading (minutes; default: 90).
+workout_interval_minutes: 90
+# Delay before the next workout prompt (minutes; default: 15).
+workout_snooze_minutes: 15
+# Enable scheduled hydration prompts (default: false).
+water_reminders_enabled: false
+# Elapsed-time interval (minutes; default: 60).
+water_interval_minutes: 60
+# Delay before the next hydration prompt (minutes; default: 15).
+water_snooze_minutes: 15
+# Each exercise requires a positive reps count or duration_seconds value.
+workout_exercises:
+  - name: Push-ups
+    reps: 10
+  - name: Squats
+    reps: 15
+  - name: Jumping jacks
+    duration_seconds: 30
+  - name: Gyroball wrist workout
+    duration_seconds: 60
 sync_base_url: http://127.0.0.1:9000
 sync_token: ""
 sync_batch_size: 100

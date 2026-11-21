@@ -8,6 +8,8 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 from db.repository import ActivityRepository
 from services.activity_tagger import ActivityTagger
 from services.collector_service import (
@@ -2038,7 +2040,7 @@ def start_web_dashboard(port: int = 8000) -> None:
 
 
 def load_settings(path: str) -> CollectorSettings:
-    values = {
+    values: dict[str, object] = {
         "database_path": "activity.db",
         "poll_interval_seconds": 5.0,
         "idle_threshold_seconds": 300,
@@ -2049,7 +2051,7 @@ def load_settings(path: str) -> CollectorSettings:
     }
     config_path = _resolve_settings_path(path)
     if config_path.exists():
-        values.update(_read_simple_yaml(config_path))
+        values.update(_read_settings_yaml(config_path))
     resolved_identity_path = _resolve_identity_path(str(values["identity_path"]))
     return CollectorSettings(
         database_path=str(values["database_path"]),
@@ -2084,6 +2086,13 @@ def _resolve_identity_path(path: str) -> str:
     if identity_path == DEFAULT_IDENTITY_PATH and PERSONAL_IDENTITY_PATH.exists():
         return str(PERSONAL_IDENTITY_PATH)
     return str(identity_path)
+
+
+def _read_settings_yaml(path: Path) -> dict[str, object]:
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(loaded, dict):
+        raise ValueError("Settings YAML must contain a mapping")
+    return loaded
 
 
 def _read_simple_yaml(path: Path) -> dict[str, str]:

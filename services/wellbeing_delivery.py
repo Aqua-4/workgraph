@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import threading
+from importlib import import_module
 from pathlib import Path
 
 LOGGER = logging.getLogger(__name__)
@@ -82,6 +83,65 @@ class WellbeingDelivery:
     def notify(self, message: str) -> None:
         threading.Thread(target=self._notify, args=(message,), daemon=True).start()
 
+    def notify_reminder(self, title: str, message: str) -> None:
+        threading.Thread(
+            target=self._notify_reminder, args=(title, message), daemon=True
+        ).start()
+
+    def _notify_reminder(self, title: str, message: str) -> None:
+        system = platform.system().lower()
+        if system == "linux":
+            command = shutil.which("notify-send")
+            if not command:
+                self._warn_once("notifications", "notify-send is not installed")
+                return
+            try:
+                result = subprocess.run(
+                    [command, "--app-name=WorkGraph", title, message],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    self._warn_once("notifications", "Desktop notification failed")
+            except (OSError, subprocess.SubprocessError):
+                self._warn_once("notifications", "Could not launch notify-send")
+        elif system == "windows":
+            try:
+                Notification = import_module("winotify").Notification
+
+                Notification(app_id="WorkGraph", title=title, msg=message).show()
+            except Exception:
+                self._warn_once(
+                    "notifications",
+                    "Windows notifications unavailable; check winotify installation",
+                )
+        elif system == "darwin":
+            command = shutil.which("osascript")
+            if not command:
+                self._warn_once("notifications", "osascript is not installed")
+                return
+            script = (
+                "on run argv\n"
+                " display notification (item 2 of argv) with title (item 1 of argv)\n"
+                "end run"
+            )
+            try:
+                result = subprocess.run(
+                    [command, "-e", script, title, message],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    self._warn_once("notifications", "Desktop notification failed")
+            except (OSError, subprocess.SubprocessError):
+                self._warn_once("notifications", "Could not launch osascript")
+        else:
+            self._warn_once("notifications", "Desktop notifications are not supported")
+
     def _notify(self, message: str) -> None:
         system = platform.system().lower()
         if system == "linux":
@@ -122,7 +182,7 @@ class WellbeingDelivery:
                 self._warn_once("notifications", "Could not launch notify-send")
         elif system == "windows":
             try:
-                from winotify import Notification
+                Notification = import_module("winotify").Notification
 
                 Notification(
                     app_id="WorkGraph", title="Time for a break", msg=message
