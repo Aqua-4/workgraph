@@ -25,6 +25,30 @@ class TkWellbeingUI:
         self._prompt: WellbeingPrompt | None = None
         self._selected_exercise = None
 
+    def show_greeting(self, hour: int) -> None:
+        if 5 <= hour < 12:
+            greeting = "Good morning"
+        elif 12 <= hour < 17:
+            greeting = "Good afternoon"
+        else:
+            greeting = "Good evening"
+
+        window = self._tk.Toplevel(self.root)
+        window.title("WorkGraph")
+        window.resizable(False, False)
+        frame = self._ttk.Frame(window, padding=18)
+        frame.grid(sticky="nsew")
+        self._ttk.Label(
+            frame, text=f"{greeting}!", font=("TkDefaultFont", 15, "bold")
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        self._ttk.Label(frame, text="WorkGraph activity tracking is running.").grid(
+            row=1, column=0, sticky="w", pady=(0, 12)
+        )
+        self._ttk.Button(frame, text="Dismiss", command=window.destroy).grid(
+            row=2, column=0, sticky="e"
+        )
+        window.lift()
+
     def show(self, prompt: WellbeingPrompt) -> None:
         if self._window is not None and self._prompt == prompt:
             return

@@ -1,0 +1,26 @@
+---
+name: personal-workgraph-tags
+description: "Configure and improve config/my-tags.yaml using WorkGraph database session activity. Use when increasing tag coverage, analyzing untagged sessions, or tuning personal tagging rules from activity evidence."
+argument-hint: "Optional time period, device scope, or tagging priorities"
+---
+
+# Personal WorkGraph Tags
+
+Improve coverage of meaningful activity while preserving accurate classifications. Make evidence-supported changes to `config/my-tags.yaml` when requested; do not maximize coverage by assigning uncertain activity to arbitrary categories.
+
+## Procedure
+
+1. Read `config/my-tags.yaml`, `config/tags.yaml`, the active settings and identity configuration, and `services/activity_tagger.py`. Inspect relevant tag-review code when using review actions or browser context. Preserve existing user rules, comments, ordering, `tag_review`, and `system_idle_apps` unless a specific change is justified. Never put personal activity or identifiers into shared defaults.
+2. Resolve the actual database path and identity from active configuration, including personal override behavior. Open SQLite read-only using `uv run python` and parameterized queries. Exclude soft-deleted sessions and scope to the configured user and, when appropriate, device. If the identity, database, or required data is unavailable, state the limitation and do not invent evidence.
+3. Use the requested period; otherwise start with the most recent 30 days and report its dates, active days, and session count. Expand the period only when necessary to find useful recurring evidence, stating any change. Measure non-idle and idle sessions separately and distinguish missing or empty stored tags from other explicitly configured unknown categories.
+4. Establish a baseline for both session-count and duration coverage. Replay the current `ActivityTagger.tag_session` over the same sessions and separately report stored-tag coverage: stored tags may reflect older rules or manual reviews and are not the same as current rule predictions. Group currently unmatched activity by useful repo, browser domain, app, and title signals, ranked by count and duration. Inspect only enough representative titles to understand ambiguous groups; avoid reproducing private titles, identifiers, or sensitive activity in output.
+5. Propose small, specific rules for recurring, confidently identifiable activity. Use existing categories where appropriate and preserve explicit user preferences and recent manual review decisions. A browser-context label is a Tag Review grouping aid, not an automatic tag rule; add an appropriate domain or keyword when automatic tagging is intended. Leave ambiguous, generic, or mixed-use signals untagged or ask the user to choose a category. Avoid broad catch-all keywords and duplicate or overlapping domains without a clear precedence decision.
+6. Evaluate candidate rules by replaying the actual tagger in memory on the same baseline sessions before modifying the file. Compare predicted coverage by count and duration, newly matched sessions, and changes between existing predicted tags; inspect representative collisions, especially previously tagged sessions and manual decisions. Keep changes only when classification is defensible, and explain unresolved ambiguity. First matching tag wins across the effective merged rule order, so a rule in an earlier tag can override a more specific signal in a later tag.
+7. Edit only the personal YAML, preserving unrelated contents and adding concise native YAML comments for changed groups or parameters. Do not write to the database, run retagging or migrations, or change historical tags without explicit permission. Explain that configuration changes affect future tagging; historical records remain unchanged unless separately retagged.
+8. Validate YAML parsing and the effective rules with `ActivityTagger`, then repeat the same replay and collision comparison against the saved configuration. Run the relevant focused tagger or tag-review tests when available. Report aggregate before/after predicted coverage, changed classifications and limitations, the scope and period used, and whether historical records were modified. Do not print raw session titles, identity values, tokens, or other sensitive details.
+
+## Matching Details
+
+- The tagger loads shared tags first and updates them with personal tags; replacing an existing tag does not move its position in the effective order. A personal-only tag is appended.
+- Within each tag, repo matching is case-insensitive prefix matching, domain matching is case-insensitive suffix matching, and keywords use case-insensitive word-boundary regex matching against title, app name, and domain. Rule fields are alternatives, not requirements that all match.
+- `intent` is not used by `ActivityTagger.tag_session` as an automatic matching condition. `tag_review.browser_context_patterns` and `system_idle_apps` serve separate purposes and should not be changed merely to inflate tag coverage.

@@ -372,6 +372,7 @@ def test_collector_announces_only_after_successful_first_sample(
     with (
         patch.object(collector, "collect_once", side_effect=collect),
         patch.object(collector.wellbeing_delivery, "speak") as speak,
+        patch.object(collector, "_run_tk_loop", side_effect=RuntimeError("no display")),
         patch("services.collector_service.signal.signal"),
         patch("services.collector_service.time.sleep"),
     ):
@@ -384,6 +385,116 @@ def test_collector_announces_only_after_successful_first_sample(
             speak.assert_called_once_with(
                 "WorkGraph activity tracking started.", error_on_failure=True
             )
+
+
+@pytest.mark.parametrize(
+    ("hour", "greeting"),
+    [
+        (4, "Good evening"),
+        (5, "Good morning"),
+        (11, "Good morning"),
+        (12, "Good afternoon"),
+        (16, "Good afternoon"),
+        (17, "Good evening"),
+    ],
+)
+def test_startup_greeting_uses_local_time(hour: int, greeting: str) -> None:
+    window = MagicMock()
+    with (
+        patch("tkinter.Toplevel", return_value=window),
+        patch("tkinter.ttk.Frame", return_value=MagicMock()),
+        patch("tkinter.ttk.Label") as label,
+        patch("tkinter.ttk.Button") as button,
+    ):
+        ui = TkWellbeingUI(MagicMock(), Queue(), WellbeingSettings())
+        ui.show_greeting(hour)
+
+    assert label.call_args_list[0].kwargs["text"] == f"{greeting}!"
+    button.call_args.kwargs["command"]()
+    window.destroy.assert_called_once()
+
+
+def test_startup_greeting_and_speech_only_once(tmp_path: Path) -> None:
+    collector = CollectorService(
+        CollectorSettings(
+            database_path=str(tmp_path / "activity.db"),
+            identity_path=str(tmp_path / "identity.json"),
+        )
+    )
+    collector._wellbeing_ui = MagicMock()
+    try:
+        with (
+            patch("services.collector_service.datetime") as clock,
+            patch.object(collector.wellbeing_delivery, "speak") as speak,
+        ):
+            clock.now.return_value = datetime(2026, 11, 21, 14)
+            collector._announce_started()
+            collector._announce_started()
+        speak.assert_called_once_with(
+            "WorkGraph activity tracking started.", error_on_failure=True
+        )
+        collector._wellbeing_ui.show_greeting.assert_called_once_with(14)
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
+
+
+def test_default_collector_starts_tk_greeting_after_first_sample(
+    tmp_path: Path,
+) -> None:
+    collector = CollectorService(
+        CollectorSettings(
+            database_path=str(tmp_path / "activity.db"),
+            identity_path=str(tmp_path / "identity.json"),
+        )
+    )
+    root = MagicMock()
+    ui = MagicMock()
+    events: list[str] = []
+
+    def run_mainloop() -> None:
+        root.after.call_args_list[0].args[1]()
+        collector._running = False
+
+    root.mainloop.side_effect = run_mainloop
+    ui.show_greeting.side_effect = lambda hour: events.append("greeting")
+    with (
+        patch("tkinter.Tk", return_value=root),
+        patch("services.collector_service.TkWellbeingUI", return_value=ui),
+        patch("services.collector_service.signal.signal"),
+        patch.object(
+            collector, "collect_once", side_effect=lambda: events.append("sample")
+        ),
+        patch.object(
+            collector.wellbeing_delivery,
+            "speak",
+            side_effect=lambda *args, **kwargs: events.append("speech"),
+        ),
+    ):
+        collector.run_forever()
+
+    assert events == ["sample", "speech", "greeting"]
+    root.destroy.assert_called_once()
+
+
+def test_greeting_failure_does_not_interrupt_startup(tmp_path: Path) -> None:
+    collector = CollectorService(
+        CollectorSettings(
+            database_path=str(tmp_path / "activity.db"),
+            identity_path=str(tmp_path / "identity.json"),
+        )
+    )
+    collector._wellbeing_ui = MagicMock()
+    collector._wellbeing_ui.show_greeting.side_effect = RuntimeError("no window")
+    try:
+        with patch.object(collector.wellbeing_delivery, "speak") as speak:
+            collector._announce_started()
+            collector._announce_started()
+        speak.assert_called_once()
+        collector._wellbeing_ui.show_greeting.assert_called_once()
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
 
 
 def test_overnight_announcement_hours() -> None:

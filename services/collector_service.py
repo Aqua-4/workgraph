@@ -5,6 +5,7 @@ import queue
 import signal
 import time
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -98,7 +99,7 @@ class CollectorService:
         LOGGER.info("WorkGraph collector started")
 
         try:
-            if self._interactive_reminders_enabled():
+            if self.settings.dashboard_mode != "sync-server":
                 try:
                     self._run_tk_loop()
                 except Exception:
@@ -116,13 +117,6 @@ class CollectorService:
             self.repository.close()
             self.wellbeing_delivery.close()
             LOGGER.info("WorkGraph collector stopped")
-
-    def _interactive_reminders_enabled(self) -> bool:
-        return self.settings.dashboard_mode != "sync-server" and (
-            self.settings.wellbeing.idle_check_enabled
-            or self.settings.wellbeing.workout_reminders_enabled
-            or self.settings.wellbeing.water_reminders_enabled
-        )
 
     def _run_collector_loop(self) -> None:
         announced = False
@@ -169,6 +163,11 @@ class CollectorService:
                 "WorkGraph activity tracking started.", error_on_failure=True
             )
             self._announced = True
+            if self._wellbeing_ui is not None:
+                try:
+                    self._wellbeing_ui.show_greeting(datetime.now().hour)
+                except Exception:
+                    LOGGER.warning("Could not show startup greeting", exc_info=True)
 
     def _close_tk_ui(self) -> None:
         if self._wellbeing_ui is not None:
