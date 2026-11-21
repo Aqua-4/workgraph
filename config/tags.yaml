@@ -1,3 +1,155 @@
+# Processes that should always be treated as idle/system time regardless of the
+# idle-threshold timer. Matched case-insensitively against app_name and process_name.
+# Override or extend in config/my-tags.yaml using the same key.
+system_idle_apps:
+  # Windows lock/login
+  - lockapp
+  - logonui
+  - winlogon
+  # macOS lock/login
+  - loginwindow
+  - ScreenSaverEngine
+  # Linux lock/screensaver
+  - gnome-screensaver
+  - xscreensaver
+  - i3lock
+  - slock
+  - swaylock
+  - xfce4-screensaver
+  - gdm
+  - gdm3
+  - lightdm
+
+# Browser-title context buckets used by Tag Review when browser_domain is missing.
+# Matching is case-insensitive substring matching against normalized window titles.
+tag_review:
+  browser_context_patterns:
+    # Local product/work dashboards
+    - pattern: "dashboard - workgraph"
+      label: "WorkGraph"
+    - pattern: "journal - workgraph"
+      label: "WorkGraph"
+    - pattern: "timeline - workgraph"
+      label: "WorkGraph"
+
+    # Collaboration and meetings
+    - pattern: "google chat"
+      label: "Google Chat"
+    - pattern: "google meet"
+      label: "Google Meet"
+    - pattern: "meet - "
+      label: "Google Meet"
+    - pattern: "meet – "
+      label: "Google Meet"
+    - pattern: "teams"
+      label: "Microsoft Teams"
+    - pattern: "zoom"
+      label: "Zoom"
+    - pattern: "webex"
+      label: "Webex"
+
+    # Email and office tools
+    - pattern: "gmail"
+      label: "Gmail"
+    - pattern: "inbox"
+      label: "Gmail"
+    - pattern: "outlook"
+      label: "Outlook"
+    - pattern: "calendar"
+      label: "Calendar"
+    - pattern: "google docs"
+      label: "Google Docs"
+    - pattern: "google sheets"
+      label: "Google Sheets"
+    - pattern: "google drive"
+      label: "Google Drive"
+
+    # AI tools
+    - pattern: "gemini notebook"
+      label: "Gemini Notebook"
+    - pattern: "chatgpt"
+      label: "ChatGPT"
+    - pattern: "claude"
+      label: "Claude"
+    - pattern: "perplexity"
+      label: "Perplexity"
+    - pattern: "copilot"
+      label: "Copilot"
+
+    # Engineering platforms
+    - pattern: "github"
+      label: "GitHub"
+    - pattern: "gitlab"
+      label: "GitLab"
+    - pattern: "bitbucket"
+      label: "Bitbucket"
+    - pattern: "stackoverflow"
+      label: "Stack Overflow"
+    - pattern: "readthedocs"
+      label: "Read the Docs"
+    - pattern: "developer.mozilla.org"
+      label: "MDN"
+    - pattern: "diffchecker"
+      label: "Diffchecker"
+    - pattern: "compare text and find differences"
+      label: "Diffchecker"
+
+    # Cloud and infra consoles
+    - pattern: "elastic container service"
+      label: "AWS Console"
+    - pattern: "pipelines | codepipeline"
+      label: "AWS Console"
+    - pattern: "aws"
+      label: "AWS Console"
+    - pattern: "azure"
+      label: "Azure Portal"
+    - pattern: "gcp"
+      label: "Google Cloud"
+
+    # Social, media, and content
+    - pattern: "linkedin"
+      label: "LinkedIn"
+    - pattern: "reddit"
+      label: "Reddit"
+    - pattern: "twitter"
+      label: "X/Twitter"
+    - pattern: "x.com"
+      label: "X/Twitter"
+    - pattern: "youtube music"
+      label: "YouTube Music"
+    - pattern: "youtube"
+      label: "YouTube"
+    - pattern: "spotify"
+      label: "Spotify"
+    - pattern: "netflix"
+      label: "Netflix"
+    - pattern: "prime video"
+      label: "Prime Video"
+
+    # Work portals and recruiting
+    - pattern: "darwinbox"
+      label: "Darwinbox"
+    - pattern: "omnissa horizon"
+      label: "Omnissa Horizon"
+    - pattern: "instahyre"
+      label: "Instahyre"
+    - pattern: "naukri"
+      label: "Naukri"
+
+    # Learning and interview prep
+    - pattern: "udemy"
+      label: "Udemy"
+    - pattern: "coursera"
+      label: "Coursera"
+    - pattern: "leetcode"
+      label: "LeetCode"
+    - pattern: "hackerrank"
+      label: "HackerRank"
+
+    # Generic browser states
+    - pattern: "new tab"
+      label: "New Tab"
+
 tags:
   # NOTE: Keep this list limited to non-sensitive historical project aliases only.
   # Do NOT add current client names, repos, or internal identifiers here.
@@ -7,10 +159,61 @@ tags:
       - compass
       - tenet
       - atlas
-    domains: []
+    domains:
+      - teams.microsoft.com
+      - meet.google.com
+      - zoom.us
+      - webex.com
     keywords:
       - client
       - delivery
+      - delivery_work
+      - meeting
+      - standup
+      - huddle
+      - review
+      - sprint
+      - roadmap
+      - workstream
+      - project
+    intent:
+      - client_delivery
+      - meetings
+      - planning
+
+  Strategic Planning:
+    repos: []
+    domains: []
+    keywords:
+      - planning
+      - roadmap
+      - strategy
+      - research
+      - analysis
+      - architecture
+      - design
+      - investigation
+    intent:
+      - planning
+      - research
+      - strategy
+
+  Personal Projects:
+    repos: []
+    domains: []
+    keywords:
+      - personal
+      - personal_coding
+      - side project
+      - side-project
+      - prototype
+      - hobby
+      - passion project
+      - pet project
+      - self project
+    intent:
+      - personal_coding
+      - side_project
 
   # Active coding work in repos and IDE/editor windows.
   Development:
@@ -151,6 +354,9 @@ tags:
       - learn
       - lecture
       - certification
+    intent:
+      - learning
+      - study
 
   # Online meetings, chats, and team communication.
   Collaboration:
@@ -195,6 +401,24 @@ tags:
       - invoice
       - reimbursement
       - timesheet
+
+  # OS-level utilities, file managers, and shell/system surfaces.
+  System:
+    repos: []
+    domains: []
+    keywords:
+      - system
+      - file-explorer
+      - explorer
+      - dolphin
+      - konsole
+      - lockapp
+      - searchhost
+      - plasmashell
+      - shellexperiencehost
+      - xdg-desktop-portal-kde
+      - shellhost
+      - applicationframehost
 
   # Entertainment, streaming, and media consumption.
   Entertainment:

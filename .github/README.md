@@ -21,6 +21,9 @@ querying and analyzing WorkGraph data.
 - `prompts/sync-analytics.prompt.md`
   - Analyze sync-mode metrics, cross-device differences, and sync data quality.
 
+- `prompts/drift-detection.prompt.md`
+  - Diagnose goal drift, explain what is pulling attention away, and suggest recovery actions.
+
 ## How to use in Copilot Chat
 
 1. Open Copilot Chat.
@@ -29,6 +32,7 @@ querying and analyzing WorkGraph data.
    - `/productivity-analysis`
    - `/journal-insights`
    - `/sync-analytics`
+   - `/drift-detection`
 3. Enter your question when prompted.
 
 ## Query execution guidance

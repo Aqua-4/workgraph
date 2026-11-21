@@ -10,6 +10,7 @@ from dataclasses import dataclass
 class IdleState:
     is_idle: bool
     idle_seconds: int
+    available: bool = True
 
 
 class IdleTracker:
@@ -19,21 +20,22 @@ class IdleTracker:
     def get_idle_state(self) -> IdleState:
         seconds = _idle_seconds()
         return IdleState(
-            is_idle=seconds >= self.idle_threshold_seconds,
-            idle_seconds=seconds,
+            is_idle=seconds is not None and seconds >= self.idle_threshold_seconds,
+            idle_seconds=seconds if seconds is not None else 0,
+            available=seconds is not None,
         )
 
 
-def _idle_seconds() -> int:
+def _idle_seconds() -> int | None:
     system = platform.system().lower()
     if system == "windows":
         return _windows_idle_seconds()
     if system == "linux":
         return _linux_idle_seconds()
-    return 0
+    return None
 
 
-def _windows_idle_seconds() -> int:
+def _windows_idle_seconds() -> int | None:
     class LASTINPUTINFO(ctypes.Structure):
         _fields_ = [
             ("cbSize", ctypes.c_uint),
@@ -45,12 +47,12 @@ def _windows_idle_seconds() -> int:
     info = LASTINPUTINFO()
     info.cbSize = ctypes.sizeof(info)
     if not user32.GetLastInputInfo(ctypes.byref(info)):
-        return 0
-    elapsed_ms = kernel32.GetTickCount() - info.dwTime
+        return None
+    elapsed_ms = (kernel32.GetTickCount() - info.dwTime) & 0xFFFFFFFF
     return max(0, int(elapsed_ms / 1000))
 
 
-def _linux_idle_seconds() -> int:
+def _linux_idle_seconds() -> int | None:
     try:
         result = subprocess.run(
             ["xprintidle"],
@@ -60,10 +62,10 @@ def _linux_idle_seconds() -> int:
             timeout=1.5,
         )
     except (FileNotFoundError, subprocess.SubprocessError, OSError):
-        return 0
+        return None
     if result.returncode != 0:
-        return 0
+        return None
     try:
         return max(0, int(result.stdout.strip()) // 1000)
     except ValueError:
-        return 0
+        return None

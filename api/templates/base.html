@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}WorkGraph Dashboard{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <style>
@@ -16,8 +17,6 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #f5f5f5;
-            color: #333;
         }
 
         .container {
@@ -27,27 +26,26 @@
         }
 
         header {
-            background: #fff;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid var(--bs-border-color);
             padding: 20px 0;
             margin-bottom: 30px;
         }
 
         h1 {
             margin-bottom: 10px;
-            color: #1a1a1a;
+            color: var(--bs-emphasis-color);
         }
 
         h2 {
             margin-top: 30px;
             margin-bottom: 15px;
-            color: #1a1a1a;
+            color: var(--bs-emphasis-color);
             font-size: 1.3em;
         }
 
         h3 {
             margin-bottom: 10px;
-            color: #333;
+            color: var(--bs-emphasis-color);
             font-size: 1em;
         }
 
@@ -58,7 +56,7 @@
         }
 
         nav a {
-            color: #0066cc;
+            color: var(--bs-link-color);
             text-decoration: none;
             font-weight: 500;
             padding: 8px 12px;
@@ -67,20 +65,16 @@
         }
 
         nav a:hover {
-            background: #f0f0f0;
+            background: var(--bs-secondary-bg);
         }
 
         nav a.active {
-            background: #0066cc;
-            color: white;
+            background: var(--bs-primary);
+            color: var(--bs-light);
         }
 
         .card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .stats-grid {
@@ -91,16 +85,16 @@
         }
 
         .stat-box {
-            background: #fff;
-            border-radius: 8px;
+            background: var(--bs-tertiary-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 10px;
             padding: 20px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         }
 
         .stat-value {
             font-size: 2em;
             font-weight: bold;
-            color: #0066cc;
+            color: var(--bs-primary);
             margin: 10px 0;
         }
 
@@ -112,11 +106,10 @@
         }
 
         .metric-card {
-            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-            border: 1px solid #e5eef9;
+            background: var(--bs-tertiary-bg);
+            border: 1px solid var(--bs-border-color);
             border-radius: 14px;
             padding: 18px 20px;
-            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
         }
 
         .metric-card__label {
@@ -124,18 +117,18 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: #64748b;
+            color: var(--bs-secondary-color);
         }
 
         .metric-card__value {
             font-size: clamp(1.7rem, 2vw, 2.3rem);
             font-weight: 800;
-            color: #0f172a;
+            color: var(--bs-emphasis-color);
             line-height: 1;
         }
 
         .metric-card__subtext {
-            color: #64748b;
+            color: var(--bs-secondary-color);
             font-size: 0.92rem;
             line-height: 1.45;
         }
@@ -143,15 +136,15 @@
         .metric-card__trend {
             font-size: 0.85rem;
             font-weight: 600;
-            color: #0f766e;
+            color: var(--bs-success);
         }
 
         .page-context {
             margin-top: 18px;
             padding: 16px 18px;
             border-radius: 14px;
-            background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
-            border: 1px solid #dbeafe;
+            background: var(--bs-tertiary-bg);
+            border: 1px solid var(--bs-border-color);
         }
 
         .page-context__item {
@@ -165,17 +158,17 @@
             font-weight: 700;
             letter-spacing: 0.08em;
             text-transform: uppercase;
-            color: #64748b;
+            color: var(--bs-secondary-color);
         }
 
         .page-context__value {
-            color: #0f172a;
+            color: var(--bs-emphasis-color);
             font-weight: 600;
         }
 
         .stat-label {
             font-size: 0.9em;
-            color: #666;
+            color: var(--bs-secondary-color);
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -194,7 +187,7 @@
         .bar-label {
             min-width: 150px;
             font-size: 0.9em;
-            color: #666;
+            color: var(--bs-secondary-color);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -203,18 +196,18 @@
         .bar-container {
             flex: 1;
             height: 28px;
-            background: #f0f0f0;
+            background: var(--bs-secondary-bg);
             border-radius: 4px;
             overflow: hidden;
         }
 
         .bar {
             height: 100%;
-            background: linear-gradient(90deg, #0066cc, #0052a3);
+            background: var(--bs-primary);
             display: flex;
             align-items: center;
             padding-right: 10px;
-            color: white;
+            color: var(--bs-light);
             font-size: 0.85em;
             font-weight: 500;
             justify-content: flex-end;
@@ -222,7 +215,7 @@
 
         .bar-value {
             font-size: 0.9em;
-            color: #666;
+            color: var(--bs-secondary-color);
             min-width: 80px;
             text-align: right;
         }
@@ -234,70 +227,50 @@
         }
 
         thead {
-            background: #f9f9f9;
+            background: var(--bs-secondary-bg);
         }
 
         th {
             padding: 12px;
             text-align: left;
             font-weight: 600;
-            color: #666;
+            color: var(--bs-secondary-color);
             font-size: 0.85em;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid var(--bs-border-color);
         }
 
         td {
             padding: 12px;
-            border-bottom: 1px solid #f0f0f0;
+            border-bottom: 1px solid var(--bs-border-color);
         }
 
         tr:hover {
-            background: #fafafa;
-        }
-
-        .app-badge {
-            display: inline-block;
-            background: #e3f2fd;
-            color: #0066cc;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
-            font-weight: 500;
-        }
-
-        .tag-badge {
-            display: inline-block;
-            background: #f3e5f5;
-            color: #7b1fa2;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.85em;
-            font-weight: 500;
+            background: var(--bs-secondary-bg);
         }
 
         .duration {
             font-weight: 500;
-            color: #333;
+            color: var(--bs-body-color);
         }
 
         .time-small {
             font-size: 0.85em;
-            color: #999;
+            color: var(--bs-secondary-color);
         }
 
         footer {
             text-align: center;
             padding: 40px 20px;
-            color: #999;
+            color: var(--bs-secondary-color);
             font-size: 0.85em;
         }
 
         .loading {
             text-align: center;
             padding: 40px;
-            color: #999;
+            color: var(--bs-secondary-color);
         }
 
         .form-grid {
@@ -314,7 +287,7 @@
 
         .field label {
             font-size: 0.85em;
-            color: #555;
+            color: var(--bs-secondary-color);
             font-weight: 600;
         }
 
@@ -322,44 +295,32 @@
         .field textarea,
         .field select {
             width: 100%;
-            border: 1px solid #ddd;
+            border: 1px solid var(--bs-border-color);
             border-radius: 6px;
             padding: 10px;
             font: inherit;
-        }
-
-        .btn {
-            border: 0;
-            border-radius: 6px;
-            padding: 10px 14px;
-            background: #0066cc;
-            color: #fff;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .btn:hover {
-            background: #0052a3;
+            color: var(--bs-body-color);
+            background: var(--bs-body-bg);
         }
 
         .muted {
-            color: #888;
+            color: var(--bs-secondary-color);
             font-size: 0.9em;
         }
 
         .success {
-            color: #0d7a43;
-            background: #e6f7ef;
-            border: 1px solid #bcead1;
+            color: var(--bs-success-text-emphasis);
+            background: var(--bs-success-bg-subtle);
+            border: 1px solid var(--bs-success-border-subtle);
             border-radius: 6px;
             padding: 10px;
             margin-bottom: 12px;
         }
 
         .error {
-            color: #a11b1b;
-            background: #fdecec;
-            border: 1px solid #f3c5c5;
+            color: var(--bs-danger-text-emphasis);
+            background: var(--bs-danger-bg-subtle);
+            border: 1px solid var(--bs-danger-border-subtle);
             border-radius: 6px;
             padding: 10px;
             margin-bottom: 12px;
@@ -375,8 +336,10 @@
             <nav class="d-flex flex-wrap gap-2 mt-2">
                 <a href="/" class="{% block nav_dashboard %}{% endblock %}">Dashboard</a>
                 <a href="/timeline" class="{% block nav_timeline %}{% endblock %}">Timeline</a>
+                <a href="/goals" class="{% block nav_goals %}{% endblock %}">Goals</a>
                 {% if dashboard_mode != "sync-server" %}
                 <a href="/tag-review" class="{% block nav_tag_review %}{% endblock %}">Tag Review</a>
+                <a href="/browser-tag-review" class="{% block nav_browser_tag_review %}{% endblock %}">Browser Tag Review</a>
                 <a href="/journal" class="{% block nav_journal %}{% endblock %}">Journal</a>
                 {% endif %}
             </nav>

@@ -158,6 +158,7 @@ ORDER BY minutes DESC;
 - SQLite queries use plain `sqlite3` module; parameterised queries only (no f-string SQL).
 - Tests live in `tests/` and run with `uv run python -m pytest`.
 - Config is read from `config/settings.yaml`; never hard-code paths.
+- When modifying any configuration file, use comment strings to group related parameters and add concise information about each parameter's purpose, accepted values, units, defaults, or operational effects. Use the format's native comment syntax (for example, `#` in YAML); never add comments to strict formats such as standard JSON if they would make the file invalid.
 
 ## Agent execution preference
 

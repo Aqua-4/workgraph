@@ -162,3 +162,15 @@ CREATE INDEX IF NOT EXISTS idx_work_events_type
 
 CREATE INDEX IF NOT EXISTS idx_work_events_impact
     ON work_events (impact);
+
+CREATE TABLE IF NOT EXISTS wellbeing_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    reminder_type TEXT NOT NULL,
+    action TEXT NOT NULL,
+    exercise_name TEXT,
+    metadata TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_wellbeing_events_created_at
+    ON wellbeing_events (created_at);

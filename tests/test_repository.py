@@ -164,6 +164,28 @@ class ActivityRepositoryTests(unittest.TestCase):
         self.assertEqual(events[0]["event_type"], "Incident")
         self.assertEqual(events[0]["impact"], "High")
 
+    def test_repository_saves_wellbeing_event(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+            created_at = datetime(2026, 7, 10, 15, 0, tzinfo=UTC)
+
+            with ActivityRepository(db_path) as repository:
+                event_id = repository.save_wellbeing_event(
+                    created_at=created_at,
+                    reminder_type="workout",
+                    action="workout_complete",
+                    exercise_name="Push-ups",
+                    metadata={"verified": False},
+                )
+                events = repository.recent_wellbeing_events(limit=10)
+
+        self.assertEqual(event_id, 1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["reminder_type"], "workout")
+        self.assertEqual(events[0]["action"], "workout_complete")
+        self.assertEqual(events[0]["exercise_name"], "Push-ups")
+        self.assertEqual(json.loads(events[0]["metadata"]), {"verified": False})
+
     def test_repository_initializes_and_updates_sync_state(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "activity.db"

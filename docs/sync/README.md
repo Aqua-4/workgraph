@@ -34,6 +34,7 @@ flowchart LR
 - [MULTI_DEVICE_SETUP.md](MULTI_DEVICE_SETUP.md): practical setup steps for Raspberry Pi sync server and multiple client devices.
 - [SERVER_AGGREGATE_METRICS_APPROACH.md](SERVER_AGGREGATE_METRICS_APPROACH.md): implemented approach and current behavior for computing dashboard metrics from synced multi-device server data.
 - [SYNC_HARDENING_LAUNCH.md](SYNC_HARDENING_LAUNCH.md): implemented hardening summary, resilience guarantees, and pre-launch test checklist.
+- [JOURNAL_SYNC_CURSOR_RECOVERY.md](JOURNAL_SYNC_CURSOR_RECOVERY.md): runbook for recovering missing journal entries caused by cursor ordering gaps.
 - [../operations/README.md](../operations/README.md): architecture diagrams, sync lifecycle, troubleshooting, deployment, and upgrade notes.
 
 ## Suggested Additions

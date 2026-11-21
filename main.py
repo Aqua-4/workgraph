@@ -8,6 +8,8 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 from db.repository import ActivityRepository
 from services.activity_tagger import ActivityTagger
 from services.collector_service import (
@@ -27,6 +29,8 @@ from services.reporting import (
 )
 from services.sync_daemon import SyncDaemon, SyncDaemonSettings
 from services.sync_worker import HttpSyncClient, SyncWorker, SyncWorkerSettings
+from services.wellbeing import WellbeingSettings
+from services.wellbeing_delivery import send_control_command
 from workgraph.models import ActivitySession
 
 DEFAULT_SETTINGS_PATH = Path("config/settings.yaml")
@@ -71,7 +75,17 @@ def main() -> None:
         action="store_true",
         help="Recompute tags for all existing sessions using current config/tags.yaml rules.",
     )
+    parser.add_argument(
+        "--safe",
+        action="store_true",
+        help="Use with --retag-existing to only fill untagged sessions and preserve existing tags.",
+    )
     subparsers = parser.add_subparsers(dest="command")
+
+    wellbeing_parser = subparsers.add_parser(
+        "wellbeing", help="Control break reminders in the running collector."
+    )
+    wellbeing_parser.add_argument("action", choices=["snooze", "break"])
 
     export_parser = subparsers.add_parser(
         "export", help="Export activity sessions as csv, json, or markdown."
@@ -474,7 +488,13 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.command == "export":
+    if args.command == "wellbeing":
+        settings = load_settings(args.config)
+        if settings.dashboard_mode == "sync-server":
+            raise SystemExit("Wellbeing controls are unavailable in sync-server mode.")
+        send_control_command(settings.log_path, args.action)
+        print(f"Wellbeing {args.action} request queued for the collector.")
+    elif args.command == "export":
         run_export_command(args)
     elif args.command == "report" and args.report_command == "weekly":
         run_weekly_report_command(args)
@@ -507,7 +527,7 @@ def main() -> None:
     elif args.command == "sync" and args.sync_command == "verify":
         run_sync_verify_command(args)
     elif args.retag_existing:
-        retag_existing_sessions(args.config)
+        retag_existing_sessions(args.config, safe=args.safe)
     elif args.web:
         start_web_dashboard(args.port)
     else:
@@ -519,6 +539,7 @@ def main() -> None:
             service.collect_once()
             service.flush()
             service.repository.close()
+            service.wellbeing_delivery.close()
         else:
             service.run_forever()
 
@@ -1131,7 +1152,34 @@ def _sync_rollup_expected_values(
         SELECT
             COUNT(*) AS row_count,
             COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS active_seconds,
-            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)), 0) AS focus_seconds,
+            COALESCE(
+                SUM(
+                    CASE
+                        -- Use client-supplied focus_seconds when present
+                        WHEN CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER) IS NOT NULL
+                            THEN COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)
+                        -- Server-side heuristic: session >= 25 min, not idle, not a meeting
+                        WHEN COALESCE(active_seconds, 0) >= 1500
+                            AND COALESCE(CAST(json_extract(payload_json, '$.is_idle') AS INTEGER), 0) = 0
+                            AND NOT (
+                                LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%teams%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%zoom%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%webex%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%slack%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%meet.google.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%teams.microsoft.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%zoom.us%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%webex.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%meeting%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%standup%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%huddle%'
+                            )
+                        THEN COALESCE(active_seconds, 0)
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS focus_seconds,
             COALESCE(
                 SUM(
                     CASE
@@ -1162,6 +1210,11 @@ def _sync_rollup_expected_values(
           AND deleted_at IS NULL
           AND utc_start IS NOT NULL
           AND substr(utc_start, 1, 10) = ?
+          AND LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) NOT IN (
+              'lockapp', 'logonui', 'winlogon', 'loginwindow', 'screensaverengine',
+              'gnome-screensaver', 'xscreensaver', 'i3lock', 'slock', 'swaylock',
+              'xfce4-screensaver', 'gdm', 'gdm3', 'lightdm'
+          )
         """,
         (user_id, device_id, day_utc),
     ).fetchone()
@@ -1194,6 +1247,11 @@ def _sync_rollup_expected_values(
               AND deleted_at IS NULL
               AND utc_start IS NOT NULL
               AND substr(utc_start, 1, 10) = ?
+              AND LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) NOT IN (
+                  'lockapp', 'logonui', 'winlogon', 'loginwindow', 'screensaverengine',
+                  'gnome-screensaver', 'xscreensaver', 'i3lock', 'slock', 'swaylock',
+                  'xfce4-screensaver', 'gdm', 'gdm3', 'lightdm'
+              )
         )
         SELECT COUNT(*) AS switch_count
         FROM ordered
@@ -1384,9 +1442,11 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
         "push_sessions": 0,
         "push_journal_entries": 0,
         "push_daily_reflections": 0,
+        "push_work_events": 0,
         "pull_sessions": 0,
         "pull_journal_entries": 0,
         "pull_daily_reflections": 0,
+        "pull_work_events": 0,
         "pull_tombstones": 0,
     }
 
@@ -1408,34 +1468,40 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
             push_sessions = int(push.get("sessions", 0) or 0)
             push_journals = int(push.get("journal_entries", 0) or 0)
             push_reflections = int(push.get("daily_reflections", 0) or 0)
+            push_work_events = int(push.get("work_events", 0) or 0)
 
             pull_sessions = int(pull.get("sessions", 0) or 0)
             pull_journals = int(pull.get("journal_entries", 0) or 0)
             pull_reflections = int(pull.get("daily_reflections", 0) or 0)
+            pull_work_events = int(pull.get("work_events", 0) or 0)
             pull_tombstones = int(pull.get("tombstones", 0) or 0)
 
             totals["push_sessions"] += push_sessions
             totals["push_journal_entries"] += push_journals
             totals["push_daily_reflections"] += push_reflections
+            totals["push_work_events"] += push_work_events
             totals["pull_sessions"] += pull_sessions
             totals["pull_journal_entries"] += pull_journals
             totals["pull_daily_reflections"] += pull_reflections
+            totals["pull_work_events"] += pull_work_events
             totals["pull_tombstones"] += pull_tombstones
 
             cycle_progress = (
                 push_sessions
                 + push_journals
                 + push_reflections
+                + push_work_events
                 + pull_sessions
                 + pull_journals
                 + pull_reflections
+                + pull_work_events
                 + pull_tombstones
             )
 
             print(
                 f"cycle {cycle}: "
-                f"push(s={push_sessions},j={push_journals},r={push_reflections}) "
-                f"pull(s={pull_sessions},j={pull_journals},r={pull_reflections},t={pull_tombstones})"
+                f"push(s={push_sessions},j={push_journals},r={push_reflections},w={push_work_events}) "
+                f"pull(s={pull_sessions},j={pull_journals},r={pull_reflections},w={pull_work_events},t={pull_tombstones})"
             )
 
             if cycle_progress == 0:
@@ -1449,8 +1515,8 @@ def run_sync_catchup_command(args: argparse.Namespace) -> None:
     print(f"Cycles run: {cycles_run}")
     print(
         "Totals: "
-        f"push(s={totals['push_sessions']},j={totals['push_journal_entries']},r={totals['push_daily_reflections']}), "
-        f"pull(s={totals['pull_sessions']},j={totals['pull_journal_entries']},r={totals['pull_daily_reflections']},t={totals['pull_tombstones']})"
+        f"push(s={totals['push_sessions']},j={totals['push_journal_entries']},r={totals['push_daily_reflections']},w={totals['push_work_events']}), "
+        f"pull(s={totals['pull_sessions']},j={totals['pull_journal_entries']},r={totals['pull_daily_reflections']},w={totals['pull_work_events']},t={totals['pull_tombstones']})"
     )
 
 
@@ -1612,7 +1678,13 @@ def run_sync_verify_command(args: argparse.Namespace) -> None:
         return
 
     mismatches: list[str] = []
-    for field in ["sessions", "journal_entries", "daily_reflections", "active_seconds"]:
+    for field in [
+        "sessions",
+        "journal_entries",
+        "daily_reflections",
+        "work_events",
+        "active_seconds",
+    ]:
         local_value = int(local_totals[field])
         server_value = int(server_totals[field])
         if local_value != server_value:
@@ -1639,6 +1711,7 @@ def run_sync_verify_command(args: argparse.Namespace) -> None:
         f"sessions={local_totals['sessions']}, "
         f"journal_entries={local_totals['journal_entries']}, "
         f"daily_reflections={local_totals['daily_reflections']}, "
+        f"work_events={local_totals['work_events']}, "
         f"active_seconds={local_totals['active_seconds']}"
     )
 
@@ -1665,11 +1738,13 @@ def _local_sync_totals(conn: sqlite3.Connection) -> dict[str, int]:
     sessions = _count_active_rows(conn, "activity_sessions")
     journals = _count_active_rows(conn, "journal_entries")
     reflections = _count_active_rows(conn, "daily_reflections")
+    work_events = _count_active_rows(conn, "work_events")
     active_seconds = _sum_active_seconds(conn)
     return {
         "sessions": sessions,
         "journal_entries": journals,
         "daily_reflections": reflections,
+        "work_events": work_events,
         "active_seconds": active_seconds,
     }
 
@@ -1719,6 +1794,7 @@ def _pull_server_totals(
         "sessions": 0,
         "journal_entries": 0,
         "daily_reflections": 0,
+        "work_events": 0,
         "active_seconds": 0,
     }
     truncated = False
@@ -1737,10 +1813,12 @@ def _pull_server_totals(
         sessions = changes.get("sessions") or []
         journals = changes.get("journal_entries") or []
         reflections = changes.get("daily_reflections") or []
+        work_events = changes.get("work_events") or []
 
         totals["sessions"] += len(sessions)
         totals["journal_entries"] += len(journals)
         totals["daily_reflections"] += len(reflections)
+        totals["work_events"] += len(work_events)
         totals["active_seconds"] += sum(
             int(item.get("duration_sec") or 0) for item in sessions
         )
@@ -1878,8 +1956,11 @@ def _count_broken_sync_state_refs(conn: sqlite3.Connection) -> int:
     return int(row["broken_count"] if row is not None else 0)
 
 
-def retag_existing_sessions(config_path: str) -> None:
-    """Retag all existing sessions in DB with current tagging rules."""
+def retag_existing_sessions(config_path: str, *, safe: bool = False) -> None:
+    """Retag existing sessions in DB with current tagging rules.
+
+    When safe=True, only sessions with an empty tag are eligible for updates.
+    """
     settings = load_settings(config_path)
     configure_logging(settings.log_path)
 
@@ -1892,16 +1973,28 @@ def retag_existing_sessions(config_path: str) -> None:
         rows = repository.all_sessions()
         total = len(rows)
         updated = 0
+        eligible = 0
 
         for row in rows:
+            old_tag = row["tag"]
+            if safe and old_tag not in (None, ""):
+                continue
+
+            eligible += 1
             session = _session_from_row(row)
             new_tag = tagger.tag_session(session)
-            old_tag = row["tag"]
             if new_tag != old_tag:
                 repository.update_session_tag(int(row["id"]), new_tag)
                 updated += 1
 
-        print(f"Retag complete: updated {updated} of {total} sessions")
+        if safe:
+            print(
+                "Retag complete (safe mode): "
+                f"updated {updated} of {eligible} eligible sessions "
+                f"({total} total)"
+            )
+        else:
+            print(f"Retag complete: updated {updated} of {total} sessions")
     finally:
         repository.close()
 
@@ -1947,7 +2040,7 @@ def start_web_dashboard(port: int = 8000) -> None:
 
 
 def load_settings(path: str) -> CollectorSettings:
-    values = {
+    values: dict[str, object] = {
         "database_path": "activity.db",
         "poll_interval_seconds": 5.0,
         "idle_threshold_seconds": 300,
@@ -1958,7 +2051,7 @@ def load_settings(path: str) -> CollectorSettings:
     }
     config_path = _resolve_settings_path(path)
     if config_path.exists():
-        values.update(_read_simple_yaml(config_path))
+        values.update(_read_settings_yaml(config_path))
     resolved_identity_path = _resolve_identity_path(str(values["identity_path"]))
     return CollectorSettings(
         database_path=str(values["database_path"]),
@@ -1970,6 +2063,14 @@ def load_settings(path: str) -> CollectorSettings:
         ),
         log_path=str(values["log_path"]),
         identity_path=resolved_identity_path,
+        dashboard_mode=str(values.get("dashboard_mode", "standalone")),
+        wellbeing=WellbeingSettings(
+            **{
+                key: values[key]
+                for key in WellbeingSettings.model_fields
+                if key in values
+            }
+        ),
     )
 
 
@@ -1985,6 +2086,13 @@ def _resolve_identity_path(path: str) -> str:
     if identity_path == DEFAULT_IDENTITY_PATH and PERSONAL_IDENTITY_PATH.exists():
         return str(PERSONAL_IDENTITY_PATH)
     return str(identity_path)
+
+
+def _read_settings_yaml(path: Path) -> dict[str, object]:
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(loaded, dict):
+        raise ValueError("Settings YAML must contain a mapping")
+    return loaded
 
 
 def _read_simple_yaml(path: Path) -> dict[str, str]:

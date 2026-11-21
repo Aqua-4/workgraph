@@ -6,16 +6,15 @@
 
 {% block extra_styles %}
 <style>
-    :root {
-        --tag-review-repo: #0f766e;
-        --tag-review-domain: #0369a1;
-        --tag-review-browser-context: #b45309;
-        --tag-review-app: #6d28d9;
+    .tag-review-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-width: 0;
     }
 
-    .tag-review-shell {
-        display: grid;
-        gap: 1rem;
+    .tag-review-shell>* {
+        min-width: 0;
     }
 
     .tag-review-preview {
@@ -27,63 +26,38 @@
     }
 
     .tag-review-muted {
-        color: #64748b;
+        color: var(--bs-secondary-color);
         font-size: 0.92rem;
     }
 
     .tag-review-table td,
     .tag-review-table th {
         vertical-align: top;
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
-    .tag-review-row {
-        --tag-review-accent: #475569;
-    }
-
-    .tag-review-row[data-group-type="repo"] {
-        --tag-review-accent: var(--tag-review-repo);
-    }
-
-    .tag-review-row[data-group-type="domain"] {
-        --tag-review-accent: var(--tag-review-domain);
-    }
-
-    .tag-review-row[data-group-type="browser_context"] {
-        --tag-review-accent: var(--tag-review-browser-context);
-    }
-
-    .tag-review-row[data-group-type="app"] {
-        --tag-review-accent: var(--tag-review-app);
+    .tag-review-table {
+        width: 100%;
+        table-layout: fixed;
     }
 
     .tag-review-group-card {
-        border-left: 4px solid var(--tag-review-accent);
+        border: 1px solid var(--bs-border-color);
         border-radius: 0.85rem;
-        background:
-            linear-gradient(135deg, color-mix(in srgb, var(--tag-review-accent) 10%, white), white 58%),
-            white;
+        background: var(--bs-tertiary-bg);
         padding: 0.8rem 0.9rem;
         min-height: 100%;
     }
 
     .tag-review-group-chip {
-        display: inline-flex;
-        align-items: center;
-        border-radius: 999px;
-        padding: 0.24rem 0.55rem;
-        font-size: 0.72rem;
-        font-weight: 700;
         letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--tag-review-accent);
-        background: color-mix(in srgb, var(--tag-review-accent) 13%, white);
-        border: 1px solid color-mix(in srgb, var(--tag-review-accent) 22%, white);
     }
 
     .tag-review-group-value {
         font-size: 1rem;
         font-weight: 700;
-        color: #0f172a;
+        color: var(--bs-emphasis-color);
         margin-top: 0.45rem;
         overflow-wrap: anywhere;
     }
@@ -96,15 +70,7 @@
     }
 
     .tag-review-meta-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.3rem;
-        padding: 0.28rem 0.55rem;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(148, 163, 184, 0.3);
         font-size: 0.79rem;
-        color: #334155;
     }
 
     .tag-review-samples {
@@ -118,19 +84,19 @@
     .tag-review-sample-item {
         padding: 0.6rem 0.75rem;
         border-radius: 0.8rem;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
+        background: var(--bs-tertiary-bg);
+        border: 1px solid var(--bs-border-color);
     }
 
     .tag-review-sample-title {
         font-weight: 600;
-        color: #0f172a;
+        color: var(--bs-emphasis-color);
     }
 
     .tag-review-sample-meta {
         margin-top: 0.2rem;
         font-size: 0.82rem;
-        color: #64748b;
+        color: var(--bs-secondary-color);
     }
 
     .tag-review-actions {
@@ -147,8 +113,8 @@
     }
 
     .tag-review-detail-panel {
-        background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-        border: 1px solid #dbe4ee;
+        background: linear-gradient(180deg, var(--bs-tertiary-bg) 0%, var(--bs-body-bg) 100%);
+        border: 1px solid var(--bs-border-color);
         border-radius: 1rem;
         padding: 1rem;
         margin-top: 0.25rem;
@@ -156,7 +122,7 @@
 
     .tag-review-detail-status {
         font-size: 0.88rem;
-        color: #64748b;
+        color: var(--bs-secondary-color);
         margin-bottom: 0.75rem;
     }
 
@@ -168,8 +134,8 @@
     .tag-review-detail-item {
         padding: 0.8rem 0.9rem;
         border-radius: 0.9rem;
-        border: 1px solid #e2e8f0;
-        background: white;
+        border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg);
     }
 
     .tag-review-detail-header {
@@ -183,12 +149,12 @@
 
     .tag-review-detail-title {
         font-weight: 700;
-        color: #0f172a;
+        color: var(--bs-emphasis-color);
     }
 
     .tag-review-detail-time {
         font-size: 0.8rem;
-        color: #64748b;
+        color: var(--bs-secondary-color);
     }
 
     .tag-review-detail-tags {
@@ -199,12 +165,7 @@
     }
 
     .tag-review-detail-tag {
-        padding: 0.22rem 0.5rem;
-        border-radius: 999px;
-        background: #eff6ff;
-        color: #1d4ed8;
         font-size: 0.77rem;
-        font-weight: 600;
     }
 
     .tag-review-toggle {
@@ -228,16 +189,16 @@
     <div class="card p-3">
         <h3 class="mb-1">Sync Health</h3>
         <div class="d-flex gap-2 flex-wrap">
-            <span class="badge text-bg-light border">Devices: {{ sync_health.registered_devices }}</span>
-            <span class="badge text-bg-light border">Synced: {{ sync_health.synced_devices }}</span>
-            <span class="badge text-bg-light border">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
+            <span class="badge text-bg-secondary">Devices: {{ sync_health.registered_devices }}</span>
+            <span class="badge text-bg-secondary">Synced: {{ sync_health.synced_devices }}</span>
+            <span class="badge text-bg-secondary">Last Sync: {{ sync_health.last_sync_at|human_datetime }}</span>
         </div>
     </div>
     {% endif %}
 
     <div class="card p-3 p-md-4">
         <h3 class="mb-3">Filters</h3>
-        <form method="get" class="row g-3 align-items-end">
+        <form method="get" class="row g-3 align-items-end" id="tag-review-filter-form">
             <div class="col-12 col-md-2">
                 <label for="days" class="form-label">Past Days</label>
                 <input type="number" class="form-control" id="days" name="days" min="1" max="3650" value="{{ days }}">
@@ -292,7 +253,7 @@
                                 data-group-value="{{ group.group_value }}">
                                 <td>
                                     <div class="tag-review-group-card">
-                                        <span class="tag-review-group-chip">{{ group.group_type.replace('_', ' ')|title
+                                        <span class="badge text-bg-secondary tag-review-group-chip text-uppercase">{{ group.group_type.replace('_', ' ')|title
                                             }}</span>
                                         <div class="tag-review-group-value">{{ group.group_value }}</div>
                                     </div>
@@ -300,8 +261,8 @@
                                 <td>
                                     <div class="tag-review-group-card">
                                         <div class="tag-review-meta-list">
-                                            <span class="tag-review-meta-pill">{{ group.session_count }} sessions</span>
-                                            <span class="tag-review-meta-pill">{{ "%.1f"|format((group.total_seconds /
+                                            <span class="badge text-bg-secondary tag-review-meta-pill">{{ group.session_count }} sessions</span>
+                                            <span class="badge text-bg-secondary tag-review-meta-pill">{{ "%.1f"|format((group.total_seconds /
                                                 3600) if group.total_seconds else 0) }}h active</span>
                                         </div>
                                         {% if group.dominant_apps %}
@@ -391,6 +352,8 @@
                 <div class="d-flex gap-2 mt-3 flex-wrap">
                     <button id="tag-review-refresh-preview" type="button" class="btn btn-outline-primary">Refresh
                         Preview</button>
+                    <button id="tag-review-copy-preview" type="button" class="btn btn-outline-secondary">Copy
+                        YAML</button>
                     <button id="tag-review-download" type="button" class="btn btn-primary">Download YAML</button>
                 </div>
             </div>
@@ -406,7 +369,7 @@
                 <div class="border rounded p-3 h-100">
                     <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
                         <strong>{{ tag_name }}</strong>
-                        <span class="badge text-bg-light border">{{ suggestion.total_reviewed }} reviewed</span>
+                        <span class="badge text-bg-secondary">{{ suggestion.total_reviewed }} reviewed</span>
                     </div>
                     <div class="mb-2">
                         <div class="tag-review-muted">Domains</div>
@@ -455,10 +418,12 @@
 
 <script>
     (() => {
+        const filterForm = document.getElementById("tag-review-filter-form");
         const feedbackNode = document.getElementById("tag-review-feedback");
         const previewNode = document.getElementById("tag-review-yaml-preview");
         const queryString = window.location.search;
         const searchParams = new URLSearchParams(window.location.search);
+        const currentOnlyUntagged = searchParams.get("only_untagged") || "{{ 'true' if only_untagged else 'false' }}";
 
         function groupKey(groupType, groupValue) {
             return `${groupType}::${groupValue}`;
@@ -485,6 +450,34 @@
             }
         }
 
+        async function copyPreviewText() {
+            if (!previewNode) {
+                setFeedback("YAML preview is not available.", "error");
+                return;
+            }
+
+            const previewText = previewNode.value || "";
+            if (!previewText.trim()) {
+                setFeedback("Nothing to copy. Refresh preview first.", "error");
+                return;
+            }
+
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(previewText);
+                } else {
+                    previewNode.focus();
+                    previewNode.select();
+                    document.execCommand("copy");
+                    previewNode.setSelectionRange(0, 0);
+                    previewNode.blur();
+                }
+                setFeedback("Copied YAML preview to clipboard.", "success");
+            } catch (error) {
+                setFeedback("Failed to copy YAML preview.", "error");
+            }
+        }
+
         function renderDetailSessions(sessions) {
             if (!sessions.length) {
                 return '<div class="tag-review-detail-status">No matching sessions found for this bucket.</div>';
@@ -495,7 +488,7 @@
                     session.browser_domain,
                     session.git_repo,
                     session.tag ? `Tag: ${session.tag}` : null,
-                ].filter(Boolean).map((item) => `<span class="tag-review-detail-tag">${escapeHtml(item)}</span>`).join("");
+                ].filter(Boolean).map((item) => `<span class="badge text-bg-secondary tag-review-detail-tag">${escapeHtml(item)}</span>`).join("");
 
                 return `
                     <div class="tag-review-detail-item">
@@ -518,6 +511,24 @@
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#39;");
         }
+
+        filterForm?.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const formData = new FormData(filterForm);
+            const params = new URLSearchParams();
+
+            for (const [key, value] of formData.entries()) {
+                if (key === "only_untagged") {
+                    continue;
+                }
+                if (typeof value === "string" && value.trim() !== "") {
+                    params.set(key, value);
+                }
+            }
+
+            params.set("only_untagged", filterForm.only_untagged.checked ? "true" : "false");
+            window.location.search = params.toString();
+        });
 
         async function toggleDetails(row, button) {
             const groupType = row?.getAttribute("data-group-type");
@@ -551,7 +562,7 @@
 
             const params = new URLSearchParams();
             params.set("days", searchParams.get("days") || "{{ days }}");
-            params.set("only_untagged", searchParams.get("only_untagged") || "{{ 'true' if only_untagged else 'false' }}");
+            params.set("only_untagged", currentOnlyUntagged);
             params.set("limit", "50");
 
             const response = await fetch(`/api/tag-review/groups/${encodeURIComponent(groupType)}/${encodeURIComponent(groupValue)}?${params.toString()}`);
@@ -593,6 +604,7 @@
                         selected_tag: selectedTag,
                         source_signal: groupType,
                         days: {{ days }},
+                        only_untagged: currentOnlyUntagged === "true",
                     }),
                 });
         if (!response.ok) {
@@ -613,6 +625,7 @@
     });
 
     document.getElementById("tag-review-refresh-preview")?.addEventListener("click", refreshPreview);
+    document.getElementById("tag-review-copy-preview")?.addEventListener("click", copyPreviewText);
 
     document.getElementById("tag-review-download")?.addEventListener("click", async () => {
         const response = await fetch("/api/tag-review/yaml-download", {

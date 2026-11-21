@@ -10,11 +10,11 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib import error as urllib_error
 from urllib import request as urllib_request
-from uuid import uuid4
+from uuid import NAMESPACE_DNS, uuid4, uuid5
 
 import yaml
 from fastapi import FastAPI, Header, HTTPException, Query, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field, field_validator
@@ -95,6 +95,12 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> FileResponse:
+    """Serve the dashboard favicon from the static assets directory."""
+    return FileResponse(static_dir / "favicon.svg", media_type="image/svg+xml")
+
+
 def get_db_path() -> Path:
     """Get the database path from environment or default."""
     return Path("activity.db")
@@ -143,6 +149,9 @@ def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS work_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT,
+            user_id TEXT,
+            device_id TEXT,
             created_at TEXT NOT NULL,
             event_time TEXT,
             event_type TEXT NOT NULL,
@@ -150,8 +159,13 @@ def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
             impact TEXT,
             project TEXT,
             notes TEXT,
-            metadata TEXT
+            metadata TEXT,
+            updated_at TEXT,
+            deleted_at TEXT
         );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_work_events_uuid
+            ON work_events (uuid);
 
         CREATE INDEX IF NOT EXISTS idx_work_events_event_time
             ON work_events (event_time);
@@ -163,7 +177,56 @@ def _ensure_aux_tables(conn: sqlite3.Connection) -> None:
             ON work_events (impact);
         """
     )
+    _backfill_work_events_metadata(conn)
     conn.commit()
+
+
+def _default_user_id() -> str:
+    return str(uuid5(NAMESPACE_DNS, "workgraph.local.user"))
+
+
+def _default_device_id() -> str:
+    return str(uuid5(NAMESPACE_DNS, f"workgraph.local.device.{os.uname().nodename}"))
+
+
+def _work_event_sync_identity(conn: sqlite3.Connection) -> tuple[str, str]:
+    if _sqlite_table_exists(conn, "sync_state"):
+        row = conn.execute(
+            "SELECT user_id, device_id FROM sync_state WHERE id = 1"
+        ).fetchone()
+        if row is not None and row["user_id"] and row["device_id"]:
+            return str(row["user_id"]), str(row["device_id"])
+    return _default_user_id(), _default_device_id()
+
+
+def _backfill_work_events_metadata(conn: sqlite3.Connection) -> None:
+    if not _sqlite_table_exists(conn, "work_events"):
+        return
+
+    user_id, device_id = _work_event_sync_identity(conn)
+    rows = conn.execute(
+        """
+        SELECT id, created_at, event_time, updated_at, uuid, user_id, device_id
+        FROM work_events
+        ORDER BY id ASC
+        """
+    ).fetchall()
+    for row in rows:
+        row_uuid = str(
+            row["uuid"] or uuid5(NAMESPACE_DNS, f"workgraph.work-event.{row['id']}")
+        )
+        row_updated_at = str(row["updated_at"] or row["created_at"] or _now_iso())
+        conn.execute(
+            """
+            UPDATE work_events
+            SET uuid = ?,
+                user_id = COALESCE(user_id, ?),
+                device_id = COALESCE(device_id, ?),
+                updated_at = COALESCE(updated_at, ?)
+            WHERE id = ?
+            """,
+            (row_uuid, user_id, device_id, row_updated_at, row["id"]),
+        )
 
 
 def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
@@ -213,6 +276,11 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             updated_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS sync_ingest_sequence (
+            seq INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS sync_sessions (
             uuid TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -226,6 +294,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             repo_name TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
             deleted_at TEXT,
             payload_json TEXT NOT NULL
         );
@@ -236,6 +305,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             device_id TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
             deleted_at TEXT,
             payload_json TEXT NOT NULL
         );
@@ -247,6 +317,18 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             date TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
+            deleted_at TEXT,
+            payload_json TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS sync_work_events (
+            uuid TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
             deleted_at TEXT,
             payload_json TEXT NOT NULL
         );
@@ -259,6 +341,9 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_updated
             ON sync_daily_reflections (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_work_events_user_updated
+            ON sync_work_events (user_id, updated_at, uuid);
 
         CREATE TABLE IF NOT EXISTS sync_request_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -329,6 +414,10 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
         "ALTER TABLE sync_sessions ADD COLUMN application_name TEXT",
         "ALTER TABLE sync_sessions ADD COLUMN tag TEXT",
         "ALTER TABLE sync_sessions ADD COLUMN repo_name TEXT",
+        "ALTER TABLE sync_sessions ADD COLUMN ingest_seq INTEGER",
+        "ALTER TABLE sync_journal_entries ADD COLUMN ingest_seq INTEGER",
+        "ALTER TABLE sync_daily_reflections ADD COLUMN ingest_seq INTEGER",
+        "ALTER TABLE sync_work_events ADD COLUMN ingest_seq INTEGER",
     ]:
         try:
             conn.execute(stmt)
@@ -336,6 +425,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             pass
 
     _migrate_sync_tables_to_user_scoped_keys(conn)
+    _backfill_sync_ingest_sequences(conn)
 
     _backfill_sync_session_columns(conn)
     _ensure_sync_runtime_indexes(conn)
@@ -385,6 +475,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 repo_name TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                ingest_seq INTEGER,
                 deleted_at TEXT,
                 payload_json TEXT NOT NULL,
                 UNIQUE(user_id, uuid)
@@ -403,6 +494,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 repo_name,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
@@ -419,6 +511,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 repo_name,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             FROM sync_sessions;
@@ -438,6 +531,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 device_id TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                ingest_seq INTEGER,
                 deleted_at TEXT,
                 payload_json TEXT NOT NULL,
                 UNIQUE(user_id, uuid)
@@ -449,6 +543,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 device_id,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
@@ -458,6 +553,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 device_id,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             FROM sync_journal_entries;
@@ -478,6 +574,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 date TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                ingest_seq INTEGER,
                 deleted_at TEXT,
                 payload_json TEXT NOT NULL,
                 UNIQUE(user_id, uuid)
@@ -490,6 +587,7 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 date,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
@@ -500,12 +598,55 @@ def _migrate_sync_tables_to_user_scoped_keys(conn: sqlite3.Connection) -> None:
                 date,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             FROM sync_daily_reflections;
 
             DROP TABLE sync_daily_reflections;
             ALTER TABLE sync_daily_reflections_v2 RENAME TO sync_daily_reflections;
+            """
+        )
+
+    if _table_has_uuid_primary_key(conn, "sync_work_events"):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS sync_work_events_v2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                device_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                ingest_seq INTEGER,
+                deleted_at TEXT,
+                payload_json TEXT NOT NULL,
+                UNIQUE(user_id, uuid)
+            );
+
+            INSERT INTO sync_work_events_v2 (
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                ingest_seq,
+                deleted_at,
+                payload_json
+            )
+            SELECT
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                ingest_seq,
+                deleted_at,
+                payload_json
+            FROM sync_work_events;
+
+            DROP TABLE sync_work_events;
+            ALTER TABLE sync_work_events_v2 RENAME TO sync_work_events;
             """
         )
 
@@ -521,6 +662,9 @@ def _ensure_sync_unique_indexes(conn: sqlite3.Connection) -> None:
 
         CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_reflections_user_uuid
             ON sync_daily_reflections (user_id, uuid);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_work_events_user_uuid
+            ON sync_work_events (user_id, uuid);
         """
     )
 
@@ -530,6 +674,9 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_updated
             ON sync_sessions (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_ingest
+            ON sync_sessions (user_id, ingest_seq, uuid);
 
         CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_utc_start
             ON sync_sessions (user_id, utc_start);
@@ -546,8 +693,17 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_sync_journal_user_updated
             ON sync_journal_entries (user_id, updated_at, uuid);
 
+        CREATE INDEX IF NOT EXISTS idx_sync_journal_user_ingest
+            ON sync_journal_entries (user_id, ingest_seq, uuid);
+
         CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_updated
             ON sync_daily_reflections (user_id, updated_at, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_reflections_user_ingest
+            ON sync_daily_reflections (user_id, ingest_seq, uuid);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_work_events_user_ingest
+            ON sync_work_events (user_id, ingest_seq, uuid);
 
         CREATE INDEX IF NOT EXISTS idx_sync_request_logs_endpoint_created
             ON sync_request_logs (endpoint, created_at);
@@ -568,6 +724,53 @@ def _ensure_sync_runtime_indexes(conn: sqlite3.Connection) -> None:
             ON sync_metrics_daily (user_id, day_utc);
         """
     )
+
+
+def _next_sync_ingest_seq(conn: sqlite3.Connection) -> int:
+    cursor = conn.execute(
+        "INSERT INTO sync_ingest_sequence (created_at) VALUES (?)",
+        (_now_iso(),),
+    )
+    return int(cursor.lastrowid)
+
+
+def _backfill_sync_ingest_sequences(conn: sqlite3.Connection) -> None:
+    mappings = {
+        "sessions": "sync_sessions",
+        "journal_entries": "sync_journal_entries",
+        "daily_reflections": "sync_daily_reflections",
+        "work_events": "sync_work_events",
+    }
+    rows = conn.execute(
+        """
+        SELECT entity, row_id
+        FROM (
+            SELECT 'sessions' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
+            FROM sync_sessions
+            WHERE COALESCE(ingest_seq, 0) <= 0
+            UNION ALL
+            SELECT 'journal_entries' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
+            FROM sync_journal_entries
+            WHERE COALESCE(ingest_seq, 0) <= 0
+            UNION ALL
+            SELECT 'daily_reflections' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
+            FROM sync_daily_reflections
+            WHERE COALESCE(ingest_seq, 0) <= 0
+            UNION ALL
+            SELECT 'work_events' AS entity, id AS row_id, COALESCE(updated_at, created_at) AS sort_ts
+            FROM sync_work_events
+            WHERE COALESCE(ingest_seq, 0) <= 0
+        )
+        ORDER BY sort_ts ASC, entity ASC, row_id ASC
+        """
+    ).fetchall()
+
+    for row in rows:
+        table_name = mappings[str(row["entity"])]
+        conn.execute(
+            f"UPDATE {table_name} SET ingest_seq = ? WHERE id = ?",
+            (_next_sync_ingest_seq(conn), int(row["row_id"])),
+        )
 
 
 def _rebuild_sync_rollups(
@@ -668,7 +871,34 @@ def _recompute_sync_daily_rollup(
         SELECT
             COUNT(*) AS row_count,
             COALESCE(SUM(COALESCE(active_seconds, 0)), 0) AS active_seconds,
-            COALESCE(SUM(COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)), 0) AS focus_seconds,
+            COALESCE(
+                SUM(
+                    CASE
+                        -- Use client-supplied focus_seconds when present
+                        WHEN CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER) IS NOT NULL
+                            THEN COALESCE(CAST(json_extract(payload_json, '$.focus_seconds') AS INTEGER), 0)
+                        -- Server-side heuristic: session >= 25 min, not idle, not a meeting
+                        WHEN COALESCE(active_seconds, 0) >= 1500
+                            AND COALESCE(CAST(json_extract(payload_json, '$.is_idle') AS INTEGER), 0) = 0
+                            AND NOT (
+                                LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%teams%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%zoom%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%webex%'
+                                OR LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) LIKE '%slack%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%meet.google.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%teams.microsoft.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%zoom.us%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.browser_domain') AS TEXT), '')) LIKE '%webex.com%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%meeting%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%standup%'
+                                OR LOWER(COALESCE(CAST(json_extract(payload_json, '$.window_title') AS TEXT), '')) LIKE '%huddle%'
+                            )
+                        THEN COALESCE(active_seconds, 0)
+                        ELSE 0
+                    END
+                ),
+                0
+            ) AS focus_seconds,
             COALESCE(
                 SUM(
                     CASE
@@ -699,6 +929,11 @@ def _recompute_sync_daily_rollup(
           AND deleted_at IS NULL
           AND utc_start IS NOT NULL
           AND substr(utc_start, 1, 10) = ?
+          AND LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) NOT IN (
+              'lockapp', 'logonui', 'winlogon', 'loginwindow', 'screensaverengine',
+              'gnome-screensaver', 'xscreensaver', 'i3lock', 'slock', 'swaylock',
+              'xfce4-screensaver', 'gdm', 'gdm3', 'lightdm'
+          )
         """,
         (user_id, device_id, day_utc),
     ).fetchone()
@@ -730,6 +965,11 @@ def _recompute_sync_daily_rollup(
               AND deleted_at IS NULL
               AND utc_start IS NOT NULL
               AND substr(utc_start, 1, 10) = ?
+              AND LOWER(COALESCE(application_name, CAST(json_extract(payload_json, '$.app_name') AS TEXT), '')) NOT IN (
+                  'lockapp', 'logonui', 'winlogon', 'loginwindow', 'screensaverengine',
+                  'gnome-screensaver', 'xscreensaver', 'i3lock', 'slock', 'swaylock',
+                  'xfce4-screensaver', 'gdm', 'gdm3', 'lightdm'
+              )
         )
         SELECT COUNT(*) AS switch_count
         FROM ordered
@@ -967,9 +1207,16 @@ class TagReviewGroupAssignRequest(BaseModel):
     @classmethod
     def validate_group_type(cls, value: str) -> str:
         trimmed = value.strip().lower()
-        if trimmed not in {"repo", "domain", "browser_context", "app"}:
+        if trimmed not in {
+            "repo",
+            "domain",
+            "browser_context",
+            "title_bucket",
+            "app",
+        }:
             raise ValueError(
-                "group_type must be one of: repo, domain, browser_context, app"
+                "group_type must be one of: repo, domain, browser_context, "
+                "title_bucket, app"
             )
         return trimmed
 
@@ -1185,6 +1432,26 @@ def _parse_cursor(cursor: str | None) -> tuple[str | None, str | None]:
     return updated_at or None, row_uuid or ""
 
 
+def _parse_ingest_seq_cursor(cursor: str | None) -> int | None:
+    if not cursor:
+        return None
+    raw = str(cursor).strip()
+    if not raw:
+        return None
+    if raw.startswith("seq:"):
+        raw = raw[4:]
+    if not raw.isdigit():
+        return None
+    value = int(raw)
+    return value if value >= 0 else None
+
+
+def _build_ingest_seq_cursor(ingest_seq: int | None) -> str | None:
+    if ingest_seq is None or ingest_seq < 0:
+        return None
+    return f"seq:{ingest_seq}"
+
+
 def _build_cursor(updated_at: str | None, row_uuid: str | None) -> str | None:
     if not updated_at or not row_uuid:
         return None
@@ -1262,6 +1529,7 @@ def _upsert_sync_payload_row(
     deleted_at = payload.get("deleted_at")
     date_value = payload.get("date") if table_name == "sync_daily_reflections" else None
     is_session_table = table_name == "sync_sessions"
+    is_work_event_table = table_name == "sync_work_events"
     extracted_fields: dict[str, object | None] = (
         _extract_sync_session_fields(payload) if is_session_table else {}
     )
@@ -1283,6 +1551,7 @@ def _upsert_sync_payload_row(
             return str(existing["updated_at"]), str(existing["uuid"])
 
         if table_name == "sync_daily_reflections":
+            ingest_seq = _next_sync_ingest_seq(conn)
             cursor.execute(
                 f"""
                 UPDATE {table_name}
@@ -1290,6 +1559,7 @@ def _upsert_sync_payload_row(
                     device_id = ?,
                     created_at = ?,
                     updated_at = ?,
+                    ingest_seq = ?,
                     deleted_at = ?,
                     payload_json = ?,
                     date = COALESCE(?, date)
@@ -1300,6 +1570,7 @@ def _upsert_sync_payload_row(
                     device_id,
                     created_at,
                     updated_at,
+                    ingest_seq,
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
                     date_value,
@@ -1307,7 +1578,8 @@ def _upsert_sync_payload_row(
                     row_uuid,
                 ),
             )
-        elif is_session_table:
+        elif is_work_event_table:
+            ingest_seq = _next_sync_ingest_seq(conn)
             cursor.execute(
                 f"""
                 UPDATE {table_name}
@@ -1315,6 +1587,33 @@ def _upsert_sync_payload_row(
                     device_id = ?,
                     created_at = ?,
                     updated_at = ?,
+                    ingest_seq = ?,
+                    deleted_at = ?,
+                    payload_json = ?
+                WHERE user_id = ? AND uuid = ?
+                """,
+                (
+                    user_id,
+                    device_id,
+                    created_at,
+                    updated_at,
+                    ingest_seq,
+                    deleted_at,
+                    json.dumps(payload, separators=(",", ":")),
+                    user_id,
+                    row_uuid,
+                ),
+            )
+        elif is_session_table:
+            ingest_seq = _next_sync_ingest_seq(conn)
+            cursor.execute(
+                f"""
+                UPDATE {table_name}
+                SET user_id = ?,
+                    device_id = ?,
+                    created_at = ?,
+                    updated_at = ?,
+                    ingest_seq = ?,
                     deleted_at = ?,
                     payload_json = ?,
                     utc_start = ?,
@@ -1331,6 +1630,7 @@ def _upsert_sync_payload_row(
                     device_id,
                     created_at,
                     updated_at,
+                    ingest_seq,
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
                     extracted_fields.get("utc_start"),
@@ -1345,6 +1645,7 @@ def _upsert_sync_payload_row(
                 ),
             )
         else:
+            ingest_seq = _next_sync_ingest_seq(conn)
             cursor.execute(
                 f"""
                 UPDATE {table_name}
@@ -1352,6 +1653,7 @@ def _upsert_sync_payload_row(
                     device_id = ?,
                     created_at = ?,
                     updated_at = ?,
+                    ingest_seq = ?,
                     deleted_at = ?,
                     payload_json = ?
                 WHERE user_id = ? AND uuid = ?
@@ -1361,6 +1663,7 @@ def _upsert_sync_payload_row(
                     device_id,
                     created_at,
                     updated_at,
+                    ingest_seq,
                     deleted_at,
                     json.dumps(payload, separators=(",", ":")),
                     user_id,
@@ -1382,6 +1685,7 @@ def _upsert_sync_payload_row(
         return updated_at, row_uuid
 
     if table_name == "sync_daily_reflections":
+        ingest_seq = _next_sync_ingest_seq(conn)
         cursor.execute(
             f"""
             INSERT INTO {table_name} (
@@ -1391,10 +1695,11 @@ def _upsert_sync_payload_row(
                 date,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_uuid,
@@ -1403,11 +1708,40 @@ def _upsert_sync_payload_row(
                 date_value,
                 created_at,
                 updated_at,
+                ingest_seq,
+                deleted_at,
+                json.dumps(payload, separators=(",", ":")),
+            ),
+        )
+    elif is_work_event_table:
+        ingest_seq = _next_sync_ingest_seq(conn)
+        cursor.execute(
+            f"""
+            INSERT INTO {table_name} (
+                uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                ingest_seq,
+                deleted_at,
+                    payload_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row_uuid,
+                user_id,
+                device_id,
+                created_at,
+                updated_at,
+                ingest_seq,
                 deleted_at,
                 json.dumps(payload, separators=(",", ":")),
             ),
         )
     elif is_session_table:
+        ingest_seq = _next_sync_ingest_seq(conn)
         cursor.execute(
             f"""
             INSERT INTO {table_name} (
@@ -1423,10 +1757,11 @@ def _upsert_sync_payload_row(
                 repo_name,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_uuid,
@@ -1441,11 +1776,13 @@ def _upsert_sync_payload_row(
                 extracted_fields.get("repo_name"),
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 json.dumps(payload, separators=(",", ":")),
             ),
         )
     else:
+        ingest_seq = _next_sync_ingest_seq(conn)
         cursor.execute(
             f"""
             INSERT INTO {table_name} (
@@ -1454,10 +1791,11 @@ def _upsert_sync_payload_row(
                 device_id,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 payload_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 row_uuid,
@@ -1465,6 +1803,7 @@ def _upsert_sync_payload_row(
                 device_id,
                 created_at,
                 updated_at,
+                ingest_seq,
                 deleted_at,
                 json.dumps(payload, separators=(",", ":")),
             ),
@@ -1522,6 +1861,7 @@ def _list_sync_tombstones(
         ("sync_sessions", "sessions"),
         ("sync_journal_entries", "journal_entries"),
         ("sync_daily_reflections", "daily_reflections"),
+        ("sync_work_events", "work_events"),
     ]
     tombstones: list[dict] = []
     for table_name, entity_name in mappings:
@@ -1577,23 +1917,31 @@ def _list_sync_union_rows(
     cursor_value: str | None,
     limit: int,
 ) -> list[sqlite3.Row]:
+    ingest_seq_cursor = _parse_ingest_seq_cursor(cursor_value)
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = """
-        SELECT entity, id, updated_at, deleted_at, payload_json
+        SELECT entity, id, updated_at, ingest_seq, deleted_at, payload_json
         FROM (
-            SELECT 'sessions' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
+            SELECT 'sessions' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
             FROM sync_sessions
             UNION ALL
-            SELECT 'journal_entries' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
+            SELECT 'journal_entries' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
             FROM sync_journal_entries
             UNION ALL
-            SELECT 'daily_reflections' AS entity, uuid AS id, user_id, updated_at, deleted_at, payload_json
+            SELECT 'daily_reflections' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
             FROM sync_daily_reflections
+            UNION ALL
+            SELECT 'work_events' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
+            FROM sync_work_events
         )
         WHERE user_id = ?
     """
     params: list[str | int] = [user_id]
-    if updated_at_cursor is not None:
+    if ingest_seq_cursor is not None:
+        query += " AND COALESCE(ingest_seq, 0) > ?"
+        params.append(ingest_seq_cursor)
+        query += " ORDER BY COALESCE(ingest_seq, 0) ASC, id ASC LIMIT ?"
+    elif updated_at_cursor is not None:
         query += """
           AND (
                 updated_at > ?
@@ -1601,7 +1949,9 @@ def _list_sync_union_rows(
               )
         """
         params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
-    query += " ORDER BY updated_at ASC, id ASC LIMIT ?"
+        query += " ORDER BY updated_at ASC, id ASC LIMIT ?"
+    else:
+        query += " ORDER BY COALESCE(ingest_seq, 0) ASC, id ASC LIMIT ?"
     params.append(limit)
     return list(conn.execute(query, params).fetchall())
 
@@ -1612,20 +1962,26 @@ def _count_sync_union_rows_after_cursor(
     user_id: str,
     cursor_value: str | None,
 ) -> int:
+    ingest_seq_cursor = _parse_ingest_seq_cursor(cursor_value)
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = """
         SELECT COUNT(*) AS total_rows
         FROM (
-            SELECT uuid AS id, user_id, updated_at FROM sync_sessions
+            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_sessions
             UNION ALL
-            SELECT uuid AS id, user_id, updated_at FROM sync_journal_entries
+            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_journal_entries
             UNION ALL
-            SELECT uuid AS id, user_id, updated_at FROM sync_daily_reflections
+            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_daily_reflections
+            UNION ALL
+            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_work_events
         )
         WHERE user_id = ?
     """
     params: list[str] = [user_id]
-    if updated_at_cursor is not None:
+    if ingest_seq_cursor is not None:
+        query += " AND COALESCE(ingest_seq, 0) > ?"
+        params.append(str(ingest_seq_cursor))
+    elif updated_at_cursor is not None:
         query += """
           AND (
                 updated_at > ?
@@ -1645,10 +2001,14 @@ def _count_sync_table_rows_after_cursor(
     user_id: str,
     cursor_value: str | None,
 ) -> int:
+    ingest_seq_cursor = _parse_ingest_seq_cursor(cursor_value)
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = f"SELECT COUNT(*) AS total_rows FROM {table_name} WHERE user_id = ?"
     params: list[str] = [user_id]
-    if updated_at_cursor is not None:
+    if ingest_seq_cursor is not None:
+        query += " AND COALESCE(ingest_seq, 0) > ?"
+        params.append(str(ingest_seq_cursor))
+    elif updated_at_cursor is not None:
         query += """
           AND (
                 updated_at > ?
@@ -1815,6 +2175,7 @@ def get_sync_health(db_path: Path) -> dict:
     pending_sessions_total = 0
     pending_journal_entries_total = 0
     pending_reflections_total = 0
+    pending_work_events_total = 0
     for row in device_status_rows:
         device_last_sync = row["last_sync_at"]
         last_pull_cursor = row["last_pull_cursor"]
@@ -1822,6 +2183,7 @@ def get_sync_health(db_path: Path) -> dict:
         pending_sessions = 0
         pending_journal_entries = 0
         pending_reflections = 0
+        pending_work_events = 0
         pending_pull_rows = 0
         if row_user_id:
             pending_sessions = _count_sync_table_rows_after_cursor(
@@ -1842,14 +2204,24 @@ def get_sync_health(db_path: Path) -> dict:
                 user_id=row_user_id,
                 cursor_value=last_pull_cursor,
             )
+            pending_work_events = _count_sync_table_rows_after_cursor(
+                conn,
+                table_name="sync_work_events",
+                user_id=row_user_id,
+                cursor_value=last_pull_cursor,
+            )
             pending_pull_rows = (
-                pending_sessions + pending_journal_entries + pending_reflections
+                pending_sessions
+                + pending_journal_entries
+                + pending_reflections
+                + pending_work_events
             )
 
         pending_pull_rows_total += pending_pull_rows
         pending_sessions_total += pending_sessions
         pending_journal_entries_total += pending_journal_entries
         pending_reflections_total += pending_reflections
+        pending_work_events_total += pending_work_events
 
         is_synced = bool(device_last_sync)
         if is_synced:
@@ -1875,6 +2247,7 @@ def get_sync_health(db_path: Path) -> dict:
                 "pending_sessions": pending_sessions,
                 "pending_journal_entries": pending_journal_entries,
                 "pending_reflections": pending_reflections,
+                "pending_work_events": pending_work_events,
             }
         )
 
@@ -1911,6 +2284,7 @@ def get_sync_health(db_path: Path) -> dict:
         "pending_sessions": pending_sessions_total,
         "pending_journal_entries": pending_journal_entries_total,
         "pending_reflections": pending_reflections_total,
+        "pending_work_events": pending_work_events_total,
         "pending_upload_failures": pending_upload_failures,
         "sync_failures": open_errors,
         "last_error_at": error_count_row["last_error_at"]
@@ -3490,6 +3864,64 @@ async def dashboard(
     )
 
 
+@app.get("/goals", response_class=HTMLResponse)
+async def goals_page(
+    days: int = Query(7, ge=1, le=3650),
+    source: str | None = Query(None),
+    user_id: str | None = Query(None),
+    device_id: str | None = Query(None),
+):
+    """Goals view showing configured goal targets, actual progress, and drift."""
+    db_path = get_db_path()
+    dashboard_mode = _configured_dashboard_mode()
+    default_source = _source_for_dashboard_mode(dashboard_mode)
+    normalized_source = _normalize_source(source or default_source)
+
+    from services.reporting import analyze_goal_allocation
+
+    goals_path = _resolve_goals_path()
+    goals: list[object] = []
+    if db_path.exists():
+        goals = analyze_goal_allocation(
+            db_path=db_path,
+            goals_path=goals_path,
+            days=days,
+        )
+
+    use_hours = any(getattr(goal, "target_hours", None) is not None for goal in goals)
+    drift_score = (
+        round(
+            sum(abs(float(getattr(goal, "delta_pct_points", 0.0))) for goal in goals)
+            / 2.0,
+            2,
+        )
+        if goals
+        else 0.0
+    )
+    template = jinja_env.get_template("goals.html")
+    return template.render(
+        goals=goals,
+        use_hours=use_hours,
+        days=days,
+        drift_score=drift_score,
+        goals_path=str(goals_path),
+        dashboard_mode=dashboard_mode,
+        source=normalized_source,
+        selected_user_id=user_id,
+        selected_device_id=device_id,
+        sync_health=get_sync_health(db_path) if db_path.exists() else None,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source=normalized_source,
+            days=days,
+            selected_user_id=user_id,
+            selected_device_id=device_id,
+            selected_user_name=user_id,
+            selected_device_name=device_id,
+        ),
+    )
+
+
 @app.get("/timeline", response_class=HTMLResponse)
 async def timeline(
     days: int = Query(7, ge=1, le=30),
@@ -3805,6 +4237,68 @@ async def tag_review_page(
     )
 
 
+@app.get("/browser-tag-review", response_class=HTMLResponse)
+async def browser_tag_review_page(
+    days: int = Query(7, ge=1, le=3650),
+    app_name: str | None = Query(None),
+    domain: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    dashboard_mode = _configured_dashboard_mode()
+    available_tags = get_available_tags()
+    sync_health = get_sync_health(db_path) if db_path.exists() else None
+
+    groups: list[dict[str, object]] = []
+    group_count = 0
+    preview_text = ""
+    warnings: list[dict[str, str]] = []
+    if db_path.exists():
+        from db.repository import ActivityRepository
+
+        with ActivityRepository(db_path) as repository:
+            groups = repository.list_browser_tag_review_groups(
+                days=days,
+                app_name=app_name,
+                domain=domain,
+                limit=limit,
+                offset=0,
+            )
+            group_count = repository.count_browser_tag_review_groups(
+                days=days,
+                app_name=app_name,
+                domain=domain,
+            )
+        _, preview_text, warnings = _build_tag_review_payload(
+            db_path=db_path,
+            days=days,
+            selected_tag=None,
+            min_domain_hits=2,
+            min_repo_hits=2,
+        )
+
+    template = jinja_env.get_template("browser_tag_review.html")
+    return template.render(
+        groups=groups,
+        group_count=group_count,
+        days=days,
+        filter_app_name=app_name,
+        filter_domain=domain,
+        limit=limit,
+        available_tags=available_tags,
+        yaml_preview=preview_text,
+        warnings=warnings,
+        sync_health=sync_health,
+        dashboard_mode=dashboard_mode,
+        page_context=_build_dashboard_header_context(
+            dashboard_mode=dashboard_mode,
+            source="local",
+            days=days,
+        ),
+    )
+
+
 @app.get("/api/tag-review/groups")
 async def api_tag_review_groups(
     days: int = Query(7, ge=1, le=3650),
@@ -3868,6 +4362,59 @@ async def api_tag_review_groups(
     }
 
 
+@app.get("/api/browser-tag-review/groups")
+async def api_browser_tag_review_groups(
+    days: int = Query(7, ge=1, le=3650),
+    app_name: str | None = Query(None),
+    domain: str | None = Query(None),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+
+    if not db_path.exists():
+        return {
+            "groups": [],
+            "count": 0,
+            "filters": {
+                "days": days,
+                "app_name": app_name,
+                "domain": domain,
+                "limit": limit,
+                "offset": offset,
+            },
+        }
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        groups = repository.list_browser_tag_review_groups(
+            days=days,
+            app_name=app_name,
+            domain=domain,
+            limit=limit,
+            offset=offset,
+        )
+        count = repository.count_browser_tag_review_groups(
+            days=days,
+            app_name=app_name,
+            domain=domain,
+        )
+
+    return {
+        "groups": groups,
+        "count": count,
+        "filters": {
+            "days": days,
+            "app_name": app_name,
+            "domain": domain,
+            "limit": limit,
+            "offset": offset,
+        },
+    }
+
+
 @app.get("/api/tag-review/groups/{group_type}/{group_value}")
 async def api_tag_review_group_detail(
     group_type: str,
@@ -3913,6 +4460,49 @@ async def api_tag_review_group_detail(
     }
 
 
+@app.get("/api/browser-tag-review/groups/{group_type}/{group_value}")
+async def api_browser_tag_review_group_detail(
+    group_type: str,
+    group_value: str,
+    days: int = Query(7, ge=1, le=3650),
+    limit: int = Query(100, ge=1, le=500),
+):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    if not db_path.exists():
+        return {
+            "group_type": group_type,
+            "group_value": group_value,
+            "sessions": [],
+            "count": 0,
+        }
+
+    if group_type not in {"domain", "browser_context", "title_bucket", "app"}:
+        raise HTTPException(status_code=400, detail="Invalid group_type")
+
+    from db.repository import ActivityRepository
+
+    with ActivityRepository(db_path) as repository:
+        sessions = [
+            dict(row)
+            for row in repository.list_browser_tag_review_group_sessions(
+                group_type=group_type,
+                group_value=group_value,
+                days=days,
+                limit=limit,
+            )
+        ]
+
+    total_seconds = sum(int(item.get("duration_sec") or 0) for item in sessions)
+    return {
+        "group_type": group_type,
+        "group_value": group_value,
+        "sessions": sessions,
+        "count": len(sessions),
+        "total_seconds": total_seconds,
+    }
+
+
 @app.post("/api/tag-review/assign-group")
 async def api_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
     _ensure_tag_review_features_enabled()
@@ -3933,6 +4523,59 @@ async def api_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
         if not sessions:
             raise HTTPException(
                 status_code=404, detail="No matching sessions found for group"
+            )
+
+        session_ids: list[int] = []
+        for session in sessions:
+            session_ids.append(int(session["id"]))
+            repository.create_tag_review_action(
+                session_id=int(session["id"]),
+                original_tag=session["tag"],
+                selected_tag=payload.selected_tag,
+                reason=payload.reason,
+                source_signal=payload.source_signal or payload.group_type,
+            )
+        affected_count = repository.update_session_tags(
+            session_ids, payload.selected_tag
+        )
+        updated_sessions = [
+            dict(repository.get_session(session_id))
+            for session_id in session_ids[:20]
+            if repository.get_session(session_id) is not None
+        ]
+
+    return {
+        "ok": True,
+        "group_type": payload.group_type,
+        "group_value": payload.group_value,
+        "selected_tag": payload.selected_tag,
+        "affected_count": affected_count,
+        "sessions": updated_sessions,
+    }
+
+
+@app.post("/api/browser-tag-review/assign-group")
+async def api_browser_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
+    _ensure_tag_review_features_enabled()
+    db_path = get_db_path()
+    if not db_path.exists():
+        raise HTTPException(status_code=404, detail="No activity database found")
+
+    from db.repository import ActivityRepository
+
+    if payload.group_type not in {"domain", "browser_context", "title_bucket", "app"}:
+        raise HTTPException(status_code=400, detail="Invalid group_type")
+
+    with ActivityRepository(db_path) as repository:
+        sessions = repository.list_browser_tag_review_group_sessions(
+            group_type=payload.group_type,
+            group_value=payload.group_value,
+            days=payload.days,
+            limit=5000,
+        )
+        if not sessions:
+            raise HTTPException(
+                status_code=404, detail="No matching browser sessions found for group"
             )
 
         session_ids: list[int] = []
@@ -4396,12 +5039,16 @@ async def create_work_event(payload: WorkEventCreate):
     conn.row_factory = sqlite3.Row
     _ensure_aux_tables(conn)
     cursor = conn.cursor()
+    user_id, device_id = _work_event_sync_identity(conn)
 
     event_time_iso = _to_utc_iso(payload.event_time)
     now_iso = datetime.now(UTC).isoformat(timespec="seconds")
     cursor.execute(
         """
         INSERT INTO work_events (
+            uuid,
+            user_id,
+            device_id,
             created_at,
             event_time,
             event_type,
@@ -4409,11 +5056,16 @@ async def create_work_event(payload: WorkEventCreate):
             impact,
             project,
             notes,
-            metadata
+            metadata,
+            updated_at,
+            deleted_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
+            str(uuid4()),
+            user_id,
+            device_id,
             now_iso,
             event_time_iso,
             payload.event_type,
@@ -4422,6 +5074,8 @@ async def create_work_event(payload: WorkEventCreate):
             payload.project,
             payload.notes,
             json.dumps(payload.metadata) if payload.metadata is not None else None,
+            now_iso,
+            None,
         ),
     )
     conn.commit()
@@ -4448,6 +5102,7 @@ async def list_work_events(
 
     query = "SELECT * FROM work_events WHERE 1=1"
     params: list[str | int] = []
+    query += " AND deleted_at IS NULL"
 
     if from_ts:
         query += " AND COALESCE(event_time, created_at) >= ?"
@@ -4483,7 +5138,7 @@ async def get_work_event(event_id: int):
     _ensure_aux_tables(conn)
 
     row = conn.execute(
-        "SELECT * FROM work_events WHERE id = ?",
+        "SELECT * FROM work_events WHERE id = ? AND deleted_at IS NULL",
         (event_id,),
     ).fetchone()
     conn.close()
@@ -4509,6 +5164,7 @@ async def update_work_event(event_id: int, payload: WorkEventCreate):
         raise HTTPException(status_code=404, detail="Work event not found")
 
     event_time_iso = _to_utc_iso(payload.event_time)
+    now_iso = datetime.now(UTC).isoformat(timespec="seconds")
     cursor.execute(
         """
         UPDATE work_events
@@ -4518,7 +5174,8 @@ async def update_work_event(event_id: int, payload: WorkEventCreate):
             impact = ?,
             project = ?,
             notes = ?,
-            metadata = ?
+            metadata = ?,
+            updated_at = ?
         WHERE id = ?
         """,
         (
@@ -4529,12 +5186,45 @@ async def update_work_event(event_id: int, payload: WorkEventCreate):
             payload.project,
             payload.notes,
             json.dumps(payload.metadata) if payload.metadata is not None else None,
+            now_iso,
             event_id,
         ),
     )
     conn.commit()
     conn.close()
     return {"id": event_id, "updated": True}
+
+
+@app.delete("/api/work-events/{event_id}")
+async def delete_work_event(event_id: int):
+    _ensure_journal_features_enabled()
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    _ensure_aux_tables(conn)
+    cursor = conn.cursor()
+
+    row = cursor.execute(
+        "SELECT id FROM work_events WHERE id = ? AND deleted_at IS NULL",
+        (event_id,),
+    ).fetchone()
+    if row is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Work event not found")
+
+    now_iso = datetime.now(UTC).isoformat(timespec="seconds")
+    cursor.execute(
+        """
+        UPDATE work_events
+        SET deleted_at = ?,
+            updated_at = ?
+        WHERE id = ?
+        """,
+        (now_iso, now_iso, event_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"id": event_id, "deleted": True}
 
 
 @app.get("/api/work-events/{event_id}/correlated-sessions")
@@ -4920,7 +5610,12 @@ async def sync_push_changes(
                 accepted_count=int(
                     sum(
                         int(accepted.get(k, 0))
-                        for k in ["sessions", "journal_entries", "daily_reflections"]
+                        for k in [
+                            "sessions",
+                            "journal_entries",
+                            "daily_reflections",
+                            "work_events",
+                        ]
                     )
                 ),
                 conflict_count=int(len(replay_response.get("conflicts", []))),
@@ -4931,6 +5626,7 @@ async def sync_push_changes(
         sessions = payload.changes.get("sessions") or []
         journal_entries = payload.changes.get("journal_entries") or []
         reflections = payload.changes.get("daily_reflections") or []
+        work_events = payload.changes.get("work_events") or []
 
         cursors: list[tuple[str, str]] = []
         for row in sessions:
@@ -4963,6 +5659,16 @@ async def sync_push_changes(
             )
             if updated_at and row_uuid:
                 cursors.append((updated_at, row_uuid))
+        for row in work_events:
+            updated_at, row_uuid = _upsert_sync_payload_row(
+                conn,
+                table_name="sync_work_events",
+                user_id=payload.user_id,
+                device_id=payload.device_id,
+                payload=row,
+            )
+            if updated_at and row_uuid:
+                cursors.append((updated_at, row_uuid))
 
         now_iso = _now_iso()
         next_push_cursor = payload.client_cursor
@@ -4975,6 +5681,7 @@ async def sync_push_changes(
                 "sessions": len(sessions),
                 "journal_entries": len(journal_entries),
                 "daily_reflections": len(reflections),
+                "work_events": len(work_events),
             },
             "conflicts": [],
             "next_push_cursor": next_push_cursor,
@@ -5041,7 +5748,13 @@ async def sync_push_changes(
             device_id=payload.device_id,
             user_id=payload.user_id,
             batch_id=payload.batch_id,
-            accepted_count=len(sessions) + len(journal_entries) + len(reflections),
+            # Keep request metrics aligned with returned accepted counters.
+            accepted_count=(
+                len(sessions)
+                + len(journal_entries)
+                + len(reflections)
+                + len(work_events)
+            ),
             conflict_count=0,
         )
 
@@ -5122,6 +5835,7 @@ async def sync_pull_changes(
         active_sessions: list[dict] = []
         active_journal_entries: list[dict] = []
         active_daily_reflections: list[dict] = []
+        active_work_events: list[dict] = []
         tombstones: list[dict] = []
 
         for row in rows:
@@ -5150,11 +5864,15 @@ async def sync_pull_changes(
                 active_journal_entries.append(item)
             elif entity == "daily_reflections":
                 active_daily_reflections.append(item)
+            elif entity == "work_events":
+                active_work_events.append(item)
 
         next_cursor = payload.cursor
         if rows:
             last_row = rows[-1]
-            next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
+            next_cursor = _build_ingest_seq_cursor(int(last_row["ingest_seq"] or 0))
+            if next_cursor is None:
+                next_cursor = _build_cursor(last_row["updated_at"], last_row["id"])
 
         total_after_cursor = _count_sync_union_rows_after_cursor(
             conn,
@@ -5203,7 +5921,8 @@ async def sync_pull_changes(
             user_id=payload.user_id,
             accepted_count=len(active_sessions)
             + len(active_journal_entries)
-            + len(active_daily_reflections),
+            + len(active_daily_reflections)
+            + len(active_work_events),
             has_more=has_more,
         )
         conn.commit()
@@ -5213,6 +5932,7 @@ async def sync_pull_changes(
                 "sessions": active_sessions,
                 "journal_entries": active_journal_entries,
                 "daily_reflections": active_daily_reflections,
+                "work_events": active_work_events,
                 "tombstones": tombstones,
             },
             "next_cursor": next_cursor,

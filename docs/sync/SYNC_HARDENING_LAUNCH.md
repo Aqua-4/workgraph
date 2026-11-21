@@ -46,6 +46,40 @@ Uniqueness:
 
 Rollups are maintained on ingest and can be rebuilt via endpoint.
 
+#### `focus_seconds` computation
+
+`focus_seconds` is derived server-side during rollup. For each session the rollup uses:
+
+1. **Client-supplied value** — if `payload_json.focus_seconds` is non-null, it is used as-is (allows future clients to report precise focus time).
+2. **Server-side heuristic (fallback)** — when the field is absent (current default for all clients), a session contributes its full `active_seconds` if all of the following are true:
+   - `active_seconds >= 1500` (at least 25 minutes — one Pomodoro block)
+   - `is_idle = 0`
+   - The session is not classified as a meeting (no Teams/Zoom/Webex/Slack/Meet app or window-title heuristic match)
+
+If neither condition applies the session contributes 0 to `focus_seconds`.
+
+#### System Idle App Exclusions
+
+Lock screens and login UIs are automatically treated as idle regardless of the system idle threshold. These are configured in `config/tags.yaml` as a top-level `system_idle_apps` list and matched case-insensitively against both `app_name` and `process_name`:
+
+**Default list (Windows, macOS, Linux):**
+- `lockapp`, `logonui`, `winlogon` (Windows)
+- `loginwindow`, `ScreenSaverEngine` (macOS)
+- `gnome-screensaver`, `xscreensaver`, `i3lock`, `slock`, `swaylock`, `xfce4-screensaver`, `gdm`, `gdm3`, `lightdm` (Linux)
+
+**Collection-time:** When the active window matches a system idle app, the `ActivitySample` is marked with `is_idle = True` regardless of the idle timer threshold, preventing lock-screen time from inflating active-time metrics.
+
+**Rollup-time:** Rollups also exclude these apps from aggregations as a safety net for historical data.
+
+**Customization:** Override or extend the list per device using `config/my-tags.yaml`:
+```yaml
+system_idle_apps:
+  - lockapp
+  - logonui
+  - winlogon
+  - custom_screensaver  # your additions
+```
+
 ### 3) User Isolation
 
 All sync pull and sync analytics paths are user-scoped.
