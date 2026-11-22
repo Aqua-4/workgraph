@@ -217,6 +217,7 @@ class WellbeingDelivery:
                         "engine.say(sys.argv[1]); engine.runAndWait()",
                         message,
                     ],
+                    stdin=subprocess.DEVNULL,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.PIPE,
                     text=True,
