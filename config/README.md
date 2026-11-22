@@ -104,8 +104,9 @@ workout_exercises:
 
 Tkinter popups require a graphical desktop session. If Tk cannot open, WorkGraph
 uses desktop notifications; these fallback notifications do not offer interactive
-actions. The water prompt retries during the operating window and its Tk popup has
-only a Snooze action. Idle prompts require available OS idle data; the existing
+actions. Water and workout prompts can appear independently. The water prompt
+retries during the operating window and its Tk popup has only a Snooze action.
+Idle prompts require available OS idle data; the existing
 detector does not provide it on macOS.
 
 All wellbeing reminders, controls, notifications, Tk UI, and startup wellbeing
@@ -133,7 +134,6 @@ Add the desired flat settings to `config/my-settings.yaml`:
 ```yaml
 break_reminders_enabled: true
 break_work_minutes: 50
-break_idle_minutes: 5
 break_snooze_minutes: 10
 time_announcements_enabled: true
 time_announcement_interval_minutes: 30
@@ -145,9 +145,10 @@ wellbeing_end_time: "18:00"
 Restart the collector to apply changes. Announcements run on local clock boundaries
 within the configured hours, including overnight ranges; equal start and end times
 allow announcements all day. They are skipped when the user is idle by default,
-or when idle detection is unavailable. Break reminders operate outside these hours
-too. A long idle interval or locked screen counts as a break, but cannot confirm a
-physical break was taken. Short pauses do not reset accumulated activity.
+but continue when idle detection is unavailable. Break reminders also operate outside
+these hours and use elapsed time independently of idle detection and screen locks.
+Marking a break taken resets the break timer; the legacy `break_idle_minutes` setting
+is retained for compatibility but does not affect scheduled reminders.
 
 Linux notification actions support snoozing or marking a break taken when the
 desktop supports them. On any platform, use these commands as a fallback, with

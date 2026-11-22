@@ -26,7 +26,7 @@ class WorkoutExercise(BaseModel):
 
 @dataclass(frozen=True)
 class WellbeingPrompt:
-    kind: Literal["water", "idle", "workout"]
+    kind: Literal["break", "water", "idle", "workout"]
     title: str
     message: str
     exercises: tuple[WorkoutExercise, ...] = ()
@@ -78,8 +78,6 @@ class WellbeingService:
         self._previous_break_tick: float | None = None
         self._previous_announcement_tick: float | None = None
         self._previous_wall: datetime | None = None
-        self._previous_available = False
-        self._system_idle_since: float | None = None
         self._last_announcement: tuple[object, int] | None = None
         self._suggestion_index = 0
         self._workout_deadline: float | None = None
@@ -87,12 +85,11 @@ class WellbeingService:
         self._idle_snoozed_until = 0.0
         self._idle_suppressed = False
         self._workout_skipped_day = None
-        self._active_prompt: WellbeingPrompt | None = None
+        self._active_prompts: dict[str, WellbeingPrompt] = {}
 
-    def take_break(self, *, reset_workout: bool = True) -> None:
+    def take_break(self, *, reset_workout: bool = False) -> None:
         self.work_seconds = 0.0
         self.next_reminder = self.settings.break_work_minutes * 60.0
-        self._previous_available = False
         if reset_workout:
             self._workout_deadline = None
 
@@ -101,7 +98,10 @@ class WellbeingService:
 
     @property
     def active_prompt(self) -> WellbeingPrompt | None:
-        return self._active_prompt
+        return next(iter(self._active_prompts.values()), None)
+
+    def prompt_for_action(self, action: str) -> WellbeingPrompt | None:
+        return self._active_prompts.get(action.partition("_")[0])
 
     def next_prompt(
         self,
@@ -110,8 +110,16 @@ class WellbeingService:
         idle_seconds: int,
         idle_available: bool,
     ) -> WellbeingPrompt | None:
-        if self._active_prompt is not None:
-            return self._active_prompt
+        prompts = self.next_prompts(tick, now, idle_seconds, idle_available)
+        return prompts[0] if prompts else None
+
+    def next_prompts(
+        self,
+        tick: float,
+        now: datetime,
+        idle_seconds: int,
+        idle_available: bool,
+    ) -> tuple[WellbeingPrompt, ...]:
 
         if self.settings.workout_reminders_enabled and self._workout_deadline is None:
             self._workout_deadline = tick + self.settings.workout_interval_minutes * 60
@@ -140,30 +148,27 @@ class WellbeingService:
             and self._workout_skipped_day != self._operating_day(now)
         )
         if not self._within_hours(now.time()):
-            return None
+            return tuple(self._active_prompts.values())
 
-        if water_due:
-            prompt = WellbeingPrompt(
+        if water_due and "water" not in self._active_prompts:
+            self._active_prompts["water"] = WellbeingPrompt(
                 "water", "Stay hydrated", "Take a few sips of water."
             )
-        elif idle_due:
+        if idle_due and "idle" not in self._active_prompts:
             minutes = max(1, idle_seconds // 60)
-            prompt = WellbeingPrompt(
+            self._active_prompts["idle"] = WellbeingPrompt(
                 "idle",
                 "Still here?",
                 f"You have been inactive for {minutes} minutes.",
             )
-        elif workout_due:
-            prompt = WellbeingPrompt(
+        if workout_due and "workout" not in self._active_prompts:
+            self._active_prompts["workout"] = WellbeingPrompt(
                 "workout",
                 "Time to move",
                 "Choose a workout:",
                 self.settings.workout_exercises,
             )
-        else:
-            return None
-        self._active_prompt = prompt
-        return prompt
+        return tuple(self._active_prompts.values())
 
     def apply_action(
         self,
@@ -172,7 +177,7 @@ class WellbeingService:
         now: datetime,
         exercise_name: str | None = None,
     ) -> bool:
-        prompt = self._active_prompt
+        prompt = self.prompt_for_action(action)
         if prompt is None:
             return False
 
@@ -183,7 +188,6 @@ class WellbeingService:
                 )
             elif action == "idle_break":
                 self._idle_suppressed = True
-                self.take_break()
             else:
                 return False
         elif prompt.kind == "workout":
@@ -210,7 +214,7 @@ class WellbeingService:
         else:
             return False
 
-        self._active_prompt = None
+        del self._active_prompts[prompt.kind]
         return True
 
     def _operating_day(self, now: datetime):
@@ -251,34 +255,19 @@ class WellbeingService:
             else 0
         )
         timely = 0 <= elapsed <= self.max_sample_gap
-        if system_idle:
-            if self._system_idle_since is None or not timely:
-                self._system_idle_since = tick
-            idle_seconds = max(idle_seconds, int(tick - self._system_idle_since))
-            idle_available = True
-        else:
-            self._system_idle_since = None
-        if self.settings.break_reminders_enabled and idle_available:
-            if idle_seconds >= self.settings.break_idle_minutes * 60:
-                self.take_break(reset_workout=False)
-            elif self._previous_available and timely and not system_idle:
-                self.work_seconds += elapsed
-                if self.work_seconds >= self.next_reminder:
-                    suggestions = (
-                        "Take a short walk or stand up for a few minutes.",
-                        "Take a break and gently stretch your shoulders and neck.",
-                        "Rest your eyes: look into the distance for 20 seconds.",
-                    )
-                    self.notify(suggestions[self._suggestion_index % len(suggestions)])
-                    self._suggestion_index += 1
-                    self.snooze()
+        if self.settings.break_reminders_enabled and timely:
+            self.work_seconds += elapsed
+            if self.work_seconds >= self.next_reminder:
+                suggestions = (
+                    "Take a short walk or stand up for a few minutes.",
+                    "Take a break and gently stretch your shoulders and neck.",
+                    "Rest your eyes: look into the distance for 20 seconds.",
+                )
+                self.notify(suggestions[self._suggestion_index % len(suggestions)])
+                self._suggestion_index += 1
+                self.snooze()
 
         self._previous_break_tick = tick
-        self._previous_available = (
-            idle_available
-            and not system_idle
-            and idle_seconds < self.settings.break_idle_minutes * 60
-        )
 
     def update_time_announcements(
         self,

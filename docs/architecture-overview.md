@@ -12,6 +12,10 @@ These components are shared across standalone, sync-client, and sync-server mode
 - `services/reporting.py` for deterministic reports and goal drift analysis
 - `main.py` for CLI entry points and backup/restore workflows
 
+## Service and Data Flow
+
+The service and data-flow diagram, including the optional sync daemon, is maintained as a standalone Mermaid source file: [architecture-overview.mmd](architecture-overview.mmd).
+
 ## Standalone Mode
 
 Standalone mode is the local-first experience.
