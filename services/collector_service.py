@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+import psutil
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from collector.browser_tracker import BrowserTracker
@@ -18,7 +19,7 @@ from collector.window_tracker import WindowTracker
 from db.repository import ActivityRepository
 from processor.session_builder import SessionBuilder
 from services.activity_tagger import ActivityTagger
-from services.wellbeing import WellbeingService, WellbeingSettings
+from services.wellbeing import WellbeingPrompt, WellbeingService, WellbeingSettings
 from services.wellbeing_delivery import WellbeingDelivery, read_control_commands
 from services.wellbeing_ui import TkWellbeingUI
 from workgraph.models import ActivitySample, utc_now
@@ -77,9 +78,10 @@ class CollectorService:
             identity_path=settings.identity_path,
         )
         self.wellbeing_delivery = WellbeingDelivery()
+        self._break_reminders: queue.SimpleQueue[str] = queue.SimpleQueue()
         self.wellbeing = WellbeingService(
             settings.wellbeing,
-            self.wellbeing_delivery.notify,
+            self._break_reminders.put,
             self.wellbeing_delivery.speak,
             max_sample_gap=max(60, settings.poll_interval_seconds * 3),
         )
@@ -91,6 +93,28 @@ class CollectorService:
         self._fallback_notified_at: dict[str, float] = {}
         self._idle_unavailable_warned = False
         self._running = False
+        wellbeing = settings.wellbeing
+        self._service_status = {
+            "Activity collector": "Running",
+            "Window detection": "Not checked",
+            "Idle detection": "Not checked",
+            "Browser tracking": "Enabled",
+            "Git tracking": "Enabled",
+            "Database": "Enabled",
+            "Break reminders": "Enabled"
+            if wellbeing.break_reminders_enabled
+            else "Disabled",
+            "Time announcements": "Enabled"
+            if wellbeing.time_announcements_enabled
+            else "Disabled",
+            "Idle checks": "Enabled" if wellbeing.idle_check_enabled else "Disabled",
+            "Workout reminders": "Enabled"
+            if wellbeing.workout_reminders_enabled
+            else "Disabled",
+            "Water reminders": "Enabled"
+            if wellbeing.water_reminders_enabled
+            else "Disabled",
+        }
 
     def run_forever(self) -> None:
         self._running = True
@@ -165,9 +189,52 @@ class CollectorService:
             self._announced = True
             if self._wellbeing_ui is not None:
                 try:
-                    self._wellbeing_ui.show_greeting(datetime.now().hour)
+                    self._wellbeing_ui.show_greeting(
+                        datetime.now().hour, self._greeting_statuses
+                    )
                 except Exception:
                     LOGGER.warning("Could not show startup greeting", exc_info=True)
+
+    def _greeting_statuses(self) -> list[tuple[str, str]]:
+        statuses = dict(self._service_status)
+        statuses["Startup voice"] = self.wellbeing_delivery.startup_speech_status
+        statuses["Dashboard"] = "Not detected"
+        statuses["Sync daemon"] = "Not detected"
+        try:
+            for process in psutil.process_iter(["name", "cmdline", "cwd", "status"]):
+                try:
+                    info = process.info
+                    name = (info["name"] or "").lower()
+                    args = info["cmdline"] or []
+                    cwd = info["cwd"]
+                    entrypoint = (
+                        any(Path(arg).name == "main.py" for arg in args)
+                        or any(
+                            args[index : index + 2] == ["-m", "main"]
+                            for index in range(len(args))
+                        )
+                        or bool(
+                            args and Path(args[0]).name.lower().startswith("workgraph")
+                        )
+                    )
+                    if (
+                        not (name.startswith(("python", "pypy", "workgraph")))
+                        or not entrypoint
+                        or not cwd
+                        or Path(cwd).resolve() != Path.cwd().resolve()
+                        or info["status"] == psutil.STATUS_ZOMBIE
+                    ):
+                        continue
+                    if "--web" in args:
+                        statuses["Dashboard"] = "Process running"
+                    if "sync" in args and "daemon" in args:
+                        statuses["Sync daemon"] = "Process running"
+                except (psutil.Error, OSError):
+                    continue
+        except (psutil.Error, OSError):
+            statuses["Dashboard"] = "Not checked"
+            statuses["Sync daemon"] = "Not checked"
+        return list(statuses.items())
 
     def _close_tk_ui(self) -> None:
         if self._wellbeing_ui is not None:
@@ -185,19 +252,29 @@ class CollectorService:
 
     def collect_once(self) -> None:
         active_window = self.window_tracker.get_active_window()
+        self._service_status["Window detection"] = (
+            "Unavailable" if active_window.app_name == "Unknown" else "Running"
+        )
         try:
             idle_state = self.idle_tracker.get_idle_state()
         except Exception:
             idle_state = IdleState(False, 0, available=False)
             if (
-                self.settings.wellbeing.break_reminders_enabled
-                or self.settings.wellbeing.idle_check_enabled
-            ) and not self._idle_unavailable_warned:
+                self.settings.wellbeing.idle_check_enabled
+                and not self._idle_unavailable_warned
+            ):
                 LOGGER.warning(
-                    "Wellbeing idle detection failed; break timing is paused",
+                    "Wellbeing idle detection failed; idle checks are unavailable",
                     exc_info=True,
                 )
                 self._idle_unavailable_warned = True
+        self._service_status["Idle detection"] = (
+            "Running" if idle_state.available else "Unavailable"
+        )
+        if self.settings.wellbeing.idle_check_enabled:
+            self._service_status["Idle checks"] = (
+                "Enabled" if idle_state.available else "Unavailable"
+            )
         git_activity = self.git_tracker.get_activity(
             pid=active_window.process_id,
             app_name=active_window.app_name,
@@ -214,15 +291,12 @@ class CollectorService:
             idle_seconds = max(idle_seconds, 1)
 
         if self.settings.dashboard_mode in {"standalone", "sync-client"}:
-            if (
-                self.settings.wellbeing.break_reminders_enabled
-                or self.settings.wellbeing.idle_check_enabled
-            ):
+            if self.settings.wellbeing.idle_check_enabled:
                 if not idle_state.available and not system_idle:
                     if not self._idle_unavailable_warned:
                         LOGGER.warning(
                             "Wellbeing idle detection unavailable; "
-                            "break timing is paused"
+                            "idle checks are unavailable"
                         )
                         self._idle_unavailable_warned = True
                 else:
@@ -237,21 +311,45 @@ class CollectorService:
                 tick = time.monotonic()
                 now = utc_now().astimezone()
             if (
-                self.settings.wellbeing.idle_check_enabled
+                self.settings.wellbeing.break_reminders_enabled
+                or self.settings.wellbeing.idle_check_enabled
                 or self.settings.wellbeing.workout_reminders_enabled
                 or self.settings.wellbeing.water_reminders_enabled
             ):
                 try:
                     self._process_wellbeing_actions(tick, now)
-                    prompt = self.wellbeing.next_prompt(
+                    prompts = self.wellbeing.next_prompts(
                         tick=tick,
                         now=now,
                         idle_seconds=idle_state.idle_seconds,
                         idle_available=idle_state.available,
                     )
-                    if self._running and prompt is not None:
-                        self._present_wellbeing_prompt(prompt, tick, now)
+                    if self.settings.wellbeing.workout_reminders_enabled:
+                        self._service_status["Workout reminders"] = "Enabled"
+                    if self.settings.wellbeing.water_reminders_enabled:
+                        self._service_status["Water reminders"] = "Enabled"
+                    if self._running:
+                        for prompt in prompts:
+                            try:
+                                self._present_wellbeing_prompt(prompt, tick, now)
+                            except Exception:
+                                LOGGER.exception(
+                                    "Could not deliver %s wellbeing prompt", prompt.kind
+                                )
                 except Exception:
+                    for name, enabled in (
+                        ("Idle checks", self.settings.wellbeing.idle_check_enabled),
+                        (
+                            "Workout reminders",
+                            self.settings.wellbeing.workout_reminders_enabled,
+                        ),
+                        (
+                            "Water reminders",
+                            self.settings.wellbeing.water_reminders_enabled,
+                        ),
+                    ):
+                        if enabled:
+                            self._service_status[name] = "Failed"
                     LOGGER.exception("Wellbeing prompt update failed")
             if self.settings.wellbeing.break_reminders_enabled:
                 try:
@@ -270,7 +368,17 @@ class CollectorService:
                         is_idle=is_idle,
                         system_idle=system_idle,
                     )
+                    while not self._break_reminders.empty():
+                        message = self._break_reminders.get_nowait()
+                        if self._running:
+                            self._present_wellbeing_prompt(
+                                WellbeingPrompt("break", "Time for a break", message),
+                                tick,
+                                now,
+                            )
+                    self._service_status["Break reminders"] = "Enabled"
                 except Exception:
+                    self._service_status["Break reminders"] = "Failed"
                     LOGGER.exception("Wellbeing break reminder update failed")
             if self.settings.wellbeing.time_announcements_enabled:
                 try:
@@ -280,7 +388,9 @@ class CollectorService:
                         idle_available=idle_state.available,
                         is_idle=is_idle,
                     )
+                    self._service_status["Time announcements"] = "Enabled"
                 except Exception:
+                    self._service_status["Time announcements"] = "Failed"
                     LOGGER.exception("Wellbeing time announcement update failed")
 
         sample = ActivitySample(
@@ -328,7 +438,13 @@ class CollectorService:
                 action, exercise_name = self._wellbeing_actions.get_nowait()
             except queue.Empty:
                 return
-            prompt = self.wellbeing.active_prompt
+            if action == "break_snooze":
+                self.wellbeing.snooze()
+                continue
+            if action == "break_taken":
+                self.wellbeing.take_break()
+                continue
+            prompt = self.wellbeing.prompt_for_action(action)
             if prompt is None or not self.wellbeing.apply_action(
                 action, tick, now, exercise_name
             ):
@@ -371,8 +487,10 @@ class CollectorService:
             return
         previous = self._fallback_notified_at.get(prompt.kind)
         retry_seconds = max(60.0, self.settings.poll_interval_seconds)
-        if previous is not None and (
-            prompt.kind != "water" or tick - previous < retry_seconds
+        if (
+            prompt.kind != "break"
+            and previous is not None
+            and (prompt.kind != "water" or tick - previous < retry_seconds)
         ):
             return
         self._fallback_notified_at[prompt.kind] = tick

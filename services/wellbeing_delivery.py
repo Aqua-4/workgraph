@@ -77,6 +77,7 @@ class WellbeingDelivery:
         self._speech_lock = threading.Lock()
         self._speaking = False
         self._speech_process: subprocess.Popen[str] | None = None
+        self._startup_speech_status = "Not checked"
         self._closed = False
         self._warned: set[str] = set()
 
@@ -195,16 +196,24 @@ class WellbeingDelivery:
         else:
             self._warn_once("notifications", "Desktop notifications are not supported")
 
+    @property
+    def startup_speech_status(self) -> str:
+        with self._speech_lock:
+            return self._startup_speech_status
+
     def speak(self, message: str, *, error_on_failure: bool = False) -> None:
         with self._speech_lock:
             if self._closed or self._speaking:
                 return
             self._speaking = True
+            if error_on_failure:
+                self._startup_speech_status = "Starting"
         threading.Thread(
             target=self._speak, args=(message, error_on_failure), daemon=True
         ).start()
 
     def _speak(self, message: str, error_on_failure: bool = False) -> None:
+        startup_status = "Failed"
         try:
             with self._speech_lock:
                 if self._closed:
@@ -236,12 +245,16 @@ class WellbeingDelivery:
                     self._warn_once("speech", f"Speech unavailable: {errors.strip()}")
                     if error_on_failure:
                         error_beep()
+                else:
+                    startup_status = "Completed"
         except OSError:
             self._warn_once("speech", "Could not start speech engine")
             if error_on_failure:
                 error_beep()
         finally:
             with self._speech_lock:
+                if error_on_failure:
+                    self._startup_speech_status = startup_status
                 self._speech_process = None
                 self._speaking = False
 

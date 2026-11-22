@@ -1,0 +1,70 @@
+flowchart LR
+	subgraph Runtime[Runtime entry points]
+		Launcher["unified_launcher"]
+		Supervisor["collector_supervisor"]
+		Main["main.py<br/>CLI and collector entry"]
+		API["api.app<br/>Dashboard and sync API"]
+		Daemon["sync_daemon"]
+	end
+
+	subgraph Collection[Activity collection]
+		Collector["collector_service"]
+		Trackers["Window, browser, idle,<br/>and git trackers"]
+		Builder["SessionBuilder"]
+		Tagger["activity_tagger"]
+		Repository["ActivityRepository"]
+		AppDB[("Configured SQLite database<br/>local client or sync server")]
+	end
+
+	subgraph Wellbeing[Wellbeing services]
+		WellbeingService["wellbeing"]
+		Delivery["wellbeing_delivery"]
+		UI["wellbeing_ui"]
+	end
+
+	subgraph Sync[Sync services]
+		Worker["sync_worker<br/>HTTP client"]
+	end
+
+	Reporting["reporting"]
+	TagReview["tag_review"]
+	TagMigration["tag_migration<br/>(maintenance helper)"]
+
+	Launcher -->|starts and supervises| Supervisor
+	Supervisor -->|restarts| Main
+	Launcher -->|starts| API
+	Launcher -.->|when configured| Daemon
+	Main -->|CLI sync command| Daemon
+
+	Main --> Collector
+	Collector --> Trackers
+	Collector --> Builder
+	Collector --> Tagger
+	Collector --> Repository
+	Builder -->|completed sessions| Collector
+	Repository --> AppDB
+	API --> AppDB
+
+	Collector --> WellbeingService
+	WellbeingService -->|notification and speech callbacks| Delivery
+	Collector -->|desktop prompt delivery| Delivery
+	Collector --> UI
+	UI -->|user actions| Collector
+	Main -->|wellbeing control command| Delivery
+	Delivery -->|queued actions and control-file requests| Collector
+	Launcher -.->|restart/error signal| Delivery
+	Supervisor -.->|error signal| Delivery
+
+	Daemon --> Worker
+	Worker --> Repository
+	Worker <-->|authenticated push and pull| API
+
+	Main --> Reporting
+	API --> Reporting
+	Reporting --> AppDB
+	Reporting -.->|sync health lookup| API
+	API --> Tagger
+	API --> TagReview
+	Repository --> TagReview
+	TagMigration --> Tagger
+	TagMigration --> Repository

@@ -14,22 +14,22 @@ time_announcements_enabled: true
 time_announcement_interval_minutes: 30
 time_announcement_active_only: true
 # Local operating window in HH:MM; due prompts wait for the next opening.
-wellbeing_start_time: "09:00"
-wellbeing_end_time: "17:00"
-# Enable the idle intent prompt (default: false).
-idle_check_enabled: false
+wellbeing_start_time: "00:00"
+wellbeing_end_time: "23:00"
+# Enable the idle intent prompt (default: true).
+idle_check_enabled: true
 # Inactivity before prompting (minutes; default: 10).
 idle_check_minutes: 10
 # Delay after Still working or Snooze (minutes; default: 5).
 idle_check_snooze_minutes: 5
-# Enable scheduled movement prompts (default: false).
-workout_reminders_enabled: false
+# Enable scheduled movement prompts (default: true).
+workout_reminders_enabled: true
 # Elapsed-time interval, including meetings and reading (minutes; default: 90).
 workout_interval_minutes: 90
 # Delay before the next workout prompt (minutes; default: 15).
 workout_snooze_minutes: 15
-# Enable scheduled hydration prompts (default: false).
-water_reminders_enabled: false
+# Enable scheduled hydration prompts (default: true).
+water_reminders_enabled: true
 # Elapsed-time interval (minutes; default: 60).
 water_interval_minutes: 60
 # Delay before the next hydration prompt (minutes; default: 15).
