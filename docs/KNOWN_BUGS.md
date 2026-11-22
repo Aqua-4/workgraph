@@ -2,8 +2,8 @@
 
 ## Wellbeing reminder popups are hidden
 
-**Status:** Confirmed on Linux KDE Wayland and reported on Windows. Code fix
-applied; Windows runtime verification remains pending.
+**Status:** Fix verified on Linux KDE Wayland and Windows. The Windows runtime
+check confirmed the reminder window was visible and its action was processed.
 
 The startup greeting appears, but Tkinter wellbeing reminders and the sample
 reminder popup can remain invisible. The collector withdraws its Tk root window,
@@ -17,5 +17,4 @@ and deiconifying it changed its state to `normal` and `winfo_viewable()` to `1`.
 **Fix:** Reminder windows are no longer transient to the withdrawn root and are
 explicitly deiconified before being raised. A regression test checks this window
 setup with a withdrawn root and verifies that a reminder action still works.
-Restart the collector to load the updated code. Windows runtime verification is
-still needed.
+Restart the collector to load the updated code.
