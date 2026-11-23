@@ -151,7 +151,10 @@ class TkWellbeingUI:
         else:
             self._button_row(
                 frame,
-                ((f"Snooze {self.settings.water_snooze_minutes}m", "water_snooze"),),
+                (
+                    (f"Snooze {self.settings.water_snooze_minutes}m", "water_snooze"),
+                    ("Completed", "water_complete"),
+                ),
                 row=2,
             )
 
