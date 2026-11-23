@@ -1,4 +1,5 @@
 import os
+import subprocess
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,6 +14,54 @@ from services.unified_launcher import (
 
 
 class UnifiedLauncherTests(unittest.TestCase):
+    def test_linux_launcher_recovers_stale_cron_display_authority(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            launcher = temp / "run.sh"
+            launcher.write_text(
+                Path("run.sh").read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            uv = temp / ".venv" / "bin" / "uv"
+            uv.parent.mkdir(parents=True)
+            uv.write_text(
+                '#!/bin/sh\nprintf "%s\\n%s\\n" "$DISPLAY" "$XAUTHORITY"\n',
+                encoding="utf-8",
+            )
+            uv.chmod(0o755)
+            bin_dir = temp / "bin"
+            bin_dir.mkdir()
+            authority = temp / "session-authority"
+            authority.touch()
+            systemctl = bin_dir / "systemctl"
+            systemctl.write_text(
+                f'#!/bin/sh\nprintf "%s\\n" "DISPLAY=:42" "XAUTHORITY={authority}"\n',
+                encoding="utf-8",
+            )
+            systemctl.chmod(0o755)
+            env = dict(
+                os.environ,
+                PATH=f"{bin_dir}:{os.environ['PATH']}",
+                DISPLAY=":0",
+                XAUTHORITY=str(temp / "missing"),
+            )
+            result = subprocess.run(
+                ["bash", str(launcher)],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(result.stdout.splitlines(), [":42", str(authority)])
+            env["XAUTHORITY"] = str(authority)
+            result = subprocess.run(
+                ["bash", str(launcher)],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(result.stdout.splitlines(), [":0", str(authority)])
+
     def test_resolve_settings_prefers_my_settings_for_default_path(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)

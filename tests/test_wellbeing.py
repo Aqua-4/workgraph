@@ -295,6 +295,27 @@ def test_due_prompts_and_actions_are_independent_without_idle_detection() -> Non
     assert service.next_prompts(61, now, 0, False) == ()
 
 
+def test_water_complete_resets_deadline_to_interval() -> None:
+    service = WellbeingService(
+        WellbeingSettings(
+            water_reminders_enabled=True,
+            water_interval_minutes=10,
+            water_snooze_minutes=1,
+        ),
+        lambda text: None,
+        lambda text: None,
+    )
+    now = datetime(2026, 11, 15, 10)
+    service.next_prompt(0, now, 0, True)
+    prompt = service.next_prompt(600, now, 0, True)
+    assert prompt is not None and prompt.kind == "water"
+
+    assert service.apply_action("water_complete", 600, now)
+    assert service.next_prompt(1199, now, 0, True) is None
+    prompt = service.next_prompt(1200, now, 0, True)
+    assert prompt is not None and prompt.kind == "water"
+
+
 def test_break_action_does_not_reset_workout_deadline() -> None:
     service = WellbeingService(
         WellbeingSettings(workout_reminders_enabled=True, workout_interval_minutes=1),
@@ -340,7 +361,7 @@ def test_wellbeing_ui_hands_actions_off_and_ignores_close() -> None:
     assert not ui._submit_action("workout_snooze")
 
 
-def test_water_popup_has_only_snooze_and_ignores_close_controls() -> None:
+def test_water_popup_offers_snooze_and_completion() -> None:
     window = MagicMock()
     with (
         patch("tkinter.Toplevel", return_value=window),
@@ -355,10 +376,15 @@ def test_water_popup_has_only_snooze_and_ignores_close_controls() -> None:
     window.protocol.assert_called_once_with("WM_DELETE_WINDOW", ui._ignore_close)
     window.bind.assert_any_call("<Escape>", ui._ignore_close)
     assert ui._ignore_close() == "break"
-    button.assert_called_once()
-    assert button.call_args.kwargs["text"] == "Snooze 15m"
-    button.call_args.kwargs["command"]()
+    assert button.call_count == 2
+    assert [call.kwargs["text"] for call in button.call_args_list] == [
+        "Snooze 15m",
+        "Completed",
+    ]
+    button.call_args_list[0].kwargs["command"]()
     assert actions.get_nowait() == ("water_snooze", None)
+    button.call_args_list[1].kwargs["command"]()
+    assert actions.get_nowait() == ("water_complete", None)
 
 
 @pytest.mark.parametrize(

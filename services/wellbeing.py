@@ -208,9 +208,12 @@ class WellbeingService:
             else:
                 return False
         elif prompt.kind == "water":
-            if action != "water_snooze":
+            if action == "water_complete":
+                self._water_deadline = tick + self.settings.water_interval_minutes * 60
+            elif action == "water_snooze":
+                self._water_deadline = tick + self.settings.water_snooze_minutes * 60
+            else:
                 return False
-            self._water_deadline = tick + self.settings.water_snooze_minutes * 60
         else:
             return False
 
