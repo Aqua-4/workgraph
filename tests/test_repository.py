@@ -142,6 +142,36 @@ class ActivityRepositoryTests(unittest.TestCase):
         self.assertIsNotNone(reflections[0]["user_id"])
         self.assertIsNotNone(reflections[0]["device_id"])
 
+    def test_repository_upserts_sync_reflection_twice(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "activity.db"
+
+            with ActivityRepository(db_path) as repository:
+                repository.upsert_sync_entity(
+                    "daily_reflections",
+                    {
+                        "date": "2026-11-27",
+                        "wins": "first",
+                        "uuid": "reflection-uuid",
+                        "created_at": "2026-11-27T10:00:00+00:00",
+                        "updated_at": "2026-11-27T10:00:00+00:00",
+                    },
+                )
+                repository.upsert_sync_entity(
+                    "daily_reflections",
+                    {
+                        "date": "2026-11-27",
+                        "wins": "second",
+                        "uuid": "reflection-uuid",
+                        "created_at": "2026-11-27T10:00:00+00:00",
+                        "updated_at": "2026-11-27T11:00:00+00:00",
+                    },
+                )
+                reflections = repository.reflections_between("2026-11-27", "2026-11-27")
+
+        self.assertEqual(len(reflections), 1)
+        self.assertEqual(reflections[0]["wins"], "second")
+
     def test_repository_saves_work_event(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "activity.db"

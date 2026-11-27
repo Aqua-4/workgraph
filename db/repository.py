@@ -1139,7 +1139,7 @@ class ActivityRepository:
         existing = None
         if lookup_terms:
             existing = self._connection.execute(
-                f"SELECT rowid, * FROM {table_name} WHERE "
+                f"SELECT rowid AS __sync_rowid, * FROM {table_name} WHERE "
                 + " OR ".join(lookup_terms)
                 + f" ORDER BY CASE WHEN {_quote_sql_identifier(definition.uuid)} = ? THEN 0 ELSE 1 END LIMIT 1",
                 [*lookup_params, row_uuid],
@@ -1163,7 +1163,7 @@ class ActivityRepository:
             )
             self._connection.execute(
                 f"UPDATE {table_name} SET {assignments} WHERE rowid = ?",
-                [*row_values.values(), existing["rowid"]],
+                [*row_values.values(), existing["__sync_rowid"]],
             )
         else:
             insert_columns = list(row_values)
