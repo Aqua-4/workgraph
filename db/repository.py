@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import NAMESPACE_DNS, uuid4, uuid5
 
+from services.sync_config import SyncEntity, load_sync_entities
 from services.tag_review import (
     resolve_browser_tag_review_group,
     resolve_tag_review_group,
@@ -27,6 +28,7 @@ class ActivityRepository:
         device_name: str | None = None,
         device_type: str | None = None,
         identity_path: str | Path | None = None,
+        sync_config_path: str | Path | None = None,
     ) -> None:
         self.db_path = Path(db_path)
         identity = _load_or_create_identity(identity_path)
@@ -35,6 +37,7 @@ class ActivityRepository:
         self._user_name = user_name or identity["user_name"]
         self._device_name = device_name or identity["device_name"]
         self._device_type = device_type or identity["device_type"]
+        self._sync_config_path = sync_config_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._connection = sqlite3.connect(self.db_path)
         self._connection.row_factory = sqlite3.Row
@@ -45,6 +48,10 @@ class ActivityRepository:
         self._connection.executescript(schema_path.read_text(encoding="utf-8"))
         self._connection.commit()
         self._migrate()
+        self._sync_entities = load_sync_entities(
+            self._sync_config_path, connection=self._connection
+        )
+        self._backfill_configured_sync_metadata()
 
     def _migrate(self) -> None:
         migrations = [
@@ -1078,10 +1085,97 @@ class ActivityRepository:
         cursor: str | None = None,
         limit: int = 1000,
     ) -> list[sqlite3.Row]:
-        table_name = _resolve_entity_table(entity)
+        definition = self._get_sync_entity(entity)
         return self._list_entity_changes(
-            table_name=table_name, cursor=cursor, limit=limit
+            table_name=definition.table, cursor=cursor, limit=limit
         )
+
+    @property
+    def sync_entities(self) -> dict[str, SyncEntity]:
+        return dict(self._sync_entities)
+
+    def upsert_sync_entity(self, entity: str, payload: dict) -> None:
+        definition = self._get_sync_entity(entity)
+        table_name = _quote_sql_identifier(definition.table)
+        columns = {
+            str(row[1])
+            for row in self._connection.execute(f"PRAGMA table_info({table_name})")
+        }
+
+        row_uuid = str(payload.get(definition.uuid) or uuid4())
+        created_at = (
+            payload.get(definition.created_at)
+            or payload.get(definition.updated_at)
+            or _format_datetime(datetime.now(UTC))
+        )
+        updated_at = payload.get(definition.updated_at) or created_at
+        row_values = {
+            key: value
+            for key, value in payload.items()
+            if key in columns and key != definition.local_id
+        }
+        row_values[definition.uuid] = row_uuid
+        row_values[definition.created_at] = created_at
+        row_values[definition.updated_at] = updated_at
+        row_values[definition.deleted_at] = payload.get(definition.deleted_at)
+        row_values[definition.user_id] = (
+            payload.get(definition.user_id) or self._user_id
+        )
+        row_values[definition.device_id] = (
+            payload.get(definition.device_id) or self._device_id
+        )
+
+        lookup_columns = [definition.uuid, *definition.conflict_columns]
+        lookup_values = [
+            row_uuid,
+            *(row_values.get(column) for column in definition.conflict_columns),
+        ]
+        lookup_terms = [
+            f"{_quote_sql_identifier(column)} = ?"
+            for column, value in zip(lookup_columns, lookup_values)
+            if value is not None
+        ]
+        lookup_params = [value for value in lookup_values if value is not None]
+        existing = None
+        if lookup_terms:
+            existing = self._connection.execute(
+                f"SELECT rowid, * FROM {table_name} WHERE "
+                + " OR ".join(lookup_terms)
+                + f" ORDER BY CASE WHEN {_quote_sql_identifier(definition.uuid)} = ? THEN 0 ELSE 1 END LIMIT 1",
+                [*lookup_params, row_uuid],
+            ).fetchone()
+
+        if existing is not None:
+            existing_updated = (
+                existing[definition.updated_at] or existing[definition.created_at]
+            )
+            existing_uuid = str(existing[definition.uuid] or "")
+            if not _is_incoming_newer(
+                incoming_updated_at=str(updated_at),
+                incoming_id=row_uuid,
+                existing_updated_at=str(existing_updated or ""),
+                existing_id=existing_uuid,
+            ):
+                return
+            row_values.pop(definition.created_at, None)
+            assignments = ", ".join(
+                f"{_quote_sql_identifier(column)} = ?" for column in row_values
+            )
+            self._connection.execute(
+                f"UPDATE {table_name} SET {assignments} WHERE rowid = ?",
+                [*row_values.values(), existing["rowid"]],
+            )
+        else:
+            insert_columns = list(row_values)
+            quoted_columns = ", ".join(
+                _quote_sql_identifier(column) for column in insert_columns
+            )
+            placeholders = ", ".join("?" for _ in insert_columns)
+            self._connection.execute(
+                f"INSERT INTO {table_name} ({quoted_columns}) VALUES ({placeholders})",
+                [row_values[column] for column in insert_columns],
+            )
+        self._connection.commit()
 
     def list_session_changes_since(
         self,
@@ -1413,20 +1507,23 @@ class ActivityRepository:
         deleted_at: str,
         updated_at: str | None = None,
     ) -> None:
-        table_name = _resolve_entity_table(entity)
+        definition = self._get_sync_entity(entity)
+        table_name = _quote_sql_identifier(definition.table)
+        uuid_column = _quote_sql_identifier(definition.uuid)
+        updated_column = _quote_sql_identifier(definition.updated_at)
+        created_column = _quote_sql_identifier(definition.created_at)
+        deleted_column = _quote_sql_identifier(definition.deleted_at)
         effective_updated_at = updated_at or deleted_at
         self._connection.execute(
-            f"""
-            UPDATE {table_name}
-            SET deleted_at = ?,
-                updated_at = ?
-            WHERE uuid = ?
+            f"""UPDATE {table_name}
+            SET {deleted_column} = ?, {updated_column} = ?
+            WHERE {uuid_column} = ?
               AND (
-                    COALESCE(updated_at, created_at) IS NULL
-                    OR COALESCE(updated_at, created_at) < ?
+                    COALESCE({updated_column}, {created_column}) IS NULL
+                    OR COALESCE({updated_column}, {created_column}) < ?
                     OR (
-                        COALESCE(updated_at, created_at) = ?
-                        AND uuid <= ?
+                        COALESCE({updated_column}, {created_column}) = ?
+                        AND {uuid_column} <= ?
                     )
               )
             """,
@@ -1440,6 +1537,12 @@ class ActivityRepository:
             ),
         )
         self._connection.commit()
+
+    def _get_sync_entity(self, entity: str) -> SyncEntity:
+        try:
+            return self._sync_entities[entity]
+        except KeyError as exc:
+            raise ValueError(f"Unsupported sync entity: {entity}") from exc
 
     def reflections_between(
         self,
@@ -1679,6 +1782,11 @@ class ActivityRepository:
             created_column="created_at",
             date_key_column="date",
         )
+        self._backfill_table(
+            table_name="work_events",
+            created_column="created_at",
+            date_key_column=None,
+        )
         self._connection.execute(
             """
             UPDATE devices
@@ -1687,6 +1795,40 @@ class ActivityRepository:
             """,
             (now, now, self._device_id),
         )
+        self._connection.commit()
+
+    def _backfill_configured_sync_metadata(self) -> None:
+        now = _format_datetime(datetime.now(UTC))
+        for definition in self._sync_entities.values():
+            table = _quote_sql_identifier(definition.table)
+            uuid_column = _quote_sql_identifier(definition.uuid)
+            created_column = _quote_sql_identifier(definition.created_at)
+            updated_column = _quote_sql_identifier(definition.updated_at)
+            user_column = _quote_sql_identifier(definition.user_id)
+            device_column = _quote_sql_identifier(definition.device_id)
+            rows = self._connection.execute(
+                f"""SELECT rowid, {created_column} AS created_at
+                    FROM {table}
+                    WHERE {uuid_column} IS NULL OR {user_column} IS NULL
+                       OR {device_column} IS NULL OR {updated_column} IS NULL"""
+            ).fetchall()
+            for row in rows:
+                created_at = row["created_at"] or now
+                self._connection.execute(
+                    f"""UPDATE {table}
+                        SET {uuid_column} = COALESCE({uuid_column}, ?),
+                            {user_column} = COALESCE({user_column}, ?),
+                            {device_column} = COALESCE({device_column}, ?),
+                            {updated_column} = COALESCE({updated_column}, ?)
+                        WHERE rowid = ?""",
+                    (
+                        str(uuid4()),
+                        self._user_id,
+                        self._device_id,
+                        created_at,
+                        row["rowid"],
+                    ),
+                )
         self._connection.commit()
 
     def _backfill_table(
@@ -1828,6 +1970,10 @@ def _is_incoming_newer(
     if incoming_updated_at < existing_updated_at:
         return False
     return incoming_id >= existing_id
+
+
+def _quote_sql_identifier(value: str) -> str:
+    return f'"{value.replace(chr(34), chr(34) * 2)}"'
 
 
 def _resolve_entity_table(entity: str) -> str:

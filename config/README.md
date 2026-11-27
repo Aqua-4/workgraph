@@ -2,6 +2,24 @@
 
 This directory contains WorkGraph configuration files that control how the collector behaves and categorizes your activities.
 
+## Sync Entity Whitelist
+
+`sync.yaml` is the shared allowlist for database entities replicated between
+clients and the sync server. Add a table there to enable generic push/pull; no
+entity-specific sync code is needed when the table follows the declared row
+contract. The table and its migrations must still be installed on each client.
+
+Each entity requires UUID, created/updated/deleted timestamps, and user/device
+scope columns. `local_id` identifies a device-local integer key that must not be
+replicated. Optional `conflict_columns` define a natural key, such as `date` for
+daily reflections. `legacy_server_table` is reserved for maintaining an existing
+server-side projection; new entities normally omit it.
+
+Clients and server must use matching manifests. Sync requests advertise the
+configured entity names, and mismatches fail instead of silently discarding
+unknown records. Existing clients without capability metadata remain compatible
+with the original four entities only.
+
 ## Files
 
 ### `settings.yaml` — Collector Behavior

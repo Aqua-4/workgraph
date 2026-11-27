@@ -29,6 +29,20 @@ flowchart LR
 	ServerDB -- cross-device summaries --> Dashboard
 ```
 
+	## Entity Configuration
+
+	The shared allowlist is `../../config/sync.yaml`. The worker and API load its
+	entity definitions at runtime; adding a table that follows the configured UUID,
+	timestamp, soft-delete, and user/device ownership contract does not require an
+	entity-specific sync implementation. Clients still need the table schema and
+	feature code installed. The server stores generic payloads in the shared change
+	stream, while configured legacy projections preserve existing session metrics.
+
+	Push and pull requests advertise the client manifest. A mismatch is rejected
+	with HTTP 409 rather than allowing a client to advance its cursor past an entity
+	it cannot handle. Deploy matching manifest changes to the server and clients
+	together before enabling a new entity.
+
 ## Documents
 
 - [MULTI_DEVICE_SETUP.md](MULTI_DEVICE_SETUP.md): practical setup steps for Raspberry Pi sync server and multiple client devices.

@@ -20,6 +20,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from pydantic import BaseModel, Field, field_validator
 
 from services.activity_tagger import ActivityTagger
+from services.sync_config import SyncEntity, load_sync_entities
 from services.tag_review import (
     build_tag_review_suggestions,
     build_yaml_preview,
@@ -28,6 +29,7 @@ from services.tag_review import (
 
 app = FastAPI(title="WorkGraph Dashboard")
 sync_logger = logging.getLogger("workgraph.sync")
+SYNC_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "sync.yaml"
 
 WORK_EVENT_TYPES = [
     "Achievement",
@@ -281,6 +283,11 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS sync_entity_migrations (
+            entity TEXT PRIMARY KEY,
+            completed_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS sync_sessions (
             uuid TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -333,6 +340,20 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
             payload_json TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS sync_entity_records (
+            entity TEXT NOT NULL,
+            uuid TEXT NOT NULL,
+            user_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            conflict_key TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            ingest_seq INTEGER,
+            deleted_at TEXT,
+            payload_json TEXT NOT NULL,
+            PRIMARY KEY (user_id, entity, uuid)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_sync_sessions_user_updated
             ON sync_sessions (user_id, updated_at, uuid);
 
@@ -344,6 +365,12 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sync_work_events_user_updated
             ON sync_work_events (user_id, updated_at, uuid);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_sync_entity_conflict_key
+            ON sync_entity_records (user_id, entity, conflict_key);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_entity_records_user_ingest
+            ON sync_entity_records (user_id, ingest_seq, entity, uuid);
 
         CREATE TABLE IF NOT EXISTS sync_request_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -426,6 +453,7 @@ def _ensure_sync_tables(conn: sqlite3.Connection) -> None:
 
     _migrate_sync_tables_to_user_scoped_keys(conn)
     _backfill_sync_ingest_sequences(conn)
+    _migrate_legacy_sync_records(conn)
 
     _backfill_sync_session_columns(conn)
     _ensure_sync_runtime_indexes(conn)
@@ -732,6 +760,190 @@ def _next_sync_ingest_seq(conn: sqlite3.Connection) -> int:
         (_now_iso(),),
     )
     return int(cursor.lastrowid)
+
+
+def _migrate_legacy_sync_records(conn: sqlite3.Connection) -> None:
+    entities = _load_sync_entities()
+    for entity in entities.values():
+        legacy_table = entity.legacy_server_table
+        if legacy_table is None:
+            continue
+        migrated = conn.execute(
+            "SELECT 1 FROM sync_entity_migrations WHERE entity = ?",
+            (entity.name,),
+        ).fetchone()
+        if migrated is not None:
+            continue
+        legacy_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (legacy_table,),
+        ).fetchone()
+        if legacy_exists is None:
+            raise RuntimeError(
+                f"Sync manifest legacy table {legacy_table!r} does not exist"
+            )
+        quoted_table = _quote_sync_identifier(legacy_table)
+        rows = conn.execute(
+            f"""SELECT uuid, user_id, device_id, created_at, updated_at,
+                       deleted_at, payload_json
+                FROM {quoted_table}"""
+        ).fetchall()
+        for row in rows:
+            payload_json = row["payload_json"]
+            if not payload_json:
+                continue
+            try:
+                payload = json.loads(payload_json)
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(payload, dict):
+                continue
+            payload[entity.uuid] = row["uuid"]
+            payload[entity.user_id] = row["user_id"]
+            payload[entity.device_id] = row["device_id"]
+            payload[entity.created_at] = row["created_at"]
+            payload[entity.updated_at] = row["updated_at"]
+            payload[entity.deleted_at] = row["deleted_at"]
+            _upsert_generic_sync_record(
+                conn,
+                entity=entity,
+                user_id=str(row["user_id"]),
+                device_id=str(row["device_id"]),
+                payload=payload,
+                only_if_missing=True,
+            )
+        conn.execute(
+            "INSERT INTO sync_entity_migrations (entity, completed_at) VALUES (?, ?)",
+            (entity.name, _now_iso()),
+        )
+
+
+def _upsert_generic_sync_record(
+    conn: sqlite3.Connection,
+    *,
+    entity: SyncEntity,
+    user_id: str,
+    device_id: str,
+    payload: dict,
+    only_if_missing: bool = False,
+) -> tuple[str, str]:
+    row_uuid_value = payload.get(entity.uuid)
+    if row_uuid_value is None or not str(row_uuid_value).strip():
+        raise ValueError(f"Sync entity {entity.name!r} row is missing its UUID")
+    row_uuid = str(row_uuid_value).strip()
+    updated_at = str(
+        payload.get(entity.updated_at) or payload.get(entity.created_at) or _now_iso()
+    )
+    created_at = str(payload.get(entity.created_at) or updated_at)
+    deleted_at = payload.get(entity.deleted_at)
+    normalized_payload = dict(payload)
+    if entity.local_id:
+        normalized_payload.pop(entity.local_id, None)
+    normalized_payload[entity.uuid] = row_uuid
+    normalized_payload[entity.user_id] = user_id
+    normalized_payload[entity.device_id] = device_id
+    normalized_payload[entity.created_at] = created_at
+    normalized_payload[entity.updated_at] = updated_at
+    normalized_payload[entity.deleted_at] = deleted_at
+    conflict_values = [
+        normalized_payload.get(column) for column in entity.conflict_columns
+    ]
+    conflict_key = (
+        json.dumps(conflict_values, separators=(",", ":"))
+        if conflict_values and all(value is not None for value in conflict_values)
+        else None
+    )
+
+    existing = conn.execute(
+        """SELECT * FROM sync_entity_records
+           WHERE user_id = ? AND entity = ? AND uuid = ?""",
+        (user_id, entity.name, row_uuid),
+    ).fetchone()
+    if existing is None and conflict_key is not None:
+        existing = conn.execute(
+            """SELECT * FROM sync_entity_records
+               WHERE user_id = ? AND entity = ? AND conflict_key = ?""",
+            (user_id, entity.name, conflict_key),
+        ).fetchone()
+
+    if existing is not None:
+        if only_if_missing:
+            return str(existing["updated_at"]), str(existing["uuid"])
+        if not _is_incoming_newer(
+            incoming_updated_at=updated_at,
+            incoming_uuid=row_uuid,
+            existing_updated_at=str(existing["updated_at"]),
+            existing_uuid=str(existing["uuid"]),
+        ):
+            return str(existing["updated_at"]), str(existing["uuid"])
+        ingest_seq = _next_sync_ingest_seq(conn)
+        conn.execute(
+            """UPDATE sync_entity_records
+               SET uuid = ?, device_id = ?, conflict_key = ?, created_at = ?,
+                   updated_at = ?, ingest_seq = ?, deleted_at = ?, payload_json = ?
+               WHERE user_id = ? AND entity = ? AND uuid = ?""",
+            (
+                row_uuid,
+                device_id,
+                conflict_key,
+                created_at,
+                updated_at,
+                ingest_seq,
+                deleted_at,
+                json.dumps(normalized_payload, separators=(",", ":")),
+                user_id,
+                entity.name,
+                existing["uuid"],
+            ),
+        )
+        return updated_at, row_uuid
+
+    ingest_seq = _next_sync_ingest_seq(conn)
+    conn.execute(
+        """INSERT INTO sync_entity_records (
+               entity, uuid, user_id, device_id, conflict_key, created_at,
+               updated_at, ingest_seq, deleted_at, payload_json
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            entity.name,
+            row_uuid,
+            user_id,
+            device_id,
+            conflict_key,
+            created_at,
+            updated_at,
+            ingest_seq,
+            deleted_at,
+            json.dumps(normalized_payload, separators=(",", ":")),
+        ),
+    )
+    return updated_at, row_uuid
+
+
+def _quote_sync_identifier(identifier: str) -> str:
+    return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
+
+
+def _load_sync_entities() -> dict[str, SyncEntity]:
+    return load_sync_entities(SYNC_CONFIG_PATH)
+
+
+def _validate_sync_capabilities(
+    supported_entities: list[str] | None,
+    entities: dict[str, SyncEntity],
+) -> None:
+    if supported_entities is None:
+        if any(entity.legacy_server_table is None for entity in entities.values()):
+            raise HTTPException(
+                status_code=409,
+                detail="Client must advertise supported sync entities",
+            )
+        return
+    if set(supported_entities) != set(entities):
+        raise HTTPException(
+            status_code=409,
+            detail="Client and server sync entity manifests do not match",
+        )
 
 
 def _backfill_sync_ingest_sequences(conn: sqlite3.Connection) -> None:
@@ -1168,6 +1380,7 @@ class DeviceRegisterRequest(BaseModel):
 class SyncPushRequest(BaseModel):
     device_id: str = Field(min_length=1)
     user_id: str = Field(min_length=1)
+    supported_entities: list[str] | None = None
     client_cursor: str | None = None
     batch_id: str = Field(min_length=1)
     changes: dict[str, list[dict]] = Field(default_factory=dict)
@@ -1176,6 +1389,7 @@ class SyncPushRequest(BaseModel):
 class SyncPullRequest(BaseModel):
     device_id: str = Field(min_length=1)
     user_id: str = Field(min_length=1)
+    supported_entities: list[str] | None = None
     cursor: str | None = None
     limit: int = Field(default=1000, ge=1, le=5000)
 
@@ -1920,27 +2134,16 @@ def _list_sync_union_rows(
     ingest_seq_cursor = _parse_ingest_seq_cursor(cursor_value)
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = """
-        SELECT entity, id, updated_at, ingest_seq, deleted_at, payload_json
-        FROM (
-            SELECT 'sessions' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
-            FROM sync_sessions
-            UNION ALL
-            SELECT 'journal_entries' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
-            FROM sync_journal_entries
-            UNION ALL
-            SELECT 'daily_reflections' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
-            FROM sync_daily_reflections
-            UNION ALL
-            SELECT 'work_events' AS entity, uuid AS id, user_id, updated_at, ingest_seq, deleted_at, payload_json
-            FROM sync_work_events
-        )
+        SELECT entity, uuid AS id, user_id, updated_at, ingest_seq,
+               deleted_at, payload_json
+        FROM sync_entity_records
         WHERE user_id = ?
     """
     params: list[str | int] = [user_id]
     if ingest_seq_cursor is not None:
         query += " AND COALESCE(ingest_seq, 0) > ?"
         params.append(ingest_seq_cursor)
-        query += " ORDER BY COALESCE(ingest_seq, 0) ASC, id ASC LIMIT ?"
+        query += " ORDER BY COALESCE(ingest_seq, 0) ASC, entity ASC, id ASC LIMIT ?"
     elif updated_at_cursor is not None:
         query += """
           AND (
@@ -1949,9 +2152,9 @@ def _list_sync_union_rows(
               )
         """
         params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
-        query += " ORDER BY updated_at ASC, id ASC LIMIT ?"
+        query += " ORDER BY updated_at ASC, entity ASC, id ASC LIMIT ?"
     else:
-        query += " ORDER BY COALESCE(ingest_seq, 0) ASC, id ASC LIMIT ?"
+        query += " ORDER BY COALESCE(ingest_seq, 0) ASC, entity ASC, id ASC LIMIT ?"
     params.append(limit)
     return list(conn.execute(query, params).fetchall())
 
@@ -1966,15 +2169,7 @@ def _count_sync_union_rows_after_cursor(
     updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
     query = """
         SELECT COUNT(*) AS total_rows
-        FROM (
-            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_sessions
-            UNION ALL
-            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_journal_entries
-            UNION ALL
-            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_daily_reflections
-            UNION ALL
-            SELECT uuid AS id, user_id, updated_at, ingest_seq FROM sync_work_events
-        )
+        FROM sync_entity_records
         WHERE user_id = ?
     """
     params: list[str] = [user_id]
@@ -1990,6 +2185,29 @@ def _count_sync_union_rows_after_cursor(
         """
         params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
 
+    row = conn.execute(query, params).fetchone()
+    return int(row["total_rows"] if row is not None else 0)
+
+
+def _count_sync_entity_rows_after_cursor(
+    conn: sqlite3.Connection,
+    *,
+    user_id: str,
+    entity: str,
+    cursor_value: str | None,
+) -> int:
+    ingest_seq_cursor = _parse_ingest_seq_cursor(cursor_value)
+    updated_at_cursor, uuid_cursor = _parse_cursor(cursor_value)
+    query = """SELECT COUNT(*) AS total_rows
+               FROM sync_entity_records
+               WHERE user_id = ? AND entity = ?"""
+    params: list[str | int] = [user_id, entity]
+    if ingest_seq_cursor is not None:
+        query += " AND COALESCE(ingest_seq, 0) > ?"
+        params.append(ingest_seq_cursor)
+    elif updated_at_cursor is not None:
+        query += " AND (updated_at > ? OR (updated_at = ? AND uuid > ?))"
+        params.extend([updated_at_cursor, updated_at_cursor, uuid_cursor or ""])
     row = conn.execute(query, params).fetchone()
     return int(row["total_rows"] if row is not None else 0)
 
@@ -2176,48 +2394,32 @@ def get_sync_health(db_path: Path) -> dict:
     pending_journal_entries_total = 0
     pending_reflections_total = 0
     pending_work_events_total = 0
+    pending_entity_totals = {entity_name: 0 for entity_name in _load_sync_entities()}
     for row in device_status_rows:
         device_last_sync = row["last_sync_at"]
         last_pull_cursor = row["last_pull_cursor"]
         row_user_id = str(row["user_id"] or "").strip()
-        pending_sessions = 0
-        pending_journal_entries = 0
-        pending_reflections = 0
-        pending_work_events = 0
+        pending_entities = {entity_name: 0 for entity_name in pending_entity_totals}
         pending_pull_rows = 0
         if row_user_id:
-            pending_sessions = _count_sync_table_rows_after_cursor(
-                conn,
-                table_name="sync_sessions",
-                user_id=row_user_id,
-                cursor_value=last_pull_cursor,
-            )
-            pending_journal_entries = _count_sync_table_rows_after_cursor(
-                conn,
-                table_name="sync_journal_entries",
-                user_id=row_user_id,
-                cursor_value=last_pull_cursor,
-            )
-            pending_reflections = _count_sync_table_rows_after_cursor(
-                conn,
-                table_name="sync_daily_reflections",
-                user_id=row_user_id,
-                cursor_value=last_pull_cursor,
-            )
-            pending_work_events = _count_sync_table_rows_after_cursor(
-                conn,
-                table_name="sync_work_events",
-                user_id=row_user_id,
-                cursor_value=last_pull_cursor,
-            )
-            pending_pull_rows = (
-                pending_sessions
-                + pending_journal_entries
-                + pending_reflections
-                + pending_work_events
-            )
+            pending_entities = {
+                entity_name: _count_sync_entity_rows_after_cursor(
+                    conn,
+                    user_id=row_user_id,
+                    entity=entity_name,
+                    cursor_value=last_pull_cursor,
+                )
+                for entity_name in pending_entity_totals
+            }
+            pending_pull_rows = sum(pending_entities.values())
 
         pending_pull_rows_total += pending_pull_rows
+        for entity_name, count in pending_entities.items():
+            pending_entity_totals[entity_name] += count
+        pending_sessions = pending_entities.get("sessions", 0)
+        pending_journal_entries = pending_entities.get("journal_entries", 0)
+        pending_reflections = pending_entities.get("daily_reflections", 0)
+        pending_work_events = pending_entities.get("work_events", 0)
         pending_sessions_total += pending_sessions
         pending_journal_entries_total += pending_journal_entries
         pending_reflections_total += pending_reflections
@@ -2248,6 +2450,7 @@ def get_sync_health(db_path: Path) -> dict:
                 "pending_journal_entries": pending_journal_entries,
                 "pending_reflections": pending_reflections,
                 "pending_work_events": pending_work_events,
+                "pending_entities": pending_entities,
             }
         )
 
@@ -2285,6 +2488,7 @@ def get_sync_health(db_path: Path) -> dict:
         "pending_journal_entries": pending_journal_entries_total,
         "pending_reflections": pending_reflections_total,
         "pending_work_events": pending_work_events_total,
+        "pending_entities": pending_entity_totals,
         "pending_upload_failures": pending_upload_failures,
         "sync_failures": open_errors,
         "last_error_at": error_count_row["last_error_at"]
@@ -5817,6 +6021,8 @@ async def sync_push_changes(
             device_id=payload.device_id,
             user_id=payload.user_id,
         )
+        entities = _load_sync_entities()
+        _validate_sync_capabilities(payload.supported_entities, entities)
         cursor = conn.cursor()
 
         raw_payload = payload.model_dump(mode="python")
@@ -5844,82 +6050,55 @@ async def sync_push_changes(
                 device_id=payload.device_id,
                 user_id=payload.user_id,
                 batch_id=payload.batch_id,
-                accepted_count=int(
-                    sum(
-                        int(accepted.get(k, 0))
-                        for k in [
-                            "sessions",
-                            "journal_entries",
-                            "daily_reflections",
-                            "work_events",
-                        ]
-                    )
-                ),
+                accepted_count=sum(int(value) for value in accepted.values()),
                 conflict_count=int(len(replay_response.get("conflicts", []))),
             )
             conn.commit()
             return replay_response
 
-        sessions = payload.changes.get("sessions") or []
-        journal_entries = payload.changes.get("journal_entries") or []
-        reflections = payload.changes.get("daily_reflections") or []
-        work_events = payload.changes.get("work_events") or []
+        unknown_entities = sorted(set(payload.changes) - set(entities))
+        if unknown_entities:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unsupported sync entities: {', '.join(unknown_entities)}",
+            )
 
-        cursors: list[tuple[str, str]] = []
-        for row in sessions:
-            updated_at, row_uuid = _upsert_sync_payload_row(
-                conn,
-                table_name="sync_sessions",
-                user_id=payload.user_id,
-                device_id=payload.device_id,
-                payload=row,
-            )
-            if updated_at and row_uuid:
-                cursors.append((updated_at, row_uuid))
-        for row in journal_entries:
-            updated_at, row_uuid = _upsert_sync_payload_row(
-                conn,
-                table_name="sync_journal_entries",
-                user_id=payload.user_id,
-                device_id=payload.device_id,
-                payload=row,
-            )
-            if updated_at and row_uuid:
-                cursors.append((updated_at, row_uuid))
-        for row in reflections:
-            updated_at, row_uuid = _upsert_sync_payload_row(
-                conn,
-                table_name="sync_daily_reflections",
-                user_id=payload.user_id,
-                device_id=payload.device_id,
-                payload=row,
-            )
-            if updated_at and row_uuid:
-                cursors.append((updated_at, row_uuid))
-        for row in work_events:
-            updated_at, row_uuid = _upsert_sync_payload_row(
-                conn,
-                table_name="sync_work_events",
-                user_id=payload.user_id,
-                device_id=payload.device_id,
-                payload=row,
-            )
-            if updated_at and row_uuid:
-                cursors.append((updated_at, row_uuid))
+        accepted: dict[str, int] = {}
+        push_cursors: list[tuple[str, str]] = []
+        for entity_name, rows in payload.changes.items():
+            entity = entities[entity_name]
+            accepted[entity_name] = len(rows)
+            for row in rows:
+                try:
+                    updated_at, row_uuid = _upsert_generic_sync_record(
+                        conn,
+                        entity=entity,
+                        user_id=payload.user_id,
+                        device_id=payload.device_id,
+                        payload=row,
+                    )
+                    push_cursors.append((updated_at, row_uuid))
+                except ValueError as exc:
+                    raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+                if entity.legacy_server_table:
+                    _upsert_sync_payload_row(
+                        conn,
+                        table_name=entity.legacy_server_table,
+                        user_id=payload.user_id,
+                        device_id=payload.device_id,
+                        payload=row,
+                    )
 
         now_iso = _now_iso()
         next_push_cursor = payload.client_cursor
-        if cursors:
-            max_updated_at, max_uuid = max(cursors)
+        if push_cursors:
+            max_updated_at, max_uuid = max(push_cursors)
             next_push_cursor = _build_cursor(max_updated_at, max_uuid)
 
         response_body = {
-            "accepted": {
-                "sessions": len(sessions),
-                "journal_entries": len(journal_entries),
-                "daily_reflections": len(reflections),
-                "work_events": len(work_events),
-            },
+            "accepted": accepted,
+            "supported_entities": list(entities),
             "conflicts": [],
             "next_push_cursor": next_push_cursor,
             "server_time": now_iso,
@@ -5986,12 +6165,7 @@ async def sync_push_changes(
             user_id=payload.user_id,
             batch_id=payload.batch_id,
             # Keep request metrics aligned with returned accepted counters.
-            accepted_count=(
-                len(sessions)
-                + len(journal_entries)
-                + len(reflections)
-                + len(work_events)
-            ),
+            accepted_count=sum(accepted.values()),
             conflict_count=0,
         )
 
@@ -6062,6 +6236,8 @@ async def sync_pull_changes(
             device_id=payload.device_id,
             user_id=payload.user_id,
         )
+        entities = _load_sync_entities()
+        _validate_sync_capabilities(payload.supported_entities, entities)
 
         rows = _list_sync_union_rows(
             conn,
@@ -6069,10 +6245,9 @@ async def sync_pull_changes(
             cursor_value=payload.cursor,
             limit=payload.limit,
         )
-        active_sessions: list[dict] = []
-        active_journal_entries: list[dict] = []
-        active_daily_reflections: list[dict] = []
-        active_work_events: list[dict] = []
+        active_changes: dict[str, list[dict]] = {
+            entity_name: [] for entity_name in entities
+        }
         tombstones: list[dict] = []
 
         for row in rows:
@@ -6095,14 +6270,8 @@ async def sync_pull_changes(
             if not payload_json:
                 continue
             item = json.loads(payload_json)
-            if entity == "sessions":
-                active_sessions.append(item)
-            elif entity == "journal_entries":
-                active_journal_entries.append(item)
-            elif entity == "daily_reflections":
-                active_daily_reflections.append(item)
-            elif entity == "work_events":
-                active_work_events.append(item)
+            if entity in active_changes:
+                active_changes[entity].append(item)
 
         next_cursor = payload.cursor
         if rows:
@@ -6156,22 +6325,17 @@ async def sync_pull_changes(
             latency_ms=max(0, int((time.perf_counter() - started) * 1000)),
             device_id=payload.device_id,
             user_id=payload.user_id,
-            accepted_count=len(active_sessions)
-            + len(active_journal_entries)
-            + len(active_daily_reflections)
-            + len(active_work_events),
+            accepted_count=sum(len(items) for items in active_changes.values()),
             has_more=has_more,
         )
         conn.commit()
 
         return {
             "changes": {
-                "sessions": active_sessions,
-                "journal_entries": active_journal_entries,
-                "daily_reflections": active_daily_reflections,
-                "work_events": active_work_events,
+                **active_changes,
                 "tombstones": tombstones,
             },
+            "supported_entities": list(entities),
             "next_cursor": next_cursor,
             "has_more": has_more,
             "server_time": now_iso,

@@ -239,9 +239,13 @@ Registers a device and returns a device token.
 Pushes changed entities from client to server.
 
 Expected entities in payload changes:
-- sessions
-- journal_entries
-- daily_reflections
+- The configured entity names in `../config/sync.yaml` (currently `sessions`,
+  `journal_entries`, `daily_reflections`, and `work_events`).
+
+Clients advertise their supported entity list on push and pull. The server
+rejects manifest mismatches with HTTP 409. Rows are stored as generic records
+and returned in one cursor-ordered stream; configured legacy server tables may
+also be maintained as analytics projections.
 
 Behavior:
 - Idempotent batch handling using batch_id and payload hash.

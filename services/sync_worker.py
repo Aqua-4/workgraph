@@ -127,82 +127,71 @@ class SyncWorker:
     ) -> dict[str, Any]:
         cursor = initial_cursor
         batches = 0
-        sent_sessions = 0
-        sent_journals = 0
-        sent_reflections = 0
-        sent_work_events = 0
+        entity_names = tuple(self.repository.sync_entities)
+        sent_counts = {entity: 0 for entity in entity_names}
 
         while True:
-            sessions = [
-                dict(row)
-                for row in self.repository.list_session_changes_since(
-                    cursor=cursor, limit=self.settings.batch_size
-                )
-            ]
-            journals = [
-                dict(row)
-                for row in self.repository.list_journal_changes_since(
-                    cursor=cursor, limit=self.settings.batch_size
-                )
-            ]
-            reflections = [
-                dict(row)
-                for row in self.repository.list_reflection_changes_since(
-                    cursor=cursor, limit=self.settings.batch_size
-                )
-            ]
-            work_events = [
-                dict(row)
-                for row in self.repository.list_work_event_changes_since(
-                    cursor=cursor, limit=self.settings.batch_size
-                )
-            ]
+            changes = {
+                entity: [
+                    {
+                        key: value
+                        for key, value in dict(row).items()
+                        if key != self.repository.sync_entities[entity].local_id
+                    }
+                    for row in self.repository.list_changes_since(
+                        entity=entity,
+                        cursor=cursor,
+                        limit=self.settings.batch_size,
+                    )
+                ]
+                for entity in entity_names
+            }
 
-            if not sessions and not journals and not reflections and not work_events:
+            if not any(changes.values()):
                 break
 
             response = self.client.push(
                 {
                     "device_id": device_id,
                     "user_id": user_id,
+                    "supported_entities": list(entity_names),
                     "client_cursor": cursor,
                     "batch_id": _new_uuid(),
-                    "changes": {
-                        "sessions": sessions,
-                        "journal_entries": journals,
-                        "daily_reflections": reflections,
-                        "work_events": work_events,
-                    },
+                    "changes": changes,
                 }
             )
+            self._validate_server_entities(response)
+            accepted = response.get("accepted")
+            if isinstance(accepted, dict):
+                rejected = [
+                    entity
+                    for entity, rows in changes.items()
+                    if len(rows) and int(accepted.get(entity, 0)) != len(rows)
+                ]
+                if rejected:
+                    raise RuntimeError(
+                        "Sync server did not accept configured entities: "
+                        + ", ".join(rejected)
+                    )
 
-            sent_sessions += len(sessions)
-            sent_journals += len(journals)
-            sent_reflections += len(reflections)
-            sent_work_events += len(work_events)
+            for entity, rows in changes.items():
+                sent_counts[entity] += len(rows)
             batches += 1
 
             cursor = (
                 response.get("next_push_cursor")
-                or _max_row_cursor(sessions + journals + reflections + work_events)
+                or _max_row_cursor([row for rows in changes.values() for row in rows])
                 or cursor
             )
 
-            if (
-                not response.get("next_push_cursor")
-                and len(sessions) < self.settings.batch_size
-                and len(journals) < self.settings.batch_size
-                and len(reflections) < self.settings.batch_size
-                and len(work_events) < self.settings.batch_size
+            if not response.get("next_push_cursor") and all(
+                len(rows) < self.settings.batch_size for rows in changes.values()
             ):
                 break
 
         return {
             "batches": batches,
-            "sessions": sent_sessions,
-            "journal_entries": sent_journals,
-            "daily_reflections": sent_reflections,
-            "work_events": sent_work_events,
+            **sent_counts,
             "last_cursor": cursor,
         }
 
@@ -215,10 +204,8 @@ class SyncWorker:
     ) -> dict[str, Any]:
         cursor = initial_cursor
         pages = 0
-        applied_sessions = 0
-        applied_journals = 0
-        applied_reflections = 0
-        applied_work_events = 0
+        entity_names = tuple(self.repository.sync_entities)
+        applied_counts = {entity: 0 for entity in entity_names}
         applied_tombstones = 0
 
         while pages < self.settings.max_pull_pages:
@@ -226,27 +213,30 @@ class SyncWorker:
                 {
                     "device_id": device_id,
                     "user_id": user_id,
+                    "supported_entities": list(entity_names),
                     "cursor": cursor,
                     "limit": self.settings.pull_limit,
                 }
             )
             pages += 1
 
+            self._validate_server_entities(response)
             changes = response.get("changes") or {}
-            sessions = changes.get("sessions") or []
-            journals = changes.get("journal_entries") or []
-            reflections = changes.get("daily_reflections") or []
-            work_events = changes.get("work_events") or []
+            unknown_entities = set(changes) - set(entity_names) - {"tombstones"}
+            if unknown_entities:
+                raise RuntimeError(
+                    "Sync server returned unsupported entities: "
+                    + ", ".join(sorted(unknown_entities))
+                )
             tombstones = changes.get("tombstones") or []
 
-            for row in sessions:
-                self.repository.upsert_session_by_uuid(row)
-            for row in journals:
-                self.repository.upsert_journal_by_uuid(row)
-            for row in reflections:
-                self.repository.upsert_reflection_by_uuid(row)
-            for row in work_events:
-                self.repository.upsert_work_event_by_uuid(row)
+            pulled_rows: list[dict[str, Any]] = []
+            for entity in entity_names:
+                rows = changes.get(entity) or []
+                for row in rows:
+                    self.repository.upsert_sync_entity(entity, row)
+                applied_counts[entity] += len(rows)
+                pulled_rows.extend(rows)
             for tombstone in tombstones:
                 deleted_at = tombstone.get("deleted_at")
                 if not deleted_at:
@@ -258,16 +248,10 @@ class SyncWorker:
                     updated_at=tombstone.get("updated_at") or deleted_at,
                 )
 
-            applied_sessions += len(sessions)
-            applied_journals += len(journals)
-            applied_reflections += len(reflections)
-            applied_work_events += len(work_events)
             applied_tombstones += len(tombstones)
 
             next_cursor = (
-                response.get("next_cursor")
-                or _max_row_cursor(sessions + journals + reflections + work_events)
-                or cursor
+                response.get("next_cursor") or _max_row_cursor(pulled_rows) or cursor
             )
             cursor = next_cursor
             if not response.get("has_more"):
@@ -275,13 +259,25 @@ class SyncWorker:
 
         return {
             "pages": pages,
-            "sessions": applied_sessions,
-            "journal_entries": applied_journals,
-            "daily_reflections": applied_reflections,
-            "work_events": applied_work_events,
+            **applied_counts,
             "tombstones": applied_tombstones,
             "last_cursor": cursor,
         }
+
+    def _validate_server_entities(self, response: dict[str, Any]) -> None:
+        expected = self.repository.sync_entities
+        advertised = response.get("supported_entities")
+        requires_capability = any(
+            entity.legacy_server_table is None for entity in expected.values()
+        )
+        if advertised is None:
+            if requires_capability:
+                raise RuntimeError(
+                    "Sync server does not advertise configured entity support"
+                )
+            return
+        if set(advertised) != set(expected):
+            raise RuntimeError("Client and server sync entity manifests do not match")
 
 
 def _max_row_cursor(rows: list[dict[str, Any]]) -> str | None:

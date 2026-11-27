@@ -1,3 +1,4 @@
+import sqlite3
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,6 +32,89 @@ class FakeSyncClient:
 
 
 class SyncWorkerTests(unittest.TestCase):
+    def test_worker_syncs_entity_added_only_to_manifest(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            db_path = temp / "activity.db"
+            identity_path = temp / "identity.json"
+            sync_config_path = temp / "sync.yaml"
+            sync_config_path.write_text(
+                "version: 1\n"
+                "entities:\n"
+                "  custom_items:\n"
+                "    table: custom_items\n"
+                "    local_id: id\n"
+                "    uuid: uuid\n"
+                "    created_at: created_at\n"
+                "    updated_at: updated_at\n"
+                "    deleted_at: deleted_at\n"
+                "    user_id: user_id\n"
+                "    device_id: device_id\n",
+                encoding="utf-8",
+            )
+            with sqlite3.connect(db_path) as connection:
+                connection.execute(
+                    """CREATE TABLE custom_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        uuid TEXT UNIQUE,
+                        user_id TEXT,
+                        device_id TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT,
+                        deleted_at TEXT,
+                        title TEXT NOT NULL
+                    )"""
+                )
+
+            with ActivityRepository(
+                db_path,
+                identity_path=identity_path,
+                sync_config_path=sync_config_path,
+            ) as repository:
+                repository._connection.execute(
+                    """INSERT INTO custom_items (
+                        uuid, user_id, device_id, created_at, updated_at, title
+                    ) VALUES (?, ?, ?, ?, ?, ?)""",
+                    (
+                        "local-item",
+                        repository._user_id,
+                        repository._device_id,
+                        "2026-07-11T10:00:00+00:00",
+                        "2026-07-11T10:00:00+00:00",
+                        "Local item",
+                    ),
+                )
+                client = FakeSyncClient(
+                    push_responses=[{"supported_entities": ["custom_items"]}],
+                    pull_responses=[
+                        {
+                            "changes": {
+                                "custom_items": [
+                                    {
+                                        "id": 999,
+                                        "uuid": "remote-item",
+                                        "created_at": "2026-07-11T11:00:00+00:00",
+                                        "updated_at": "2026-07-11T11:00:00+00:00",
+                                        "title": "Remote item",
+                                    }
+                                ]
+                            },
+                            "supported_entities": ["custom_items"],
+                            "next_cursor": "pull-custom-1",
+                            "has_more": False,
+                        }
+                    ],
+                )
+                summary = SyncWorker(repository, client).run_once()
+                rows = repository.list_changes_since(entity="custom_items", limit=10)
+
+        self.assertEqual(summary["push"]["custom_items"], 1)
+        self.assertEqual(summary["pull"]["custom_items"], 1)
+        pushed = client.push_payloads[0]["changes"]["custom_items"][0]
+        self.assertEqual(pushed["uuid"], "local-item")
+        self.assertNotIn("id", pushed)
+        self.assertEqual({row["uuid"] for row in rows}, {"local-item", "remote-item"})
+
     def test_sync_worker_pushes_local_changes_and_updates_cursors(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "activity.db"

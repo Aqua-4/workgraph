@@ -1,0 +1,46 @@
+# Shared allowlist for client/server row replication.
+# Each local table must expose these metadata columns after repository migrations.
+version: 1
+entities:
+  sessions:
+    table: activity_sessions
+    local_id: id
+    legacy_server_table: sync_sessions
+    uuid: uuid
+    created_at: created_at
+    updated_at: updated_at
+    deleted_at: deleted_at
+    user_id: user_id
+    device_id: device_id
+  journal_entries:
+    table: journal_entries
+    local_id: id
+    legacy_server_table: sync_journal_entries
+    uuid: uuid
+    created_at: created_at
+    updated_at: updated_at
+    deleted_at: deleted_at
+    user_id: user_id
+    device_id: device_id
+  daily_reflections:
+    table: daily_reflections
+    local_id: id
+    legacy_server_table: sync_daily_reflections
+    uuid: uuid
+    created_at: created_at
+    updated_at: updated_at
+    deleted_at: deleted_at
+    user_id: user_id
+    device_id: device_id
+    conflict_columns:
+      - date
+  work_events:
+    table: work_events
+    local_id: id
+    legacy_server_table: sync_work_events
+    uuid: uuid
+    created_at: created_at
+    updated_at: updated_at
+    deleted_at: deleted_at
+    user_id: user_id
+    device_id: device_id

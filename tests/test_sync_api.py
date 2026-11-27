@@ -1,7 +1,9 @@
 import os
+import sqlite3
+import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -20,6 +22,181 @@ class SyncApiTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.patcher.stop()
         self.temp_dir.cleanup()
+
+    def test_manifest_only_entity_push_pull_and_tombstone(self) -> None:
+        sync_config_path = Path(self.temp_dir.name) / "sync.yaml"
+        sync_config_path.write_text(
+            "version: 1\n"
+            "entities:\n"
+            "  custom_items:\n"
+            "    table: custom_items\n"
+            "    local_id: id\n"
+            "    uuid: uuid\n"
+            "    created_at: created_at\n"
+            "    updated_at: updated_at\n"
+            "    deleted_at: deleted_at\n"
+            "    user_id: user_id\n"
+            "    device_id: device_id\n",
+            encoding="utf-8",
+        )
+        with patch("api.app.SYNC_CONFIG_PATH", sync_config_path):
+            register_response = self.client.post(
+                "/api/sync/v1/devices/register",
+                json={
+                    "user": {"id": "custom-user", "name": "Custom User"},
+                    "device": {
+                        "id": "custom-device",
+                        "name": "Custom Device",
+                        "type": "work",
+                    },
+                },
+            )
+            token = register_response.json()["device_token"]
+            headers = {"Authorization": f"Bearer {token}"}
+            mismatch = self.client.post(
+                "/api/sync/v1/push",
+                headers=headers,
+                json={
+                    "device_id": "custom-device",
+                    "user_id": "custom-user",
+                    "supported_entities": ["stale_items"],
+                    "client_cursor": None,
+                    "batch_id": "custom-push-mismatch",
+                    "changes": {},
+                },
+            )
+            self.assertEqual(mismatch.status_code, 409)
+            first_push = self.client.post(
+                "/api/sync/v1/push",
+                headers=headers,
+                json={
+                    "device_id": "custom-device",
+                    "user_id": "custom-user",
+                    "supported_entities": ["custom_items"],
+                    "client_cursor": None,
+                    "batch_id": "custom-push-1",
+                    "changes": {
+                        "custom_items": [
+                            {
+                                "id": 88,
+                                "uuid": "custom-row-1",
+                                "user_id": "forged-user",
+                                "device_id": "forged-device",
+                                "created_at": "2026-07-11T10:00:00+00:00",
+                                "updated_at": "2026-07-11T10:00:00+00:00",
+                                "title": "Opaque row",
+                            }
+                        ]
+                    },
+                },
+            )
+            self.assertEqual(first_push.status_code, 200)
+            first_pull = self.client.post(
+                "/api/sync/v1/pull",
+                headers=headers,
+                json={
+                    "device_id": "custom-device",
+                    "user_id": "custom-user",
+                    "supported_entities": ["custom_items"],
+                    "cursor": None,
+                    "limit": 10,
+                },
+            )
+            self.assertEqual(first_pull.status_code, 200)
+            first_page = first_pull.json()
+            row = first_page["changes"]["custom_items"][0]
+            self.assertNotIn("id", row)
+            self.assertEqual(row["user_id"], "custom-user")
+            self.assertEqual(row["device_id"], "custom-device")
+
+            second_push = self.client.post(
+                "/api/sync/v1/push",
+                headers=headers,
+                json={
+                    "device_id": "custom-device",
+                    "user_id": "custom-user",
+                    "supported_entities": ["custom_items"],
+                    "client_cursor": first_push.json()["next_push_cursor"],
+                    "batch_id": "custom-push-2",
+                    "changes": {
+                        "custom_items": [
+                            {
+                                "uuid": "custom-row-1",
+                                "created_at": "2026-07-11T10:00:00+00:00",
+                                "updated_at": "2026-07-11T11:00:00+00:00",
+                                "deleted_at": "2026-07-11T11:00:00+00:00",
+                                "title": "Opaque row",
+                            }
+                        ]
+                    },
+                },
+            )
+            self.assertEqual(second_push.status_code, 200)
+            second_pull = self.client.post(
+                "/api/sync/v1/pull",
+                headers=headers,
+                json={
+                    "device_id": "custom-device",
+                    "user_id": "custom-user",
+                    "supported_entities": ["custom_items"],
+                    "cursor": first_page["next_cursor"],
+                    "limit": 10,
+                },
+            )
+
+        self.assertEqual(second_pull.status_code, 200)
+        tombstones = second_pull.json()["changes"]["tombstones"]
+        self.assertEqual(tombstones[0]["entity"], "custom_items")
+        self.assertEqual(tombstones[0]["id"], "custom-row-1")
+
+    def test_legacy_server_rows_are_migrated_to_generic_pull_store(self) -> None:
+        register_response = self.client.post(
+            "/api/sync/v1/devices/register",
+            json={
+                "user": {"id": "legacy-user", "name": "Legacy User"},
+                "device": {
+                    "id": "legacy-device",
+                    "name": "Legacy Device",
+                    "type": "work",
+                },
+            },
+        )
+        token = register_response.json()["device_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        with sqlite3.connect(self.db_path) as connection:
+            connection.execute("DELETE FROM sync_entity_migrations")
+            connection.execute(
+                """INSERT INTO sync_sessions (
+                    uuid, user_id, device_id, created_at, updated_at,
+                    deleted_at, payload_json
+                ) VALUES (?, ?, ?, ?, ?, NULL, ?)""",
+                (
+                    "legacy-session",
+                    "legacy-user",
+                    "legacy-device",
+                    "2026-07-11T10:00:00+00:00",
+                    "2026-07-11T10:00:00+00:00",
+                    '{"uuid":"legacy-session","created_at":"2026-07-11T10:00:00+00:00",'
+                    '"updated_at":"2026-07-11T10:00:00+00:00","app_name":"Code"}',
+                ),
+            )
+
+        pull_response = self.client.post(
+            "/api/sync/v1/pull",
+            headers=headers,
+            json={
+                "device_id": "legacy-device",
+                "user_id": "legacy-user",
+                "cursor": None,
+                "limit": 10,
+            },
+        )
+
+        self.assertEqual(pull_response.status_code, 200)
+        sessions = pull_response.json()["changes"]["sessions"]
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["uuid"], "legacy-session")
 
     def test_register_push_pull_and_idempotent_batch(self) -> None:
         register_response = self.client.post(
@@ -428,7 +605,9 @@ class SyncApiTests(unittest.TestCase):
         self.assertGreaterEqual(health["pending_journal_entries"], 1)
         self.assertGreaterEqual(health["pending_reflections"], 1)
         device_two = next(
-            item for item in health["device_statuses"] if item["device_id"] == "device-pending-2"
+            item
+            for item in health["device_statuses"]
+            if item["device_id"] == "device-pending-2"
         )
         self.assertGreaterEqual(device_two["pending_pull_rows"], 3)
 
@@ -685,13 +864,17 @@ class SyncApiTests(unittest.TestCase):
         self.assertEqual(users_response.status_code, 200)
         self.assertGreaterEqual(len(users_response.json()["users"]), 2)
 
-        devices_response = self.client.get("/api/sync/devices", params={"user_id": "user-a"})
+        devices_response = self.client.get(
+            "/api/sync/devices", params={"user_id": "user-a"}
+        )
         self.assertEqual(devices_response.status_code, 200)
         devices = devices_response.json()["devices"]
         self.assertEqual(len(devices), 1)
         self.assertEqual(devices[0]["device_id"], "device-a1")
 
     def test_sync_stats_endpoint_and_api_stats_source_sync(self) -> None:
+        session_end = datetime.now(UTC).replace(microsecond=0)
+        session_start = session_end - timedelta(hours=1)
         register_response = self.client.post(
             "/api/sync/v1/devices/register",
             json={
@@ -719,10 +902,10 @@ class SyncApiTests(unittest.TestCase):
                     "sessions": [
                         {
                             "uuid": "sess-sync-1",
-                            "created_at": "2026-07-11T10:00:00+00:00",
-                            "updated_at": "2026-07-11T10:00:00+00:00",
-                            "start_time": "2026-07-11T10:00:00+00:00",
-                            "end_time": "2026-07-11T11:00:00+00:00",
+                            "created_at": session_start.isoformat(),
+                            "updated_at": session_end.isoformat(),
+                            "start_time": session_start.isoformat(),
+                            "end_time": session_end.isoformat(),
                             "duration_sec": 3600,
                             "app_name": "Code",
                             "tag": "Build",
@@ -846,12 +1029,22 @@ class SyncApiTests(unittest.TestCase):
 
         pull_a = self.client.post(
             "/api/sync/v1/pull",
-            json={"device_id": "device-dup-a", "user_id": "user-dup-a", "cursor": None, "limit": 100},
+            json={
+                "device_id": "device-dup-a",
+                "user_id": "user-dup-a",
+                "cursor": None,
+                "limit": 100,
+            },
             headers={"Authorization": f"Bearer {token_a}"},
         )
         pull_b = self.client.post(
             "/api/sync/v1/pull",
-            json={"device_id": "device-dup-b", "user_id": "user-dup-b", "cursor": None, "limit": 100},
+            json={
+                "device_id": "device-dup-b",
+                "user_id": "user-dup-b",
+                "cursor": None,
+                "limit": 100,
+            },
             headers={"Authorization": f"Bearer {token_b}"},
         )
         self.assertEqual(pull_a.status_code, 200)
@@ -965,12 +1158,16 @@ class SyncApiTests(unittest.TestCase):
 
     def test_mode_aware_device_register_sync_client_forwards_registration(self) -> None:
         mock_response = MagicMock()
-        mock_response.read.return_value = b'{"device_token":"remote-token","server_time":"2026-07-12T00:00:00+00:00"}'
+        mock_response.read.return_value = (
+            b'{"device_token":"remote-token","server_time":"2026-07-12T00:00:00+00:00"}'
+        )
         context_manager = MagicMock()
         context_manager.__enter__.return_value = mock_response
         context_manager.__exit__.return_value = None
 
-        with patch("api.app.urllib_request.urlopen", return_value=context_manager) as mocked_urlopen:
+        with patch(
+            "api.app.urllib_request.urlopen", return_value=context_manager
+        ) as mocked_urlopen:
             response = self.client.post(
                 "/api/device/register",
                 json={
@@ -1035,7 +1232,10 @@ class SyncApiTests(unittest.TestCase):
         self.assertEqual(register_response.status_code, 200)
 
         with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
-            response = self.client.get("/api/stats", params={"source": "local", "user_id": "user-mode-sync", "days": 7})
+            response = self.client.get(
+                "/api/stats",
+                params={"source": "local", "user_id": "user-mode-sync", "days": 7},
+            )
             self.assertEqual(response.status_code, 200)
             body = response.json()
             self.assertIn("total_seconds", body)
@@ -1117,16 +1317,19 @@ class SyncApiTests(unittest.TestCase):
         )
         self.assertEqual(bootstrap.status_code, 200)
 
-        with patch(
-            "api.app._configured_sync_client_status",
-            return_value={
-                "registered": True,
-                "sync_base_url": "http://127.0.0.1:8000",
-                "last_synced_at": "2026-07-12T12:34:56+00:00",
-                "device_id": "device-client-1",
-                "user_id": "user-client-1",
-            },
-        ), patch("api.app._configured_dashboard_mode", return_value="sync-client"):
+        with (
+            patch(
+                "api.app._configured_sync_client_status",
+                return_value={
+                    "registered": True,
+                    "sync_base_url": "http://127.0.0.1:8000",
+                    "last_synced_at": "2026-07-12T12:34:56+00:00",
+                    "device_id": "device-client-1",
+                    "user_id": "user-client-1",
+                },
+            ),
+            patch("api.app._configured_dashboard_mode", return_value="sync-client"),
+        ):
             response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
