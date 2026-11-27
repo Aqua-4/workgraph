@@ -4,16 +4,16 @@ flowchart LR
 		Supervisor["collector_supervisor"]
 		Main["main.py<br/>CLI and collector entry"]
 		API["api.app<br/>Dashboard and sync API"]
-		Daemon["sync_daemon"]
 	end
 
 	subgraph Collection[Activity collection]
 		Collector["collector_service"]
-		Trackers["Window, browser, idle,<br/>and git trackers"]
-		Builder["SessionBuilder"]
+		Window["window_tracker"]
+		Browser["browser_tracker"]
+		Idle["idle_tracker"]
+		Git["git_tracker"]
+		Builder["session_builder"]
 		Tagger["activity_tagger"]
-		Repository["ActivityRepository"]
-		AppDB[("Configured SQLite database<br/>local client or sync server")]
 	end
 
 	subgraph Wellbeing[Wellbeing services]
@@ -22,35 +22,46 @@ flowchart LR
 		UI["wellbeing_ui"]
 	end
 
-	subgraph Sync[Sync services]
+	subgraph Sync[Sync client services]
+		Daemon["sync_daemon"]
 		Worker["sync_worker<br/>HTTP client"]
 	end
 
-	Reporting["reporting"]
-	TagReview["tag_review"]
-	TagMigration["tag_migration<br/>(maintenance helper)"]
+	subgraph Shared[Shared data and services]
+		Repository["db.repository<br/>ActivityRepository"]
+		Schema["db/schema.sql"]
+		SyncConfig["sync_config"]
+		SyncManifest["config/sync.yaml"]
+		Reporting["reporting"]
+		TagReview["tag_review"]
+		TagMigration["tag_migration<br/>maintenance helper"]
+	end
+
+	LocalDB[("Client SQLite database")]
+	ServerDB[("Server SQLite database")]
+	BrowserUI["Dashboard, timeline,<br/>journal and review pages"]
 
 	Launcher -->|starts and supervises| Supervisor
 	Supervisor -->|restarts| Main
 	Launcher -->|starts| API
 	Launcher -.->|when configured| Daemon
-	Main -->|CLI sync command| Daemon
+	Main -->|CLI sync commands| Daemon
+	Main -->|one-shot sync commands| Worker
 
 	Main --> Collector
-	Collector --> Trackers
+	Main --> Reporting
+	Main -->|wellbeing control| Delivery
+	Collector --> Window & Browser & Idle & Git
 	Collector --> Builder
 	Collector --> Tagger
 	Collector --> Repository
 	Builder -->|completed sessions| Collector
-	Repository --> AppDB
-	API --> AppDB
 
 	Collector --> WellbeingService
 	WellbeingService -->|notification and speech callbacks| Delivery
 	Collector -->|desktop prompt delivery| Delivery
 	Collector --> UI
 	UI -->|user actions| Collector
-	Main -->|wellbeing control command| Delivery
 	Delivery -->|queued actions and control-file requests| Collector
 	Launcher -.->|restart/error signal| Delivery
 	Supervisor -.->|error signal| Delivery
@@ -58,13 +69,20 @@ flowchart LR
 	Daemon --> Worker
 	Worker --> Repository
 	Worker <-->|authenticated push and pull| API
+	Repository -->|local data| LocalDB
+	Schema -.->|defines local schema| LocalDB
+	Repository --> SyncConfig
+	API --> SyncConfig
+	SyncConfig --> SyncManifest
 
-	Main --> Reporting
-	API --> Reporting
-	Reporting --> AppDB
-	Reporting -.->|sync health lookup| API
-	API --> Tagger
-	API --> TagReview
+	BrowserUI <-->|HTTP| API
+	API -->|local mode| LocalDB
+	API -->|sync-server mode| ServerDB
+	API --> Repository
+	API --> Tagger & TagReview & Reporting
+	Reporting -->|configured data source| LocalDB & ServerDB
+	Main -->|health provider| Reporting
+	API -->|health provider| Reporting
 	Repository --> TagReview
 	TagMigration --> Tagger
 	TagMigration --> Repository

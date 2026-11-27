@@ -19,7 +19,7 @@ from services.wellbeing_delivery import (
     send_control_command,
 )
 from services.wellbeing_ui import TkWellbeingUI
-from workgraph.models import ActiveWindow
+from workgraph.models import ActiveWindow, ActivitySession
 
 
 def test_breaks_snooze_and_unavailable_idle() -> None:
@@ -803,6 +803,104 @@ def test_collector_wires_samples_and_controls(tmp_path: Path) -> None:
     assert collector.wellbeing.work_seconds == 0
     collector.repository.close()
     collector.wellbeing_delivery.close()
+
+
+def test_collector_isolates_optional_tracker_failures_and_recovers(
+    tmp_path: Path,
+) -> None:
+    settings = CollectorSettings(
+        database_path=str(tmp_path / "activity.db"),
+        identity_path=str(tmp_path / "identity.json"),
+        log_path=str(tmp_path / "workgraph.log"),
+    )
+    collector = CollectorService(settings)
+    samples = []
+    collector.window_tracker.get_active_window = lambda: ActiveWindow(
+        "code", "code", "work", None, "linux"
+    )
+    collector.idle_tracker.get_idle_state = lambda: IdleState(False, 0)
+    collector.git_tracker.get_activity = lambda **kwargs: (_ for _ in ()).throw(
+        RuntimeError("git unavailable")
+    )
+    collector.browser_tracker.get_domain = lambda window: (_ for _ in ()).throw(
+        RuntimeError("browser history unavailable")
+    )
+    collector.session_builder.ingest = lambda sample: samples.append(sample)
+    try:
+        collector.collect_once()
+        assert samples[0].git_repo is None
+        assert samples[0].browser_domain is None
+        assert collector._service_status["Git tracking"] == "Unavailable"
+        assert collector._service_status["Browser tracking"] == "Unavailable"
+
+        collector.git_tracker.get_activity = lambda **kwargs: GitActivity(
+            "workgraph", "main", "abc1234", []
+        )
+        collector.browser_tracker.get_domain = lambda window: "example.com"
+        collector.collect_once()
+        assert samples[1].git_repo == "workgraph"
+        assert samples[1].browser_domain == "example.com"
+        assert collector._service_status["Git tracking"] == "Enabled"
+        assert collector._service_status["Browser tracking"] == "Enabled"
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
+
+
+def test_collector_skips_window_failure_and_propagates_save_failure(
+    tmp_path: Path,
+) -> None:
+    settings = CollectorSettings(
+        database_path=str(tmp_path / "activity.db"),
+        identity_path=str(tmp_path / "identity.json"),
+        log_path=str(tmp_path / "workgraph.log"),
+    )
+    collector = CollectorService(settings)
+    ingested = []
+
+    def fail_window_detection() -> ActiveWindow:
+        raise RuntimeError("window source unavailable")
+
+    collector.window_tracker.get_active_window = fail_window_detection
+    collector.session_builder.ingest = lambda sample: ingested.append(sample)
+    try:
+        collector.collect_once()
+        assert ingested == []
+        assert collector._service_status["Window detection"] == "Unavailable"
+
+        collector.window_tracker.get_active_window = lambda: ActiveWindow(
+            "code", "code", "work", None, "linux"
+        )
+        collector.idle_tracker.get_idle_state = lambda: IdleState(False, 0)
+        collector.git_tracker.get_activity = lambda **kwargs: GitActivity(
+            None, None, None, []
+        )
+        collector.browser_tracker.get_domain = lambda window: None
+        completed = ActivitySession(
+            start_time=datetime.now(),
+            end_time=datetime.now(),
+            duration_sec=1,
+            app_name="code",
+            process_name="code",
+            window_title="work",
+            browser_domain=None,
+            is_idle=False,
+            idle_seconds=0,
+            platform="linux",
+            git_repo=None,
+            git_branch=None,
+            context_switches=0,
+            tag=None,
+        )
+        collector.session_builder.ingest = lambda sample: completed
+        collector.repository.save_session = MagicMock(
+            side_effect=RuntimeError("database unavailable")
+        )
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            collector.collect_once()
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
 
 
 def test_collector_announcements_survive_idle_and_break_failures(

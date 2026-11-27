@@ -608,18 +608,25 @@ def run_monthly_report_command(args: argparse.Namespace) -> None:
 
 def run_sync_report_command(args: argparse.Namespace) -> None:
     settings = load_settings(args.config)
+    from api.app import get_sync_health
 
     if args.output:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
-            generate_sync_report_markdown(db_path=settings.database_path),
+            generate_sync_report_markdown(
+                db_path=settings.database_path,
+                health_provider=get_sync_health,
+            ),
             encoding="utf-8",
         )
         print(f"Sync report generated: {output_path}")
         return
 
-    report = generate_sync_report_markdown(db_path=settings.database_path)
+    report = generate_sync_report_markdown(
+        db_path=settings.database_path,
+        health_provider=get_sync_health,
+    )
     print(report)
 
 

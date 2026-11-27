@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from api.app import _ensure_sync_tables
+from api.app import _ensure_sync_tables, get_sync_health
 from db.repository import ActivityRepository
 from services.reporting import (
     analyze_goal_allocation,
@@ -364,7 +364,10 @@ goals:
                 )
                 conn.commit()
 
-            report = generate_sync_report_markdown(db_path=db_path)
+            report = generate_sync_report_markdown(
+                db_path=db_path,
+                health_provider=get_sync_health,
+            )
 
         self.assertIn("# Sync Status Report", report)
         self.assertIn("Registered Devices: 1", report)

@@ -40,6 +40,15 @@ Sync-server mode is the multi-device aggregation surface.
 - Dashboard shows device health, queue state, sync failures, and aggregate metrics.
 - Reports summarize monthly activity, sync health, and goal drift from server-side data.
 
+## Service Boundaries and Failure Isolation
+
+- Reporting receives sync-health data through an injected provider instead of depending on reporting logic from FastAPI route code.
+- `CollectorService` isolates window, idle, Git, browser, wellbeing, and persistence failures. Optional enrichment failures degrade independently; window failures skip the current sample and database failures remain visible.
+- `ActivityRepository` owns candidate retrieval and review-action persistence. `services.tag_review` owns grouping, summaries, derived-group filtering, pagination, and session selection.
+- `SyncWorker` depends on narrow sync-client and sync-repository protocols, keeping wire behavior and daemon retry policy outside the worker abstraction.
+
+These boundaries preserve direct SQLite and FastAPI integration while making individual services replaceable or testable.
+
 ## Practical Rule
 
 When adding a new feature, decide first whether it belongs to:

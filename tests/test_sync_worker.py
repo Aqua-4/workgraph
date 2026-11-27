@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from db.repository import ActivityRepository
+from services.sync_config import SyncEntity
 from services.sync_worker import SyncWorker, SyncWorkerSettings
 from workgraph.models import ActivitySession
 
@@ -31,7 +32,134 @@ class FakeSyncClient:
         return {"changes": {}, "has_more": False}
 
 
+class FakeSyncRepository:
+    def __init__(self) -> None:
+        self.sync_entities = {
+            "custom_items": SyncEntity(
+                name="custom_items",
+                table="custom_items",
+                uuid="uuid",
+                created_at="created_at",
+                updated_at="updated_at",
+                deleted_at="deleted_at",
+                user_id="user_id",
+                device_id="device_id",
+                legacy_server_table="custom_items",
+                local_id="id",
+            )
+        }
+        self.state = {
+            "device_id": "device-1",
+            "user_id": "user-1",
+            "last_push_cursor": None,
+            "last_pull_cursor": None,
+        }
+        self._changes = {
+            "custom_items": [
+                {
+                    "id": 1,
+                    "uuid": "local-item",
+                    "created_at": "2026-07-11T10:00:00+00:00",
+                    "updated_at": "2026-07-11T10:00:00+00:00",
+                    "title": "Local item",
+                }
+            ]
+        }
+        self.upserted: list[tuple[str, dict[str, object]]] = []
+        self.deleted: list[tuple[str, str, str, str | None]] = []
+
+    def get_sync_state(self) -> dict[str, object]:
+        return self.state
+
+    def update_sync_state(
+        self,
+        *,
+        last_push_cursor: str | None,
+        last_pull_cursor: str | None,
+    ) -> None:
+        self.state["last_push_cursor"] = last_push_cursor
+        self.state["last_pull_cursor"] = last_pull_cursor
+
+    def list_changes_since(
+        self,
+        *,
+        entity: str,
+        cursor: str | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, object]]:
+        return self._changes.get(entity, []) if cursor is None else []
+
+    def upsert_sync_entity(self, entity: str, payload: dict[str, object]) -> None:
+        self.upserted.append((entity, payload))
+
+    def mark_deleted(
+        self,
+        *,
+        entity: str,
+        row_uuid: str,
+        deleted_at: str,
+        updated_at: str | None = None,
+    ) -> None:
+        self.deleted.append((entity, row_uuid, deleted_at, updated_at))
+
+
 class SyncWorkerTests(unittest.TestCase):
+    def test_worker_accepts_repository_protocol_implementation(self) -> None:
+        repository = FakeSyncRepository()
+        client = FakeSyncClient(
+            push_responses=[
+                {
+                    "supported_entities": ["custom_items"],
+                    "accepted": {"custom_items": 1},
+                    "next_push_cursor": "push-1",
+                }
+            ],
+            pull_responses=[
+                {
+                    "supported_entities": ["custom_items"],
+                    "changes": {
+                        "custom_items": [
+                            {
+                                "uuid": "remote-item",
+                                "created_at": "2026-07-11T11:00:00+00:00",
+                                "updated_at": "2026-07-11T11:00:00+00:00",
+                                "title": "Remote item",
+                            }
+                        ],
+                        "tombstones": [
+                            {
+                                "entity": "custom_items",
+                                "id": "deleted-item",
+                                "deleted_at": "2026-07-11T12:00:00+00:00",
+                            }
+                        ],
+                    },
+                    "next_cursor": "pull-1",
+                    "has_more": False,
+                }
+            ],
+        )
+
+        summary = SyncWorker(repository, client).run_once()
+
+        self.assertEqual(summary["push"]["custom_items"], 1)
+        self.assertEqual(summary["pull"]["custom_items"], 1)
+        self.assertEqual(repository.state["last_push_cursor"], "push-1")
+        self.assertEqual(repository.state["last_pull_cursor"], "pull-1")
+        self.assertEqual(repository.upserted[0][0], "custom_items")
+        self.assertEqual(repository.upserted[0][1]["uuid"], "remote-item")
+        self.assertEqual(
+            repository.deleted,
+            [
+                (
+                    "custom_items",
+                    "deleted-item",
+                    "2026-07-11T12:00:00+00:00",
+                    "2026-07-11T12:00:00+00:00",
+                )
+            ],
+        )
+
     def test_worker_syncs_entity_added_only_to_manifest(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp = Path(temp_dir)

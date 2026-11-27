@@ -3,13 +3,12 @@ from __future__ import annotations
 import csv
 import json
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import yaml
-
-from api.app import get_sync_health
 
 MEETING_SQL_PREDICATE = """
 (
@@ -248,8 +247,9 @@ def generate_goals_report_markdown(
 def generate_sync_report_markdown(
     *,
     db_path: str | Path,
+    health_provider: Callable[[Path], dict],
 ) -> str:
-    health = get_sync_health(Path(db_path))
+    health = health_provider(Path(db_path))
     lines = ["# Sync Status Report", ""]
     if not health.get("enabled"):
         lines.append("No sync tokens or devices are configured yet.")

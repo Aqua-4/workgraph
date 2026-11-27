@@ -5,6 +5,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from db.repository import ActivityRepository
+from services.tag_review import (
+    build_tag_review_group_page,
+    select_tag_review_group_sessions,
+)
 from workgraph.models import ActivitySession
 
 
@@ -605,9 +609,19 @@ class ActivityRepositoryTests(unittest.TestCase):
                     )
                 )
 
-                groups = repository.list_tag_review_groups(days=3650)
-                count = repository.count_tag_review_groups(days=3650)
-                repo_sessions = repository.list_tag_review_group_sessions(
+                general_groups, general_count = build_tag_review_group_page(
+                    repository.list_tag_review_candidates,
+                    days=3650,
+                )
+                browser_groups, browser_count = build_tag_review_group_page(
+                    repository.list_tag_review_candidates,
+                    days=3650,
+                    browser_only=True,
+                )
+                groups = general_groups + browser_groups
+                count = general_count + browser_count
+                repo_sessions = select_tag_review_group_sessions(
+                    repository.list_tag_review_candidates,
                     group_type="repo",
                     group_value="workgraph",
                     days=3650,
@@ -687,11 +701,17 @@ class ActivityRepositoryTests(unittest.TestCase):
                     )
                 )
 
-                groups = repository.list_tag_review_groups(days=3650)
-                new_tab_sessions = repository.list_tag_review_group_sessions(
+                groups, _ = build_tag_review_group_page(
+                    repository.list_tag_review_candidates,
+                    days=3650,
+                    browser_only=True,
+                )
+                new_tab_sessions = select_tag_review_group_sessions(
+                    repository.list_tag_review_candidates,
                     group_type="browser_context",
                     group_value="New Tab",
                     days=3650,
+                    browser_only=True,
                 )
 
         group_keys = {(group["group_type"], group["group_value"]) for group in groups}

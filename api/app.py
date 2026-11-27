@@ -22,9 +22,11 @@ from pydantic import BaseModel, Field, field_validator
 from services.activity_tagger import ActivityTagger
 from services.sync_config import SyncEntity, load_sync_entities
 from services.tag_review import (
+    build_tag_review_group_page,
     build_tag_review_suggestions,
     build_yaml_preview,
     load_custom_tag_rules,
+    select_tag_review_group_sessions,
 )
 
 app = FastAPI(title="WorkGraph Dashboard")
@@ -4629,7 +4631,8 @@ async def tag_review_page(
         from db.repository import ActivityRepository
 
         with ActivityRepository(db_path) as repository:
-            groups = repository.list_tag_review_groups(
+            groups, group_count = build_tag_review_group_page(
+                repository.list_tag_review_candidates,
                 days=days,
                 only_untagged=only_untagged,
                 app_name=app_name,
@@ -4637,13 +4640,6 @@ async def tag_review_page(
                 repo=repo,
                 limit=limit,
                 offset=0,
-            )
-            group_count = repository.count_tag_review_groups(
-                days=days,
-                only_untagged=only_untagged,
-                app_name=app_name,
-                domain=domain,
-                repo=repo,
             )
 
     suggestions, preview_text, warnings = _build_tag_review_payload(
@@ -4699,17 +4695,14 @@ async def browser_tag_review_page(
         from db.repository import ActivityRepository
 
         with ActivityRepository(db_path) as repository:
-            groups = repository.list_browser_tag_review_groups(
+            groups, group_count = build_tag_review_group_page(
+                repository.list_tag_review_candidates,
                 days=days,
                 app_name=app_name,
                 domain=domain,
+                browser_only=True,
                 limit=limit,
                 offset=0,
-            )
-            group_count = repository.count_browser_tag_review_groups(
-                days=days,
-                app_name=app_name,
-                domain=domain,
             )
         _, preview_text, warnings = _build_tag_review_payload(
             db_path=db_path,
@@ -4771,7 +4764,8 @@ async def api_tag_review_groups(
     from db.repository import ActivityRepository
 
     with ActivityRepository(db_path) as repository:
-        groups = repository.list_tag_review_groups(
+        groups, count = build_tag_review_group_page(
+            repository.list_tag_review_candidates,
             days=days,
             only_untagged=only_untagged,
             app_name=app_name,
@@ -4779,13 +4773,6 @@ async def api_tag_review_groups(
             repo=repo,
             limit=limit,
             offset=offset,
-        )
-        count = repository.count_tag_review_groups(
-            days=days,
-            only_untagged=only_untagged,
-            app_name=app_name,
-            domain=domain,
-            repo=repo,
         )
 
     return {
@@ -4830,17 +4817,14 @@ async def api_browser_tag_review_groups(
     from db.repository import ActivityRepository
 
     with ActivityRepository(db_path) as repository:
-        groups = repository.list_browser_tag_review_groups(
+        groups, count = build_tag_review_group_page(
+            repository.list_tag_review_candidates,
             days=days,
             app_name=app_name,
             domain=domain,
+            browser_only=True,
             limit=limit,
             offset=offset,
-        )
-        count = repository.count_browser_tag_review_groups(
-            days=days,
-            app_name=app_name,
-            domain=domain,
         )
 
     return {
@@ -4882,7 +4866,8 @@ async def api_tag_review_group_detail(
     with ActivityRepository(db_path) as repository:
         sessions = [
             dict(row)
-            for row in repository.list_tag_review_group_sessions(
+            for row in select_tag_review_group_sessions(
+                repository.list_tag_review_candidates,
                 group_type=group_type,
                 group_value=group_value,
                 days=days,
@@ -4926,10 +4911,12 @@ async def api_browser_tag_review_group_detail(
     with ActivityRepository(db_path) as repository:
         sessions = [
             dict(row)
-            for row in repository.list_browser_tag_review_group_sessions(
+            for row in select_tag_review_group_sessions(
+                repository.list_tag_review_candidates,
                 group_type=group_type,
                 group_value=group_value,
                 days=days,
+                browser_only=True,
                 limit=limit,
             )
         ]
@@ -4954,7 +4941,8 @@ async def api_tag_review_assign_group(payload: TagReviewGroupAssignRequest):
     from db.repository import ActivityRepository
 
     with ActivityRepository(db_path) as repository:
-        sessions = repository.list_tag_review_group_sessions(
+        sessions = select_tag_review_group_sessions(
+            repository.list_tag_review_candidates,
             group_type=payload.group_type,
             group_value=payload.group_value,
             days=payload.days,
@@ -5008,10 +4996,12 @@ async def api_browser_tag_review_assign_group(payload: TagReviewGroupAssignReque
         raise HTTPException(status_code=400, detail="Invalid group_type")
 
     with ActivityRepository(db_path) as repository:
-        sessions = repository.list_browser_tag_review_group_sessions(
+        sessions = select_tag_review_group_sessions(
+            repository.list_tag_review_candidates,
             group_type=payload.group_type,
             group_value=payload.group_value,
             days=payload.days,
+            browser_only=True,
             limit=5000,
         )
         if not sessions:
@@ -5501,7 +5491,7 @@ async def create_work_event(payload: WorkEventCreate):
             updated_at,
             deleted_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             str(uuid4()),

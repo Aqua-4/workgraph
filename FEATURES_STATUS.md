@@ -2,9 +2,10 @@
 
 Code-verified feature matrix for the current repository state.
 
-Last verified: 2026-07-12
+Last verified: 2026-11-27
 Verification basis:
-- Unit tests: `uv run python -m unittest tests.test_sync_api tests.test_sync_worker tests.test_sync_daemon`
+- Full pytest suite: 215 passed, 1 skipped
+- Focused reporting/sync API, collector, tag-review, and sync-worker suites
 - Source inspection of collector, API, services, and repository layers
 
 ## Legend
@@ -116,4 +117,6 @@ Implementation and remaining verification:
 - CLI supports collector flags plus `export`, `report weekly`, and `goals analyze` subcommands.
 - Retag flow creates a backup before rewriting tags for existing sessions.
 - Sync daemon failure/backoff does not block local collection or dashboard runtime.
+- Reporting, collector enrichment, tag-review grouping, and sync-worker repository dependencies use the service boundaries documented in `docs/architecture-overview.md`.
+- Optional collector sources degrade independently; window detection skips an invalid sample and persistence errors remain observable.
 - This file should be updated alongside roadmap changes in README.

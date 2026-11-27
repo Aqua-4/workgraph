@@ -323,11 +323,14 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
 
     def test_dashboard_daily_trend_shows_weekday_labels(self) -> None:
+        recent_day = (datetime.now(UTC) - timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=UTC),
-                    end_time=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+                    start_time=recent_day.replace(hour=9),
+                    end_time=recent_day.replace(hour=10),
                     duration_sec=3600,
                     app_name="Code",
                     process_name="Code",
@@ -346,7 +349,7 @@ class JournalApiTests(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn("Daily Trend (Last 7 Days)", response.text)
-        self.assertIn(">Fri</td>", response.text)
+        self.assertIn(f">{recent_day.strftime('%a')}</td>", response.text)
         self.assertNotIn(">2026-07-10</td>", response.text)
 
     def test_burnout_trends_compare_periods_and_ignore_invalid_or_deleted_data(
@@ -474,11 +477,14 @@ class JournalApiTests(unittest.TestCase):
         self.assertNotIn("Workload and Wellbeing Trends", response.text)
 
     def test_context_switch_rate_uses_session_transitions(self) -> None:
+        recent_day = (datetime.now(UTC) - timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=UTC),
-                    end_time=datetime(2026, 7, 10, 9, 30, tzinfo=UTC),
+                    start_time=recent_day.replace(hour=9),
+                    end_time=recent_day.replace(hour=9, minute=30),
                     duration_sec=1800,
                     app_name="Code",
                     process_name="Code",
@@ -495,8 +501,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 30, tzinfo=UTC),
-                    end_time=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+                    start_time=recent_day.replace(hour=9, minute=30),
+                    end_time=recent_day.replace(hour=10),
                     duration_sec=1800,
                     app_name="Chrome",
                     process_name="chrome",
@@ -513,8 +519,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
-                    end_time=datetime(2026, 7, 10, 10, 30, tzinfo=UTC),
+                    start_time=recent_day.replace(hour=10),
+                    end_time=recent_day.replace(hour=10, minute=30),
                     duration_sec=1800,
                     app_name="Terminal",
                     process_name="bash",
@@ -530,7 +536,11 @@ class JournalApiTests(unittest.TestCase):
                 )
             )
 
-        stats = get_summary_stats(self.db_path, days=7)
+        with patch(
+            "api.app._load_goal_targets",
+            return_value={"Client Delivery": 50.0, "Learning": 50.0},
+        ):
+            stats = get_summary_stats(self.db_path, days=7)
         self.assertEqual(stats["total_switches"], 2)
         self.assertAlmostEqual(stats["switch_rate_per_hour"], 1.33, places=2)
         self.assertIsNotNone(stats["goal_drift"])
@@ -538,11 +548,14 @@ class JournalApiTests(unittest.TestCase):
         self.assertGreater(stats["goal_drift"]["unmapped_pct"], 0)
 
     def test_summary_stats_merges_short_active_sessions_into_focus_blocks(self) -> None:
+        recent_day = (datetime.now(UTC) - timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=UTC),
-                    end_time=datetime(2026, 7, 10, 9, 12, tzinfo=UTC),
+                    start_time=recent_day.replace(hour=9),
+                    end_time=recent_day.replace(hour=9, minute=12),
                     duration_sec=720,
                     app_name="Code",
                     process_name="Code",
@@ -559,8 +572,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 12, 30, tzinfo=UTC),
-                    end_time=datetime(2026, 7, 10, 9, 25, 30, tzinfo=UTC),
+                    start_time=recent_day.replace(hour=9, minute=12, second=30),
+                    end_time=recent_day.replace(hour=9, minute=25, second=30),
                     duration_sec=780,
                     app_name="Terminal",
                     process_name="bash",
@@ -577,8 +590,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 25, 45, tzinfo=UTC),
-                    end_time=datetime(2026, 7, 10, 9, 44, 45, tzinfo=UTC),
+                    start_time=recent_day.replace(hour=9, minute=25, second=45),
+                    end_time=recent_day.replace(hour=9, minute=44, second=45),
                     duration_sec=1140,
                     app_name="Browser",
                     process_name="chrome",
@@ -595,8 +608,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 10, 30, tzinfo=UTC),
-                    end_time=datetime(2026, 7, 10, 10, 45, tzinfo=UTC),
+                    start_time=recent_day.replace(hour=10, minute=30),
+                    end_time=recent_day.replace(hour=10, minute=45),
                     duration_sec=900,
                     app_name="Mail",
                     process_name="mail",
@@ -653,6 +666,9 @@ class JournalApiTests(unittest.TestCase):
         self.assertNotIn("No devices registered yet.", response.text)
 
     def test_timeline_shows_user_and_device_context_in_standalone_mode(self) -> None:
+        recent_day = (datetime.now(UTC) - timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
         with ActivityRepository(self.db_path) as repository:
             repository._connection.execute(
                 """
@@ -682,8 +698,8 @@ class JournalApiTests(unittest.TestCase):
                     "timeline-user-device-1",
                     "user-standalone",
                     "device-standalone",
-                    datetime(2026, 7, 10, 14, 0, tzinfo=UTC).isoformat(),
-                    datetime(2026, 7, 10, 14, 30, tzinfo=UTC).isoformat(),
+                    recent_day.replace(hour=14).isoformat(),
+                    recent_day.replace(hour=14, minute=30).isoformat(),
                     1800,
                     "Code",
                     "Code",
@@ -696,8 +712,8 @@ class JournalApiTests(unittest.TestCase):
                     1,
                     "Client Delivery",
                     "linux",
-                    datetime(2026, 7, 10, 14, 30, tzinfo=UTC).isoformat(),
-                    datetime(2026, 7, 10, 14, 30, tzinfo=UTC).isoformat(),
+                    recent_day.replace(hour=14, minute=30).isoformat(),
+                    recent_day.replace(hour=14, minute=30).isoformat(),
                 ),
             )
             repository._connection.commit()

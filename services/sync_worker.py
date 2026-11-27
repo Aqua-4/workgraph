@@ -2,11 +2,49 @@ from __future__ import annotations
 
 import json
 import socket
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib import error, request
 
-from db.repository import ActivityRepository
+from services.sync_config import SyncEntity
+
+
+class SyncState(Protocol):
+    def __getitem__(self, key: str, /) -> Any: ...
+
+
+class SyncRepository(Protocol):
+    @property
+    def sync_entities(self) -> Mapping[str, SyncEntity]: ...
+
+    def get_sync_state(self) -> SyncState | None: ...
+
+    def update_sync_state(
+        self,
+        *,
+        last_push_cursor: str | None,
+        last_pull_cursor: str | None,
+    ) -> None: ...
+
+    def list_changes_since(
+        self,
+        *,
+        entity: str,
+        cursor: str | None = None,
+        limit: int = 1000,
+    ) -> Iterable[Any]: ...
+
+    def upsert_sync_entity(self, entity: str, payload: dict[str, Any]) -> None: ...
+
+    def mark_deleted(
+        self,
+        *,
+        entity: str,
+        row_uuid: str,
+        deleted_at: str,
+        updated_at: str | None = None,
+    ) -> None: ...
 
 
 class SyncClient(Protocol):
@@ -72,7 +110,7 @@ class HttpSyncClient:
 class SyncWorker:
     def __init__(
         self,
-        repository: ActivityRepository,
+        repository: SyncRepository,
         client: SyncClient,
         settings: SyncWorkerSettings | None = None,
     ) -> None:

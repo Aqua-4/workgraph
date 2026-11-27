@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
@@ -263,6 +263,135 @@ def build_tag_review_groups(
             continue
         grouped[(group["group_type"], group["group_value"])].append(session)
     return dict(grouped)
+
+
+def build_tag_review_group_page(
+    candidate_query: Callable[..., Iterable[object]],
+    *,
+    days: int,
+    only_untagged: bool = True,
+    app_name: str | None = None,
+    domain: str | None = None,
+    repo: str | None = None,
+    browser_only: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+) -> tuple[list[dict[str, object]], int]:
+    query = {
+        "days": days,
+        "only_untagged": True if browser_only else only_untagged,
+        "app_name": app_name,
+        "domain": domain,
+        "limit": 5000,
+        "offset": 0,
+    }
+    if not browser_only:
+        query["repo"] = repo
+
+    grouped: dict[tuple[str, str], dict[str, object]] = {}
+    for row in candidate_query(**query):
+        session = dict(row)
+        if browser_only:
+            group = resolve_browser_tag_review_group(session)
+        else:
+            if resolve_browser_tag_review_group(session) is not None:
+                continue
+            group = resolve_tag_review_group(session)
+        if group is None:
+            continue
+
+        group_key = (group["group_type"], group["group_value"])
+        if group_key not in grouped:
+            grouped[group_key] = {
+                "group_type": group["group_type"],
+                "group_value": group["group_value"],
+                "session_count": 0,
+                "total_seconds": 0,
+                "sample_sessions": [],
+                "dominant_apps": set(),
+                "current_tags": set(),
+                "latest_start_time": None,
+            }
+
+        item = grouped[group_key]
+        item["session_count"] = int(item["session_count"]) + 1
+        item["total_seconds"] = int(item["total_seconds"]) + int(
+            session.get("duration_sec") or 0
+        )
+        if session.get("app_name"):
+            item["dominant_apps"].add(str(session["app_name"]))
+        if session.get("tag"):
+            item["current_tags"].add(str(session["tag"]))
+        start_time = str(session.get("start_time") or "")
+        latest = item["latest_start_time"]
+        if latest is None or start_time > latest:
+            item["latest_start_time"] = start_time
+        if len(item["sample_sessions"]) < 3:
+            item["sample_sessions"].append(
+                {
+                    key: session.get(key)
+                    for key in (
+                        "id",
+                        "start_time",
+                        "app_name",
+                        "window_title",
+                        "browser_domain",
+                        "git_repo",
+                    )
+                }
+            )
+
+    groups = [
+        {
+            **item,
+            "dominant_apps": sorted(item["dominant_apps"]),
+            "current_tags": sorted(item["current_tags"]),
+        }
+        for item in grouped.values()
+    ]
+    groups.sort(
+        key=lambda item: (
+            -int(item["session_count"]),
+            -int(item["total_seconds"]),
+            str(item["group_type"]),
+            str(item["group_value"]),
+        )
+    )
+    return groups[offset : offset + limit], len(groups)
+
+
+def select_tag_review_group_sessions(
+    candidate_query: Callable[..., Iterable[object]],
+    *,
+    group_type: str,
+    group_value: str,
+    days: int,
+    only_untagged: bool = True,
+    browser_only: bool = False,
+    limit: int = 500,
+) -> list[object]:
+    sessions = candidate_query(
+        days=days,
+        only_untagged=True if browser_only else only_untagged,
+        limit=5000,
+        offset=0,
+    )
+    matched = []
+    for row in sessions:
+        session = dict(row)
+        if browser_only:
+            group = resolve_browser_tag_review_group(session)
+        else:
+            if resolve_browser_tag_review_group(session) is not None:
+                continue
+            group = resolve_tag_review_group(session)
+        if group is not None and (
+            group["group_type"] == group_type and group["group_value"] == group_value
+        ):
+            matched.append(row)
+            if len(matched) >= limit:
+                break
+    return matched
 
 
 def is_browser_app(app_name: str | None, process_name: str | None = None) -> bool:

@@ -13,7 +13,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from collector.browser_tracker import BrowserTracker
-from collector.git_tracker import GitTracker
+from collector.git_tracker import GitActivity, GitTracker
 from collector.idle_tracker import IdleState, IdleTracker
 from collector.window_tracker import WindowTracker
 from db.repository import ActivityRepository
@@ -92,6 +92,9 @@ class CollectorService:
         self._tk_root = None
         self._fallback_notified_at: dict[str, float] = {}
         self._idle_unavailable_warned = False
+        self._window_unavailable_warned = False
+        self._git_unavailable_warned = False
+        self._browser_unavailable_warned = False
         self._running = False
         wellbeing = settings.wellbeing
         self._service_status = {
@@ -251,7 +254,18 @@ class CollectorService:
             self._tk_root = None
 
     def collect_once(self) -> None:
-        active_window = self.window_tracker.get_active_window()
+        try:
+            active_window = self.window_tracker.get_active_window()
+            self._window_unavailable_warned = False
+        except Exception:
+            self._service_status["Window detection"] = "Unavailable"
+            if not self._window_unavailable_warned:
+                LOGGER.warning(
+                    "Window detection failed; skipping this collection sample",
+                    exc_info=True,
+                )
+                self._window_unavailable_warned = True
+            return
         self._service_status["Window detection"] = (
             "Unavailable" if active_window.app_name == "Unknown" else "Running"
         )
@@ -275,11 +289,23 @@ class CollectorService:
             self._service_status["Idle checks"] = (
                 "Enabled" if idle_state.available else "Unavailable"
             )
-        git_activity = self.git_tracker.get_activity(
-            pid=active_window.process_id,
-            app_name=active_window.app_name,
-            window_title=active_window.window_title,
-        )
+        try:
+            git_activity = self.git_tracker.get_activity(
+                pid=active_window.process_id,
+                app_name=active_window.app_name,
+                window_title=active_window.window_title,
+            )
+            self._service_status["Git tracking"] = "Enabled"
+            self._git_unavailable_warned = False
+        except Exception:
+            git_activity = GitActivity(None, None, None, [])
+            self._service_status["Git tracking"] = "Unavailable"
+            if not self._git_unavailable_warned:
+                LOGGER.warning(
+                    "Git tracking failed; continuing without Git metadata",
+                    exc_info=True,
+                )
+                self._git_unavailable_warned = True
 
         is_idle = idle_state.is_idle
         idle_seconds = idle_state.idle_seconds
@@ -393,12 +419,26 @@ class CollectorService:
                     self._service_status["Time announcements"] = "Failed"
                     LOGGER.exception("Wellbeing time announcement update failed")
 
+        try:
+            browser_domain = self.browser_tracker.get_domain(active_window)
+            self._service_status["Browser tracking"] = "Enabled"
+            self._browser_unavailable_warned = False
+        except Exception:
+            browser_domain = None
+            self._service_status["Browser tracking"] = "Unavailable"
+            if not self._browser_unavailable_warned:
+                LOGGER.warning(
+                    "Browser tracking failed; continuing without browser metadata",
+                    exc_info=True,
+                )
+                self._browser_unavailable_warned = True
+
         sample = ActivitySample(
             observed_at=utc_now(),
             app_name=active_window.app_name,
             process_name=active_window.process_name,
             window_title=active_window.window_title,
-            browser_domain=self.browser_tracker.get_domain(active_window),
+            browser_domain=browser_domain,
             is_idle=is_idle,
             idle_seconds=idle_seconds,
             platform=active_window.platform,

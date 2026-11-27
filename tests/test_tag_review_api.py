@@ -89,7 +89,9 @@ class TagReviewApiTests(unittest.TestCase):
                 )
             )
 
-        response = self.client.get("/api/tag-review/groups", params={"days": 3650})
+        response = self.client.get(
+            "/api/browser-tag-review/groups", params={"days": 3650}
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -139,7 +141,7 @@ class TagReviewApiTests(unittest.TestCase):
             )
 
         response = self.client.post(
-            "/api/tag-review/assign-group",
+            "/api/browser-tag-review/assign-group",
             json={
                 "group_type": "domain",
                 "group_value": "tradingview.com",
@@ -161,11 +163,11 @@ class TagReviewApiTests(unittest.TestCase):
                 days=3650,
                 selected_tag="Finance",
             )
-            grouped_sessions = repository.list_tag_review_group_sessions(
-                group_type="domain",
-                group_value="tradingview.com",
+            grouped_sessions = repository.list_tag_review_candidates(
                 days=3650,
                 only_untagged=False,
+                domain="tradingview.com",
+                limit=5000,
             )
 
         self.assertEqual(len(grouped_sessions), 2)
@@ -246,7 +248,9 @@ class TagReviewApiTests(unittest.TestCase):
                 )
             )
 
-        response = self.client.get("/api/tag-review/groups", params={"days": 3650})
+        response = self.client.get(
+            "/api/browser-tag-review/groups", params={"days": 3650}
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -278,11 +282,11 @@ class TagReviewApiTests(unittest.TestCase):
             )
 
         detail_response = self.client.get(
-            "/api/tag-review/groups/browser_context/YouTube Music",
+            "/api/browser-tag-review/groups/browser_context/YouTube Music",
             params={"days": 3650},
         )
         assign_response = self.client.post(
-            "/api/tag-review/assign-group",
+            "/api/browser-tag-review/assign-group",
             json={
                 "group_type": "browser_context",
                 "group_value": "YouTube Music",
@@ -527,7 +531,7 @@ class TagReviewApiTests(unittest.TestCase):
                 )
             )
 
-        response = self.client.get("/tag-review", params={"days": 3650})
+        response = self.client.get("/browser-tag-review", params={"days": 3650})
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Inspect Sessions", response.text)
