@@ -3377,6 +3377,242 @@ def get_sync_server_overview(
     }
 
 
+def get_burnout_trends(db_path: Path, as_of: datetime | None = None) -> dict:
+    """Summarize local workload and numeric reflection trends without scoring risk."""
+    reference = as_of or datetime.now(UTC)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=UTC)
+    period_end = reference.astimezone(UTC).date()
+    recent_start = period_end - timedelta(days=7)
+    baseline_start = period_end - timedelta(days=28)
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    tables = {
+        row["name"]
+        for row in cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    }
+
+    activity_days: dict[str, dict[str, float]] = {}
+    focus_sessions: dict[str, list[tuple[datetime, datetime, int]]] = {}
+    if "activity_sessions" in tables:
+        cursor.execute(
+            """
+                 SELECT start_time, end_time, duration_sec, app_name,
+                     window_title, browser_domain
+            FROM activity_sessions
+            WHERE start_time >= ? AND start_time < ?
+              AND is_idle = 0 AND deleted_at IS NULL
+            ORDER BY start_time, id
+            """,
+            (
+                datetime.combine(baseline_start, datetime.min.time(), UTC).isoformat(),
+                datetime.combine(period_end, datetime.min.time(), UTC).isoformat(),
+            ),
+        )
+        for row in cursor.fetchall():
+            day = row["start_time"][:10]
+            duration = int(row["duration_sec"] or 0)
+            activity = activity_days.setdefault(
+                day, {"active_seconds": 0.0, "meeting_seconds": 0.0}
+            )
+            activity["active_seconds"] += duration
+
+            app_name = (row["app_name"] or "").lower()
+            title = (row["window_title"] or "").lower()
+            domain = (row["browser_domain"] or "").lower()
+            if (
+                any(name in app_name for name in ("teams", "zoom", "webex", "slack"))
+                or any(
+                    name in domain
+                    for name in (
+                        "meet.google.com",
+                        "teams.microsoft.com",
+                        "zoom.us",
+                        "webex.com",
+                    )
+                )
+                or any(name in title for name in ("meeting", "standup", "huddle"))
+            ):
+                activity["meeting_seconds"] += duration
+
+            start_time = _parse_iso_datetime(row["start_time"])
+            end_time = _parse_iso_datetime(row["end_time"] or row["start_time"])
+            focus_sessions.setdefault(day, []).append((start_time, end_time, duration))
+
+    daily_focus_max: dict[str, float] = {}
+    for day, sessions in focus_sessions.items():
+        block_end: datetime | None = None
+        block_seconds = 0
+        longest_seconds = 0
+        for start_time, end_time, duration in sessions:
+            if block_end is None or (start_time - block_end).total_seconds() > 90:
+                longest_seconds = max(longest_seconds, block_seconds)
+                block_seconds = duration
+            else:
+                block_seconds += duration
+            block_end = max(block_end, end_time) if block_end else end_time
+        daily_focus_max[day] = max(longest_seconds, block_seconds) / 60
+
+    reflection_rows: list[sqlite3.Row] = []
+    if "daily_reflections" in tables:
+        reflection_columns = {
+            row["name"]
+            for row in cursor.execute("PRAGMA table_info(daily_reflections)").fetchall()
+        }
+        deleted_filter = (
+            "AND deleted_at IS NULL" if "deleted_at" in reflection_columns else ""
+        )
+        cursor.execute(
+            f"""
+            SELECT date, energy, stress FROM daily_reflections
+            WHERE date >= ? AND date < ? {deleted_filter}
+            """,
+            (baseline_start.isoformat(), period_end.isoformat()),
+        )
+        reflection_rows = list(cursor.fetchall())
+    conn.close()
+
+    recent_days = {
+        day: values
+        for day, values in activity_days.items()
+        if day >= recent_start.isoformat()
+    }
+    baseline_days = {
+        day: values
+        for day, values in activity_days.items()
+        if day < recent_start.isoformat()
+    }
+    recent_reflections = [
+        row for row in reflection_rows if row["date"] >= recent_start.isoformat()
+    ]
+    baseline_reflections = [
+        row for row in reflection_rows if row["date"] < recent_start.isoformat()
+    ]
+
+    def build_metric(
+        key: str,
+        label: str,
+        unit: str,
+        recent_values: list[float],
+        baseline_values: list[float],
+        min_recent: int,
+        min_baseline: int,
+        digits: int = 1,
+    ) -> dict:
+        recent_count = len(recent_values)
+        baseline_count = len(baseline_values)
+        ready = recent_count >= min_recent and baseline_count >= min_baseline
+        recent_average = sum(recent_values) / recent_count if recent_count else None
+        baseline_average = (
+            sum(baseline_values) / baseline_count if baseline_count else None
+        )
+        return {
+            "key": key,
+            "label": label,
+            "unit": unit,
+            "recent": round(recent_average, digits)
+            if recent_average is not None
+            else None,
+            "baseline": round(baseline_average, digits)
+            if baseline_average is not None
+            else None,
+            "delta": (
+                round(recent_average - baseline_average, digits)
+                if ready and recent_average is not None and baseline_average is not None
+                else None
+            ),
+            "recent_days": recent_count,
+            "baseline_days": baseline_count,
+            "min_recent_days": min_recent,
+            "min_baseline_days": min_baseline,
+            "ready": ready,
+        }
+
+    activity_metrics = [
+        build_metric(
+            "active_hours",
+            "Active hours per recorded day",
+            "hours/day",
+            [value["active_seconds"] / 3600 for value in recent_days.values()],
+            [value["active_seconds"] / 3600 for value in baseline_days.values()],
+            4,
+            11,
+            2,
+        ),
+        build_metric(
+            "extended_days",
+            "Recorded days with 8+ active hours",
+            "% of days",
+            [
+                100 * (value["active_seconds"] >= 8 * 3600)
+                for value in recent_days.values()
+            ],
+            [
+                100 * (value["active_seconds"] >= 8 * 3600)
+                for value in baseline_days.values()
+            ],
+            4,
+            11,
+        ),
+        build_metric(
+            "meeting_hours",
+            "Meeting-time proxy per recorded day",
+            "hours/day",
+            [value["meeting_seconds"] / 3600 for value in recent_days.values()],
+            [value["meeting_seconds"] / 3600 for value in baseline_days.values()],
+            4,
+            11,
+            2,
+        ),
+        build_metric(
+            "focus_minutes",
+            "Longest focus block per recorded day",
+            "minutes/day",
+            [daily_focus_max.get(day, 0) for day in recent_days],
+            [daily_focus_max.get(day, 0) for day in baseline_days],
+            4,
+            11,
+        ),
+    ]
+
+    def reflection_values(rows: list[sqlite3.Row], field: str) -> list[float]:
+        values = []
+        for row in rows:
+            value = row[field]
+            if value is not None and 1 <= value <= 10:
+                values.append(float(value))
+        return values
+
+    wellbeing_metrics = []
+    for field, label in (
+        ("energy", "Self-reported energy"),
+        ("stress", "Self-reported stress"),
+    ):
+        recent_values = reflection_values(recent_reflections, field)
+        baseline_values = reflection_values(baseline_reflections, field)
+        wellbeing_metrics.append(
+            build_metric(
+                field,
+                label,
+                "rating / 10",
+                recent_values,
+                baseline_values,
+                3,
+                7,
+            )
+        )
+
+    return {
+        "period_label": "7 recent complete UTC days vs prior 21 complete UTC days",
+        "activity_metrics": activity_metrics,
+        "wellbeing_metrics": wellbeing_metrics,
+    }
+
+
 def get_summary_stats(db_path: Path, days: int = 7) -> dict:
     """Get summary statistics for the past N days."""
     conn = sqlite3.connect(db_path)
@@ -3841,6 +4077,7 @@ async def dashboard(
     template = jinja_env.get_template("dashboard.html")
     return template.render(
         stats=stats,
+        burnout_trends=get_burnout_trends(db_path),
         sync_health=sync_health,
         client_sync=client_sync_status,
         client_sync_debug=client_sync_debug,

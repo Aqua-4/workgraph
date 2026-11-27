@@ -63,7 +63,7 @@ Verification basis:
 | Goal drift detection    | Implemented | Planned-vs-actual goal allocation drift via CLI                                                         |
 | Focus block analysis    | Partial     | Core focus metrics exist in dashboard stats                                                             |
 | Weekly/monthly reports  | Implemented | Weekly and monthly CLI reports are implemented (`workgraph report weekly` / `workgraph report monthly`) |
-| Burnout risk indicators | Planned     | No burnout model/heuristics yet                                                                         |
+| Burnout risk indicators | Partial     | Local trends cover hours, extended days, meeting/focus proxies, and energy/stress ratings; no risk score or diagnosis |
 | Trend analysis          | Partial     | 7-day trend rows implemented in dashboard stats                                                         |
 
 ## Wellbeing Features

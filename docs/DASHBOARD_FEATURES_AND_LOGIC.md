@@ -95,6 +95,19 @@ Journal behavior:
 
 - Journal UI and journal-related APIs are disabled in sync-server mode.
 
+## Workload and Wellbeing Trends
+
+In standalone and sync-client modes, the dashboard handler calls `get_burnout_trends(db_path)` in `api/app.py` and renders its results in `api/templates/dashboard.html`. It reads the local `activity_sessions` and `daily_reflections` tables, including in sync-client mode; it does not use server-side or sync analytics. Sync-server mode uses a separate template and does not show this section.
+
+Comparison windows use the latest 7 complete UTC days and the preceding 21 complete UTC days. The view includes:
+
+- Average active hours per recorded day and the share of recorded days with at least 8 active hours (extended days).
+- Average meeting-time proxy and longest focus block per recorded day; focus blocks join active sessions separated by at most 90 seconds.
+- Average energy and stress ratings from `daily_reflections`; free-text reflection fields are not queried or displayed.
+- Coverage counts for each comparison. Activity metrics require at least 4 recent and 11 baseline recorded days; reflection metrics require at least 3 recent and 7 baseline numeric ratings. Otherwise, the comparison is marked as having insufficient data.
+
+Only non-idle, non-deleted activity sessions are included. Reflection values outside the API's 1-10 range and deleted reflections are excluded. Meeting time is inferred from app/domain/title patterns, and focus blocks are inferred by joining nearby sessions; neither establishes attendance, recovery, workload quality, or burnout. The section presents descriptive patterns, not a risk score or diagnosis.
+
 ## Sync Server Dashboard Sections
 
 Rendered in `api/templates/sync_server_dashboard.html`:

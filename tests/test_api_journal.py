@@ -1,12 +1,13 @@
-from datetime import datetime, timezone
+import sqlite3
+import unittest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from api.app import app, get_summary_stats, _human_datetime
+from api.app import _human_datetime, app, get_burnout_trends, get_summary_stats
 from db.repository import ActivityRepository
 from workgraph.models import ActivitySession
 
@@ -21,7 +22,9 @@ class JournalApiTests(unittest.TestCase):
             pass
 
         self.patcher = patch("api.app.get_db_path", return_value=self.db_path)
-        self.mode_patcher = patch("api.app._configured_dashboard_mode", return_value="standalone")
+        self.mode_patcher = patch(
+            "api.app._configured_dashboard_mode", return_value="standalone"
+        )
         self.patcher.start()
         self.mode_patcher.start()
         self.client = TestClient(app)
@@ -52,8 +55,10 @@ class JournalApiTests(unittest.TestCase):
 
     def test_human_datetime_formats_dates_and_timestamps(self) -> None:
         self.assertEqual(_human_datetime("2026-07-10"), "Jul 10, 2026")
-        expected = datetime(2026, 7, 10, 15, 30, tzinfo=timezone.utc)
-        expected_text = expected.astimezone().strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+        expected = datetime(2026, 7, 10, 15, 30, tzinfo=UTC)
+        expected_text = (
+            expected.astimezone().strftime("%b %d, %Y, %I:%M %p").replace(" 0", " ")
+        )
         self.assertEqual(_human_datetime("2026-07-10T15:30:00+00:00"), expected_text)
 
     def test_update_journal_entry(self) -> None:
@@ -99,8 +104,8 @@ class JournalApiTests(unittest.TestCase):
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 10, 15, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 10, 45, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 10, 15, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 10, 45, tzinfo=UTC),
                     duration_sec=1800,
                     app_name="Code",
                     process_name="Code",
@@ -127,7 +132,9 @@ class JournalApiTests(unittest.TestCase):
         )
         journal_id = create_response.json()["id"]
 
-        correlate_response = self.client.get(f"/api/journal/{journal_id}/correlated-sessions")
+        correlate_response = self.client.get(
+            f"/api/journal/{journal_id}/correlated-sessions"
+        )
         self.assertEqual(correlate_response.status_code, 200)
 
         payload = correlate_response.json()
@@ -170,8 +177,8 @@ class JournalApiTests(unittest.TestCase):
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 8, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 9, 0, tzinfo=UTC),
                     duration_sec=3600,
                     app_name="Code",
                     process_name="Code",
@@ -203,7 +210,9 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(get_response.status_code, 200)
         self.assertEqual(get_response.json()["reflection"]["wins"], "Good focus block")
 
-        correlate_response = self.client.get("/api/reflections/2026-07-10/correlated-sessions")
+        correlate_response = self.client.get(
+            "/api/reflections/2026-07-10/correlated-sessions"
+        )
         self.assertEqual(correlate_response.status_code, 200)
         correlate_payload = correlate_response.json()
         self.assertEqual(correlate_payload["summary"]["session_count"], 1)
@@ -226,7 +235,11 @@ class JournalApiTests(unittest.TestCase):
 
         list_response = self.client.get(
             "/api/work-events",
-            params={"event_type": "Incident", "impact": "High", "project": "MCP Platform"},
+            params={
+                "event_type": "Incident",
+                "impact": "High",
+                "project": "MCP Platform",
+            },
         )
         self.assertEqual(list_response.status_code, 200)
         payload = list_response.json()
@@ -237,8 +250,8 @@ class JournalApiTests(unittest.TestCase):
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 10, 45, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 11, 15, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 10, 45, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 11, 15, tzinfo=UTC),
                     duration_sec=1800,
                     app_name="Code",
                     process_name="Code",
@@ -291,7 +304,9 @@ class JournalApiTests(unittest.TestCase):
         self.assertEqual(updated_get_response.status_code, 200)
         self.assertEqual(updated_get_response.json()["event"]["event_type"], "Decision")
 
-        correlate_response = self.client.get(f"/api/work-events/{event_id}/correlated-sessions")
+        correlate_response = self.client.get(
+            f"/api/work-events/{event_id}/correlated-sessions"
+        )
         self.assertEqual(correlate_response.status_code, 200)
         correlate_payload = correlate_response.json()
         self.assertEqual(correlate_payload["summary"]["session_count"], 1)
@@ -311,8 +326,8 @@ class JournalApiTests(unittest.TestCase):
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
                     duration_sec=3600,
                     app_name="Code",
                     process_name="Code",
@@ -334,12 +349,136 @@ class JournalApiTests(unittest.TestCase):
         self.assertIn(">Fri</td>", response.text)
         self.assertNotIn(">2026-07-10</td>", response.text)
 
+    def test_burnout_trends_compare_periods_and_ignore_invalid_or_deleted_data(
+        self,
+    ) -> None:
+        as_of = datetime(2026, 11, 28, tzinfo=UTC)
+        conn = sqlite3.connect(self.db_path)
+
+        def insert_session(
+            day: str, duration: int, app_name: str, deleted_at: str | None = None
+        ) -> None:
+            start_time = datetime.fromisoformat(f"{day}T09:00:00+00:00")
+            end_time = start_time + timedelta(seconds=duration)
+            conn.execute(
+                """
+                INSERT INTO activity_sessions (
+                    start_time, end_time, duration_sec, app_name, process_name,
+                    window_title, browser_domain, is_idle, idle_seconds,
+                    platform, deleted_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 'linux', ?)
+                """,
+                (
+                    start_time.isoformat(),
+                    end_time.isoformat(),
+                    duration,
+                    app_name,
+                    app_name,
+                    "Daily work",
+                    None,
+                    deleted_at,
+                ),
+            )
+
+        def insert_reflection(
+            day: str, energy: int, stress: int, deleted_at: str | None = None
+        ) -> None:
+            timestamp = f"{day}T12:00:00+00:00"
+            conn.execute(
+                """
+                INSERT INTO daily_reflections (
+                    date, wins, problems, tomorrow, energy, stress,
+                    created_at, updated_at, deleted_at
+                ) VALUES (?, 'private reflection text', 'private reflection text',
+                          'private reflection text', ?, ?, ?, ?, ?)
+                """,
+                (day, energy, stress, timestamp, timestamp, deleted_at),
+            )
+
+        for day_offset in range(12):
+            day = (
+                (datetime(2026, 10, 31) + timedelta(days=day_offset)).date().isoformat()
+            )
+            insert_session(day, 2 * 3600, "Code")
+        for day_offset in range(4):
+            day = (
+                (datetime(2026, 11, 21) + timedelta(days=day_offset)).date().isoformat()
+            )
+            insert_session(day, 9 * 3600, "Teams")
+        insert_session("2026-11-25", 5 * 3600, "Code", "2026-11-26T00:00:00+00:00")
+
+        for day_offset in range(7):
+            day = (
+                (datetime(2026, 10, 31) + timedelta(days=day_offset)).date().isoformat()
+            )
+            insert_reflection(day, 4, 3)
+        for day_offset in range(3):
+            day = (
+                (datetime(2026, 11, 21) + timedelta(days=day_offset)).date().isoformat()
+            )
+            insert_reflection(day, 8, 7)
+        insert_reflection("2026-11-24", 11, 0)
+        insert_reflection("2026-11-25", 1, 1, "2026-11-26T00:00:00+00:00")
+        conn.commit()
+        conn.close()
+
+        trends = get_burnout_trends(self.db_path, as_of=as_of)
+        metrics = {
+            metric["key"]: metric
+            for metric in trends["activity_metrics"] + trends["wellbeing_metrics"]
+        }
+
+        self.assertEqual(metrics["active_hours"]["recent"], 9.0)
+        self.assertEqual(metrics["active_hours"]["baseline"], 2.0)
+        self.assertEqual(metrics["active_hours"]["recent_days"], 4)
+        self.assertEqual(metrics["extended_days"]["recent"], 100.0)
+        self.assertEqual(metrics["meeting_hours"]["recent"], 9.0)
+        self.assertEqual(metrics["energy"]["recent"], 8.0)
+        self.assertEqual(metrics["energy"]["baseline"], 4.0)
+        self.assertEqual(metrics["energy"]["recent_days"], 3)
+        self.assertEqual(metrics["stress"]["recent_days"], 3)
+        self.assertNotIn("private reflection text", str(trends))
+
+    def test_burnout_trends_require_sufficient_coverage(self) -> None:
+        trends = get_burnout_trends(
+            self.db_path,
+            as_of=datetime(2026, 11, 28, tzinfo=UTC),
+        )
+
+        for metric in trends["activity_metrics"] + trends["wellbeing_metrics"]:
+            self.assertFalse(metric["ready"])
+            self.assertIsNone(metric["delta"])
+
+        empty_db_path = Path(self.temp_dir.name) / "empty.db"
+        empty_trends = get_burnout_trends(
+            empty_db_path,
+            as_of=datetime(2026, 11, 28, tzinfo=UTC),
+        )
+        for metric in (
+            empty_trends["activity_metrics"] + empty_trends["wellbeing_metrics"]
+        ):
+            self.assertFalse(metric["ready"])
+            self.assertIsNone(metric["recent"])
+
+    def test_burnout_trends_are_only_rendered_on_local_dashboard_modes(self) -> None:
+        for mode in ("standalone", "sync-client"):
+            with patch("api.app._configured_dashboard_mode", return_value=mode):
+                response = self.client.get("/")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Workload and Wellbeing Trends", response.text)
+            self.assertIn("Not enough data for a comparison.", response.text)
+
+        with patch("api.app._configured_dashboard_mode", return_value="sync-server"):
+            response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Workload and Wellbeing Trends", response.text)
+
     def test_context_switch_rate_uses_session_transitions(self) -> None:
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 9, 30, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 9, 30, tzinfo=UTC),
                     duration_sec=1800,
                     app_name="Code",
                     process_name="Code",
@@ -356,8 +495,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 30, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 9, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
                     duration_sec=1800,
                     app_name="Chrome",
                     process_name="chrome",
@@ -374,8 +513,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 10, 30, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 10, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 10, 30, tzinfo=UTC),
                     duration_sec=1800,
                     app_name="Terminal",
                     process_name="bash",
@@ -402,8 +541,8 @@ class JournalApiTests(unittest.TestCase):
         with ActivityRepository(self.db_path) as repository:
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 9, 12, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 9, 0, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 9, 12, tzinfo=UTC),
                     duration_sec=720,
                     app_name="Code",
                     process_name="Code",
@@ -420,8 +559,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 12, 30, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 9, 25, 30, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 9, 12, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 9, 25, 30, tzinfo=UTC),
                     duration_sec=780,
                     app_name="Terminal",
                     process_name="bash",
@@ -438,8 +577,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 9, 25, 45, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 9, 44, 45, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 9, 25, 45, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 9, 44, 45, tzinfo=UTC),
                     duration_sec=1140,
                     app_name="Browser",
                     process_name="chrome",
@@ -456,8 +595,8 @@ class JournalApiTests(unittest.TestCase):
             )
             repository.save_session(
                 ActivitySession(
-                    start_time=datetime(2026, 7, 10, 10, 30, tzinfo=timezone.utc),
-                    end_time=datetime(2026, 7, 10, 10, 45, tzinfo=timezone.utc),
+                    start_time=datetime(2026, 7, 10, 10, 30, tzinfo=UTC),
+                    end_time=datetime(2026, 7, 10, 10, 45, tzinfo=UTC),
                     duration_sec=900,
                     app_name="Mail",
                     process_name="mail",
@@ -543,8 +682,8 @@ class JournalApiTests(unittest.TestCase):
                     "timeline-user-device-1",
                     "user-standalone",
                     "device-standalone",
-                    datetime(2026, 7, 10, 14, 0, tzinfo=timezone.utc).isoformat(),
-                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
+                    datetime(2026, 7, 10, 14, 0, tzinfo=UTC).isoformat(),
+                    datetime(2026, 7, 10, 14, 30, tzinfo=UTC).isoformat(),
                     1800,
                     "Code",
                     "Code",
@@ -557,8 +696,8 @@ class JournalApiTests(unittest.TestCase):
                     1,
                     "Client Delivery",
                     "linux",
-                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
-                    datetime(2026, 7, 10, 14, 30, tzinfo=timezone.utc).isoformat(),
+                    datetime(2026, 7, 10, 14, 30, tzinfo=UTC).isoformat(),
+                    datetime(2026, 7, 10, 14, 30, tzinfo=UTC).isoformat(),
                 ),
             )
             repository._connection.commit()

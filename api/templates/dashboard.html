@@ -338,6 +338,60 @@
         </div>
     </div>
 
+    <h2>Workload and Wellbeing Trends</h2>
+    <div class="card">
+        <p class="text-body-secondary" style="font-size: 0.9em;">
+            {{ burnout_trends.period_label }}. These are descriptive patterns, not a burnout diagnosis.
+            Meeting time is an activity-based proxy; energy and stress are self-reported.
+        </p>
+
+        <h3>Observed Activity Patterns</h3>
+        <div class="row g-3" style="margin-bottom: 12px;">
+            {% for metric in burnout_trends.activity_metrics %}
+            <div class="col-12 col-md-6 col-xl-3 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
+                <div class="stat-label">{{ metric.label }}</div>
+                {% if metric.ready %}
+                <div class="stat-value" style="font-size: 1.25em;">
+                    {{ "%.1f"|format(metric.recent) }} {{ metric.unit }}
+                </div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 8px;">
+                    Baseline {{ "%.1f"|format(metric.baseline) }} {{ metric.unit }}
+                    ({{ "%+.1f"|format(metric.delta) }})
+                </div>
+                {% else %}
+                <div class="text-body-secondary" style="margin-top: 8px;">Not enough data for a comparison.</div>
+                {% endif %}
+                <div class="stat-label" style="font-size: 0.75em; margin-top: 8px;">
+                    Recorded days: {{ metric.recent_days }}/7 recent, {{ metric.baseline_days }}/21 baseline
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h3>Self-Reported Ratings</h3>
+        <div class="row g-3" style="margin-bottom: 0;">
+            {% for metric in burnout_trends.wellbeing_metrics %}
+            <div class="col-12 col-md-6 stat-box" style="box-shadow: none; border: 1px solid var(--bs-border-color);">
+                <div class="stat-label">{{ metric.label }}</div>
+                {% if metric.ready %}
+                <div class="stat-value" style="font-size: 1.25em;">
+                    {{ "%.1f"|format(metric.recent) }} / 10
+                </div>
+                <div class="stat-label" style="font-size: 0.8em; margin-top: 8px;">
+                    Baseline {{ "%.1f"|format(metric.baseline) }} / 10
+                    ({{ "%+.1f"|format(metric.delta) }})
+                </div>
+                {% else %}
+                <div class="text-body-secondary" style="margin-top: 8px;">Not enough data for a comparison.</div>
+                {% endif %}
+                <div class="stat-label" style="font-size: 0.75em; margin-top: 8px;">
+                    Ratings recorded: {{ metric.recent_days }}/7 recent, {{ metric.baseline_days }}/21 baseline
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
     {% if stats.goal_drift %}
     <h2>Goal Drift</h2>
     <div class="card">
