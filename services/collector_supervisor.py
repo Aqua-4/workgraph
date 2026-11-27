@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 
+from services.logging_config import configure_logging
 from services.wellbeing_delivery import error_beep
 
 LOGGER = logging.getLogger(__name__)
@@ -85,10 +86,7 @@ class CollectorSupervisor:
 
     @staticmethod
     def _configure_logging() -> None:
-        logging.basicConfig(
-            level=logging.INFO,
-            format="[%(asctime)s] %(name)s: %(message)s",
-        )
+        configure_logging()
 
 
 def main() -> int:

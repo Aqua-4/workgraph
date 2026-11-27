@@ -19,6 +19,7 @@ from collector.window_tracker import WindowTracker
 from db.repository import ActivityRepository
 from processor.session_builder import SessionBuilder
 from services.activity_tagger import ActivityTagger
+from services.logging_config import configure_logging as _configure_logging
 from services.wellbeing import WellbeingPrompt, WellbeingService, WellbeingSettings
 from services.wellbeing_delivery import WellbeingDelivery, read_control_commands
 from services.wellbeing_ui import TkWellbeingUI
@@ -36,6 +37,7 @@ class CollectorSettings(BaseModel):
     session_gap_seconds: int = 90
     browser_history_lookback_seconds: int = 600
     log_path: str = "logs/workgraph.log"
+    log_level: str = "INFO"
     identity_path: str = "config/identity.json"
     dashboard_mode: Literal["standalone", "sync-client", "sync-server"] = "standalone"
     wellbeing: WellbeingSettings = Field(default_factory=WellbeingSettings)
@@ -537,13 +539,5 @@ class CollectorService:
         self.wellbeing_delivery.notify_reminder(prompt.title, prompt.message)
 
 
-def configure_logging(log_path: str) -> None:
-    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[
-            logging.FileHandler(log_path),
-            logging.StreamHandler(),
-        ],
-    )
+def configure_logging(log_path: str, log_level: str = "INFO") -> None:
+    _configure_logging(log_path, log_level)

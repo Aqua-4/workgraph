@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import shutil
 import sqlite3
 import zipfile
@@ -37,6 +38,7 @@ DEFAULT_SETTINGS_PATH = Path("config/settings.yaml")
 PERSONAL_SETTINGS_PATH = Path("config/my-settings.yaml")
 DEFAULT_IDENTITY_PATH = Path("config/identity.json")
 PERSONAL_IDENTITY_PATH = Path("config/my-identity.json")
+LOGGER = logging.getLogger(__name__)
 
 
 def _default_config_path_str() -> str:
@@ -529,10 +531,12 @@ def main() -> None:
     elif args.retag_existing:
         retag_existing_sessions(args.config, safe=args.safe)
     elif args.web:
+        settings = load_settings(args.config)
+        configure_logging(settings.log_path, settings.log_level)
         start_web_dashboard(args.port)
     else:
         settings = load_settings(args.config)
-        configure_logging(settings.log_path)
+        configure_logging(settings.log_path, settings.log_level)
 
         service = CollectorService(settings)
         if args.once:
@@ -1969,7 +1973,7 @@ def retag_existing_sessions(config_path: str, *, safe: bool = False) -> None:
     When safe=True, only sessions with an empty tag are eligible for updates.
     """
     settings = load_settings(config_path)
-    configure_logging(settings.log_path)
+    configure_logging(settings.log_path, settings.log_level)
 
     repository = ActivityRepository(settings.database_path)
     try:
@@ -2041,8 +2045,8 @@ def start_web_dashboard(port: int = 8000) -> None:
         print("Install with: uv sync")
         return
 
-    print(f"Starting WorkGraph Dashboard on http://127.0.0.1:{port}")
-    print("Press Ctrl+C to stop the server")
+    LOGGER.info("Starting WorkGraph Dashboard on http://127.0.0.1:%s", port)
+    LOGGER.info("Press Ctrl+C to stop the server")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
 
 

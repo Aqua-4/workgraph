@@ -34,6 +34,7 @@ Controls the core collection parameters:
 | `session_gap_seconds`              | `90`                 | Maximum gap (in seconds) before a new session starts                              |
 | `browser_history_lookback_seconds` | `600`                | How far back to look in browser history for domain detection (10 minutes default) |
 | `log_path`                         | `logs/workgraph.log` | Where to write debug logs                                                         |
+| `log_level`                        | `INFO`               | Minimum log level: DEBUG, INFO, WARNING, ERROR, or CRITICAL                       |
 
 #### Personal Override (recommended)
 

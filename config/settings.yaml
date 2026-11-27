@@ -4,6 +4,7 @@ idle_threshold_seconds: 300
 session_gap_seconds: 90
 browser_history_lookback_seconds: 600
 log_path: logs/workgraph.log
+log_level: INFO
 identity_path: config/identity.json
 dashboard_mode: standalone
 break_reminders_enabled: true

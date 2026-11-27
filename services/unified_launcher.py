@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 
+from services.logging_config import configure_logging
 from services.wellbeing_delivery import error_beep
 
 LOGGER = logging.getLogger(__name__)
@@ -14,10 +15,7 @@ LOGGER = logging.getLogger(__name__)
 
 def setup_logging() -> None:
     """Setup logging for the launcher."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(asctime)s] %(name)s: %(message)s",
-    )
+    configure_logging()
 
 
 def run_unified(
