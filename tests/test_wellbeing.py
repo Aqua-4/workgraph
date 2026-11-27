@@ -899,6 +899,63 @@ def test_collector_wires_samples_and_controls(tmp_path: Path) -> None:
     collector.wellbeing_delivery.close()
 
 
+def test_collector_splits_session_when_native_idle_becomes_unavailable(
+    tmp_path: Path,
+) -> None:
+    provider = MagicMock()
+    provider.requires_idle_for_collection = True
+    provider.get_active_window.return_value = ActiveWindow(
+        "code", "code", "work", 42, "linux"
+    )
+    provider.get_idle_seconds.side_effect = [0, None, 0]
+    with patch(
+        "services.collector_service.create_platform_provider", return_value=provider
+    ):
+        collector = CollectorService(
+            CollectorSettings(
+                database_path=str(tmp_path / "activity.db"),
+                identity_path=str(tmp_path / "identity.json"),
+            )
+        )
+    collector._platform_provider_started = True
+    collector.git_tracker.get_activity = lambda **kwargs: GitActivity(
+        None, None, None, []
+    )
+    collector.browser_tracker.get_domain = lambda window: None
+    try:
+        collector.collect_once()
+        assert collector.session_builder.current is not None
+        collector.collect_once()
+        assert collector.session_builder.current is None
+        assert len(collector.repository.recent_sessions()) == 1
+        collector.collect_once()
+        assert collector.session_builder.current is not None
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
+
+
+def test_collector_starts_and_closes_native_provider(tmp_path: Path) -> None:
+    provider = MagicMock()
+    with patch(
+        "services.collector_service.create_platform_provider", return_value=provider
+    ):
+        collector = CollectorService(
+            CollectorSettings(
+                database_path=str(tmp_path / "activity.db"),
+                identity_path=str(tmp_path / "identity.json"),
+            )
+        )
+    with (
+        patch.object(collector, "_run_tk_loop", side_effect=collector.stop),
+        patch("services.collector_service.signal.signal"),
+    ):
+        collector.run_forever()
+
+    provider.start.assert_called_once()
+    provider.close.assert_called_once()
+
+
 def test_collector_isolates_optional_tracker_failures_and_recovers(
     tmp_path: Path,
 ) -> None:

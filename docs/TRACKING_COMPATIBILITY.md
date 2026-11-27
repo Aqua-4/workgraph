@@ -40,16 +40,29 @@ no native tracking backend for that environment.
 | Windows XP/7 | Not supported | Not supported | The project requires Python 3.11+, which does not support these versions. Supporting them would require a separate legacy runtime/collector and a security policy. |
 | Linux X11, including GNOME, KDE, XFCE and Cinnamon X11 sessions | Partial | Partial | Uses `xprop` with `xdotool` fallback for windows and `xprintidle` for idle. Availability and window properties depend on the installed tools and desktop. |
 | Linux GNOME Wayland | No native backend; XWayland results may be incomplete | No native backend | Investigate a GNOME Shell integration and supported idle mechanism; validate per desktop version. |
-| Linux KDE Plasma Wayland | No native backend; XWayland results may be incomplete | No native backend | Investigate KWin integration and supported idle mechanism; validate per Plasma version. |
+| Linux KDE Plasma Wayland | Native KWin bridge implemented | Native input-idle monitor implemented | Initial window and input-idle events verified on Plasma 6.6.7. Validate lock, sleep, and other Plasma versions. |
 | Other Wayland compositors, including wlroots-based desktops | No native backend; XWayland results may be incomplete | No native backend | Investigate compositor-supported protocols or integrations separately; title, PID and idle availability can differ. |
 | macOS | Not implemented | Not implemented | Add a native provider, assess OS privacy permissions and add browser profile paths. Verify supported macOS versions. |
 | BSD and other desktop OSs | Not implemented | Not implemented | Assess runtime, desktop protocol and native APIs before planning support. |
 | Headless, SSH, containers and WSL | No dependable desktop tracking by default | No dependable desktop tracking by default | Identify the actual graphical session and run a suitable collector with access to it; otherwise expose capabilities as unavailable. |
 
-The provider factory currently selects Windows or Linux by OS name and falls
-back to an unsupported provider for other systems. It does not choose a Linux
-backend based on session type. Linux's X11 tools must not be presented as native
-Wayland support. See [platforms.py](../collector/platforms.py).
+The provider factory selects a native KDE provider for KDE Wayland sessions,
+the X11-oriented provider for other Linux sessions, and a Windows provider on
+Windows. Other operating systems use an unsupported provider. The X11 tools
+must not be presented as native Wayland support. See
+[platforms.py](../collector/platforms.py).
+
+On Ubuntu 26.04.1 with Plasma 6.6.7 Wayland, a temporary live probe verified
+that a KWin script can send foreground window metadata to a local Python D-Bus
+receiver. The collector starts and stops this bridge and an input-idle monitor.
+Live probes received idle and resume events from `ext_idle_notifier_v1` version
+2; idle durations are conservative lower bounds rather than exact seconds.
+The collector skips samples while the KDE window or idle signal is unavailable,
+so those periods are not persisted as active. Recording unknown periods in
+storage and reports remains planned. Lock and sleep behavior still need
+validation. The session's advertised
+`GetSessionIdleTime` D-Bus method returned `NotSupported` and must not be relied
+on as a native idle source.
 
 ## Feature Dependencies
 
@@ -57,17 +70,18 @@ Wayland support. See [platforms.py](../collector/platforms.py).
 | --- | --- | --- |
 | Active app and process | Windows foreground PID or Linux X11 window PID resolved with `psutil` | Missing window properties, inaccessible processes, desktop isolation or a missing provider can yield `Unknown`. |
 | Window title | Win32 window text or X11 properties/`xdotool` | Titles may be unavailable, restricted or empty; access and permissions vary by platform. |
-| Idle | Win32 last-input time or Linux `xprintidle` | May be unavailable. Some potential Wayland interfaces provide threshold notifications instead of exact idle seconds, requiring an interface change. |
+| Idle | Win32 last-input time, KDE Wayland input-idle notifications, or Linux X11 `xprintidle` | May be unavailable. KDE Wayland reports a conservative elapsed-time lower bound, not exact idle seconds. |
 | Browser domain | Extracts a domain from the title, then tries browser history for recognized browsers | History paths are currently configured for selected browsers on Windows and Linux, not macOS. Results are best-effort, not a reliable active-tab API; private browsing, inaccessible profiles and missing foreground data can limit them. |
 | Git context | Resolves a working directory from process/editor information or falls back to the collector's working directory, then invokes Git | Requires Git and accessible repository metadata. The fallback can describe the collector's repository rather than the foreground application. |
 | Sessions and attribution | Aggregates and tags collected samples | Quality depends on the underlying app, title, browser, Git and idle signals. Missing data can affect context switches, categorization and reports. |
 
-When idle detection is unavailable, wellbeing receives an explicit unavailable
-state, but the normal activity sample currently defaults to `is_idle = false`
-and `idle_seconds = 0`, unless a system-idle rule applies. This does **not**
-establish that the user is active; downstream activity and reports can be
-misleading. Preserving unknown idle state through collection and reporting is a
-separate improvement to consider.
+When KDE Wayland idle detection is unavailable, the collector ends the current
+session and skips samples until idle data returns. Those gaps are not persisted.
+Other providers currently default an unavailable idle sample to
+`is_idle = false` and `idle_seconds = 0`, unless a system-idle rule applies.
+This does **not** establish that the user is active; downstream activity and
+reports can be misleading. Preserving unknown idle state through collection and
+reporting remains planned.
 
 See [browser_tracker.py](../collector/browser_tracker.py),
 [git_tracker.py](../collector/git_tracker.py), and

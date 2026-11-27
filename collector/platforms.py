@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import ctypes
+import os
 import platform
 import re
 import subprocess
+from collections.abc import Mapping
 from ctypes import wintypes
 from typing import Protocol
 
@@ -12,6 +14,17 @@ import psutil
 from workgraph.models import ActiveWindow, normalize_text
 
 UNKNOWN_APP = "Unknown"
+
+
+def is_kde_wayland_session(environment: Mapping[str, str] | None = None) -> bool:
+    environment = os.environ if environment is None else environment
+    session_type = environment.get("XDG_SESSION_TYPE", "").strip().lower()
+    if session_type:
+        is_wayland = session_type == "wayland"
+    else:
+        is_wayland = bool(environment.get("WAYLAND_DISPLAY"))
+    desktops = environment.get("XDG_CURRENT_DESKTOP", "").lower().split(":")
+    return is_wayland and any(desktop.strip() == "kde" for desktop in desktops)
 
 
 class PlatformProvider(Protocol):
@@ -115,6 +128,34 @@ class LinuxPlatformProvider:
         return int(match.group(1)) if match else None
 
 
+class KDEWaylandPlatformProvider:
+    requires_idle_for_collection = True
+
+    def __init__(self) -> None:
+        from collector.kwin_bridge import KWinBridge
+        from collector.wayland_idle import WaylandIdleMonitor
+
+        self._bridge = KWinBridge()
+        self._idle_monitor = WaylandIdleMonitor()
+
+    def start(self) -> None:
+        self._bridge.start()
+        self._idle_monitor.start()
+
+    def close(self) -> None:
+        self._bridge.close()
+        self._idle_monitor.close()
+
+    def get_active_window(self) -> ActiveWindow:
+        window = self._bridge.get_active_window()
+        if window is None:
+            raise RuntimeError("KWin window tracking is unavailable")
+        return window
+
+    def get_idle_seconds(self) -> int | None:
+        return self._idle_monitor.get_idle_seconds()
+
+
 class UnsupportedPlatformProvider:
     def __init__(self, system_name: str) -> None:
         self.system_name = system_name or "unknown"
@@ -131,6 +172,8 @@ def create_platform_provider(system_name: str | None = None) -> PlatformProvider
     if system == "windows":
         return WindowsPlatformProvider()
     if system == "linux":
+        if is_kde_wayland_session():
+            return KDEWaylandPlatformProvider()
         return LinuxPlatformProvider()
     return UnsupportedPlatformProvider(system)
 

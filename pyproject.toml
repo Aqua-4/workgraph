@@ -10,8 +10,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 dependencies = [
+    "dbus-next>=0.2.3; sys_platform == 'linux'",
     "psutil>=5.9",
     "pydantic>=2.0",
+    "pywayland>=0.4.19; sys_platform == 'linux'",
     "pyyaml>=6.0",
     "fastapi>=0.104",
     "uvicorn>=0.24",
@@ -47,6 +49,7 @@ packages = ["api", "collector", "db", "processor", "services", "workgraph"]
 
 [tool.setuptools.package-data]
 api = ["templates/*.html", "static/**/*"]
+collector = ["kwin_window.js"]
 
 [tool.ruff]
 line-length = 88

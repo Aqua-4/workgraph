@@ -71,6 +71,8 @@ class CollectorService:
     def __init__(self, settings: CollectorSettings) -> None:
         self.settings = settings
         platform_provider = create_platform_provider()
+        self._platform_provider = platform_provider
+        self._platform_provider_started = False
         self.window_tracker = WindowTracker(platform_provider)
         self.browser_tracker = BrowserTracker(settings.browser_history_lookback_seconds)
         self.idle_tracker = IdleTracker(
@@ -132,6 +134,10 @@ class CollectorService:
         LOGGER.info("WorkGraph collector started")
 
         try:
+            start_provider = getattr(self._platform_provider, "start", None)
+            if callable(start_provider):
+                start_provider()
+                self._platform_provider_started = True
             if self.settings.dashboard_mode != "sync-server":
                 try:
                     self._run_tk_loop()
@@ -145,6 +151,9 @@ class CollectorService:
             else:
                 self._run_collector_loop()
         finally:
+            close_provider = getattr(self._platform_provider, "close", None)
+            if callable(close_provider):
+                close_provider()
             self._close_tk_ui()
             self.flush()
             self.repository.close()
@@ -271,6 +280,8 @@ class CollectorService:
                     exc_info=True,
                 )
                 self._window_unavailable_warned = True
+            if self._platform_provider_started:
+                self.flush()
             return
         self._service_status["Window detection"] = (
             "Unavailable" if active_window.app_name == "Unknown" else "Running"
@@ -438,6 +449,20 @@ class CollectorService:
                     exc_info=True,
                 )
                 self._browser_unavailable_warned = True
+
+        if (
+            self._platform_provider_started
+            and getattr(self._platform_provider, "requires_idle_for_collection", False)
+            is True
+            and not idle_state.available
+        ):
+            if not self._idle_unavailable_warned:
+                LOGGER.warning("Idle detection unavailable; skipping collection sample")
+                self._idle_unavailable_warned = True
+            self.flush()
+            return
+        if idle_state.available:
+            self._idle_unavailable_warned = False
 
         sample = ActivitySample(
             observed_at=utc_now(),

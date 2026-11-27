@@ -38,6 +38,69 @@ wheels = [
 ]
 
 [[package]]
+name = "cffi"
+version = "2.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pycparser", marker = "(python_full_version < '3.12' and implementation_name != 'PyPy') or (implementation_name != 'PyPy' and sys_platform != 'emscripten')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz", hash = "sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be", size = 530807, upload-time = "2026-08-03T21:21:18.939Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ad/5a/4707a0dc1f203f5dde5a907b0d4e3c25d71120241048bd5bc6f1bb9d4e71/cffi-2.1.1-cp311-cp311-manylinux1_i686.manylinux2014_i686.manylinux_2_17_i686.manylinux_2_5_i686.whl", hash = "sha256:154852545011f779917b11c78db2358d095da62a9a172b78ad0a583ee5adc0d0", size = 211805, upload-time = "2026-08-03T21:19:31.867Z" },
+    { url = "https://files.pythonhosted.org/packages/ad/66/c19feabb28485b6e0bbaaafa90837a1ef5d302e90f2178bd33f17a49879b/cffi-2.1.1-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:3311ed60d36f83378794e1009ac6258bafbf81f7888b4caa7b35a521e3f95813", size = 218716, upload-time = "2026-08-03T21:19:32.896Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/92/500760486c8baab49a7a8a58ba7fc3355ec3974b454b8a09e528efde9e1d/cffi-2.1.1-cp311-cp311-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:6e192623c49c94421616a5778fba35cf0d5a8d000650c1967ef4448ee5cdd990", size = 205569, upload-time = "2026-08-03T21:19:34.142Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/a7/a67c733254d6e7373f7822f8082d8d6beade791e0cf12a7611f376fa61c7/cffi-2.1.1-cp311-cp311-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:a6e721d4b0e45d5b65e87534470e67b18dcd092c83f68fba09f152b9cbc061af", size = 204907, upload-time = "2026-08-03T21:19:35.174Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/a4/4399daaf8f7dfee9d7c3327fdb0426ee041cc63edc358b93911ceb2bfc7a/cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:34e261f78cb6ceaaa36f42f2613f4380d94d9c759a9c73c769ee6e0247364632", size = 217807, upload-time = "2026-08-03T21:19:36.286Z" },
+    { url = "https://files.pythonhosted.org/packages/28/f7/dabe6da2466ecbd82dc62e7342dc6b1065dad990c06f00f0ede9ebf2a0ed/cffi-2.1.1-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:7225e4514edb64eb6740324353e0da0711954fd8d7da4576755b1c6e09b697cd", size = 221252, upload-time = "2026-08-03T21:19:37.416Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/87/616202d8e51342c07d2534c510111c4cc37201775ce8f60802c9335d1edd/cffi-2.1.1-cp311-cp311-musllinux_1_2_i686.whl", hash = "sha256:df913725b79db7bcf03448f36b7bf8815363417d5b58deecf9305e3e30f0f21a", size = 214214, upload-time = "2026-08-03T21:19:38.507Z" },
+    { url = "https://files.pythonhosted.org/packages/b4/c6/ab025d75d2c26c19b087c0124e75ee31cb65032f4fe345d356d8c507ab97/cffi-2.1.1-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:f5cfbc5fe74540d335175b656c725d74d90e3730c626d92575eea35029d9afaa", size = 219408, upload-time = "2026-08-03T21:19:39.809Z" },
+    { url = "https://files.pythonhosted.org/packages/56/e6/8941622732edec876dd17d0453dce07317ae96db34f2ec1436c9d3785986/cffi-2.1.1-cp312-cp312-manylinux1_i686.manylinux2014_i686.manylinux_2_17_i686.manylinux_2_5_i686.whl", hash = "sha256:811bd1e21d32de12efca32393a0ab3f5133b54fce9bd44b8bd77ab07da14bf6a", size = 214799, upload-time = "2026-08-03T21:19:47.218Z" },
+    { url = "https://files.pythonhosted.org/packages/44/de/f98430906df1545ffde0d543dd124a7a439bc2cd32b36b9c53f805df7333/cffi-2.1.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:68e62fe11f30d5ca8289242866f0a5291402d8529ca2178ab8afc5c9694ae890", size = 222389, upload-time = "2026-08-03T21:19:48.331Z" },
+    { url = "https://files.pythonhosted.org/packages/6a/5b/717f1526b9957b34456313c31645c5b82b8fb5c3fe9e4752999be7128bfc/cffi-2.1.1-cp312-cp312-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:4a7c934f7360e8cd64fe9efadcbd10c7c6364f531e432b9a4bf5ccbc9e0e8b50", size = 210249, upload-time = "2026-08-03T21:19:49.543Z" },
+    { url = "https://files.pythonhosted.org/packages/64/b3/f8aa4f3e34986c7e4ec45072d1b1b9dd295b6b18007b45518d79726dd725/cffi-2.1.1-cp312-cp312-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:3143d81e29e1e20a9ce10901ec369012947876596f75a222235965f2b7ae832e", size = 208775, upload-time = "2026-08-03T21:19:50.918Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/db/dceb9dd5b231e1da801793f8acc9f3c52a7e1afe40bb1aae37e02b0faad5/cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:c1453022f490d2459a11819d83ad1d586e9ff65a12ac3e705ffebd46d3685dcf", size = 221822, upload-time = "2026-08-03T21:19:52.054Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/d2/6cd24ae3be000a634109c247d1475d62e5616d0dc78c82770942ec384248/cffi-2.1.1-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:208f941bb9d18e768138677f0a6d2ce01f590df56043dda1df1535ac57c88517", size = 225232, upload-time = "2026-08-03T21:19:53.109Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/52/3fa190537004dd7f0ab860a6dc7c0175b8667f68d1e618a46f5498d30250/cffi-2.1.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:210019b6c7cf07f081b4c54635c8cf744377001350e29cc0f81c4377b4797735", size = 223597, upload-time = "2026-08-03T21:19:54.515Z" },
+    { url = "https://files.pythonhosted.org/packages/9d/f4/035513d4117049066b4779dc3b7c0c0fdad175fa13731c9f4003f1cd1478/cffi-2.1.1-cp313-cp313-ios_13_0_arm64_iphoneos.whl", hash = "sha256:b5bdfd1c873d4e093aabc0ca84c4ca6dbc4f752afb5c86f146d9742580c9da2e", size = 194248, upload-time = "2026-08-03T21:19:59.399Z" },
+    { url = "https://files.pythonhosted.org/packages/76/af/2aeb4dbb5fc41a04161ae9ff1518de7cec08e164f44a8ce6a4cf7fd2cd1d/cffi-2.1.1-cp313-cp313-ios_13_0_arm64_iphonesimulator.whl", hash = "sha256:31348097ff5bbe827ccc41795d4dd099d9f0625e7def00ee653c137a490c2a6c", size = 196908, upload-time = "2026-08-03T21:20:00.746Z" },
+    { url = "https://files.pythonhosted.org/packages/43/1f/1c3d90d91811c8f86ced9ed637956c54bfe5b79ca98fe976d7f8c8979f6b/cffi-2.1.1-cp313-cp313-manylinux1_i686.manylinux2014_i686.manylinux_2_17_i686.manylinux_2_5_i686.whl", hash = "sha256:6a8dddef476fab96d066d578fc88526767b836ab5ab21754e1d5bf3879c31c7c", size = 214722, upload-time = "2026-08-03T21:20:04.377Z" },
+    { url = "https://files.pythonhosted.org/packages/37/6f/3b5ce4c3b2192d250f04908f2bfd91ef34552ec8f7716a5d4abdb8d67bb2/cffi-2.1.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:f16c709686a78c727bbbf059f92b0bf41c6fc60deec706d2dc19f529175a6125", size = 222369, upload-time = "2026-08-03T21:20:05.544Z" },
+    { url = "https://files.pythonhosted.org/packages/02/10/4b3c75dde3d9663c9e02ba05c2668b954f671d4bbe346413ca8c696b295a/cffi-2.1.1-cp313-cp313-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:fcd22650c908d7b7da162bbfaab594a1227a15d1643a98c68b122ac642fa2264", size = 210175, upload-time = "2026-08-03T21:20:06.75Z" },
+    { url = "https://files.pythonhosted.org/packages/df/62/14f74b9543e605d17701dc797b815958b8bb70b7624ce1b832ddad48ed6c/cffi-2.1.1-cp313-cp313-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:aa9511c62d14da7aacc9b4bf51f3f697a621e83b2d6919008243c3aad168eea3", size = 208670, upload-time = "2026-08-03T21:20:08.04Z" },
+    { url = "https://files.pythonhosted.org/packages/95/95/86342356ff5953b3fb06f7ef7c5bee212d45e770abc7218d451b9148313c/cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:a931079504ecc49efed7744c476a5c343a92fabf66dec2db95edb1b2fdc770e2", size = 221824, upload-time = "2026-08-03T21:20:09.274Z" },
+    { url = "https://files.pythonhosted.org/packages/eb/ff/7b3429ff53aafe931ed8a5fc69f481bbef7ba6de87ddcbb63d08f483f613/cffi-2.1.1-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:a2d7755bef5a12ed488f4ef1f1b69ee9191d7396083b755a5d2295f6edb4768b", size = 225148, upload-time = "2026-08-03T21:20:10.7Z" },
+    { url = "https://files.pythonhosted.org/packages/34/34/a95870b9221e09cf4f2ce3178b1a210abdfe63a1bd357da940418d7b8d15/cffi-2.1.1-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:e0bcb7e0f677f543555d2adff3bf19c05f66cdb4796e5ff602442ab2fe3c4ef7", size = 223564, upload-time = "2026-08-03T21:20:12.165Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/7b/d6bbf82b8b96e7391438898c42f5bd96dd02030fd5b64937d248220003e2/cffi-2.1.1-cp314-cp314-ios_13_0_arm64_iphoneos.whl", hash = "sha256:7dbb61fe3a7699468030f71bbe5f8a0e326a151daa91beb11a6fc1f980c55e1c", size = 194064, upload-time = "2026-08-03T21:20:17.148Z" },
+    { url = "https://files.pythonhosted.org/packages/94/e6/bcc91b283be94735e268487a054004f0aa19947b6348fa367db53230abc8/cffi-2.1.1-cp314-cp314-ios_13_0_arm64_iphonesimulator.whl", hash = "sha256:f24fb43132a4c6b4cb4eb029492919b2db645be6808d738f244fd146c03c32cb", size = 196720, upload-time = "2026-08-03T21:20:18.268Z" },
+    { url = "https://files.pythonhosted.org/packages/67/b8/b42132ca113dc567d37684437b46ca1dafc885902b02a110a02d5b511857/cffi-2.1.1-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:58acb8ab8e295e6c5ea12f888cbb13cf21511ef2a3303a23f4325c29d17fe5c1", size = 222328, upload-time = "2026-08-03T21:20:22.118Z" },
+    { url = "https://files.pythonhosted.org/packages/80/10/c5c0cbf0a657aecf59ef511409734230bf556f05a0d6c9eed7aa5c0a0166/cffi-2.1.1-cp314-cp314-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:456a61fa52d579ebf9df2e9552ead5129855dbaff6c1e5a9b1bc408809bdc062", size = 209985, upload-time = "2026-08-03T21:20:23.401Z" },
+    { url = "https://files.pythonhosted.org/packages/d5/6c/bfa0b87b03b9238148beca990292843c9396ba069b54496596594173de7b/cffi-2.1.1-cp314-cp314-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:a4f00aa42f75d6e4595e8866e748cc1705adc0cddfeb2ca86d0d03993d63ba03", size = 208530, upload-time = "2026-08-03T21:20:24.628Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/02/4e7d553a7ac4b4238b38b3c1b80d486e9d4436f8d2acbf87a0997fe3f402/cffi-2.1.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:b0431303acaea1089ad4b3e9ce4e6518193def1118d4073ca848635ee4ea2e96", size = 221525, upload-time = "2026-08-03T21:20:25.758Z" },
+    { url = "https://files.pythonhosted.org/packages/82/1d/a4aaf9babd75acb4d5f223bff71533bee748dd770a382619a798960ee9ba/cffi-2.1.1-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:64faea20f4e2613363a1a9b9c7dd73058f3ecd00133a511e72ad7c511658f527", size = 225053, upload-time = "2026-08-03T21:20:26.985Z" },
+    { url = "https://files.pythonhosted.org/packages/81/10/5dc0e7bdd18e22107054288283380fc97a06ae3f1656a106908d666a3c88/cffi-2.1.1-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:5c58fe613dc5e5336357eff555824a314d8e43282600435c8d1cb6a7a2fedd13", size = 223213, upload-time = "2026-08-03T21:20:28.277Z" },
+    { url = "https://files.pythonhosted.org/packages/2a/9c/92934c3bea9f785b23eba304538c0b4d37a2a96d2431eb3a1bc87a11aa19/cffi-2.1.1-cp314-cp314t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:49cbc70e6542d4ccccb936558d1064a8012541e78f821f955cff24e357776c94", size = 223864, upload-time = "2026-08-03T21:20:32.571Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/45/ba4c93527bc38616a8bd36488acb69a2212d60486794f0c1f318949bbb76/cffi-2.1.1-cp314-cp314t-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:e2d65b31f36619cda3999b78b2aa9632e76b78448e7a56fc4240824200e7c4fc", size = 211538, upload-time = "2026-08-03T21:20:33.808Z" },
+    { url = "https://files.pythonhosted.org/packages/80/e9/b6ef565e452acb932fb0cb5443f44a78efbd1233e566f02b5a83855e9115/cffi-2.1.1-cp314-cp314t-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:28907ab9bfb6aa13184cfc17c6b8e1023c5ab6fd7076d8c20a35e59fe04f8f29", size = 210688, upload-time = "2026-08-03T21:20:34.974Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/95/eff5f0cee78d2eabc7eebffec40d3fc1876b5f3c95582e018bb4b99601f2/cffi-2.1.1-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:51b31d1c98274844cfd7838ce00bfc27c7423a4dc00fc0772fc3331c2cc90676", size = 223803, upload-time = "2026-08-03T21:20:36.564Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/01/579d39fb8bef00a335a23d83757b44feb24cd6345a2c451b64cb67b9c362/cffi-2.1.1-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:5e7cecbaadb83884793e05828cee59b210b24583b9c7425d0ba6a754fe22eb4e", size = 226763, upload-time = "2026-08-03T21:20:37.816Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/b0/0b44f47c60b01b57b6e2bbd92343f13a85a1d93bc46ccf6e47e244acd99c/cffi-2.1.1-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:25792eac27877609e7bb06d42ff88278a6624fff2ba9bbb523c09616b117e80f", size = 225688, upload-time = "2026-08-03T21:20:38.959Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/8f/9ebe220eab48a093d1a5a5e339ab0dc7316eef3bb04d63c42f0251b61f50/cffi-2.1.1-cp315-cp315-ios_13_0_arm64_iphoneos.whl", hash = "sha256:dddad92b554513a31f272570678ba307fb9f618f05e3d4a5eacafff9eae03e1d", size = 194043, upload-time = "2026-08-03T21:20:48.179Z" },
+    { url = "https://files.pythonhosted.org/packages/ff/69/844bad3ece306c4782c2ecb93597035b6690d48704b803914c199da1e8b3/cffi-2.1.1-cp315-cp315-ios_13_0_arm64_iphonesimulator.whl", hash = "sha256:da0e573f9f97159390c89d9f1a9e41908b66d408cc5b58d08cf3847d844c531b", size = 196737, upload-time = "2026-08-03T21:20:49.457Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/31/9e1313b0a6e30e91b3b3d3fff51ae99c857c07738e3afcce1f7334e1b7ab/cffi-2.1.1-cp315-cp315-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:507a24c282e0f42f8ed737cf048572cbf580468da5555764a8331735e9c736b6", size = 222271, upload-time = "2026-08-03T21:20:53.462Z" },
+    { url = "https://files.pythonhosted.org/packages/50/e3/f6234a833e6e08c7007003074723c406559eecf9b48dfc97471e5a8eb7a0/cffi-2.1.1-cp315-cp315-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:246fa40ce8645a614ff682e0b70f37134e460eaf93a775e0cbe3cca585a67a80", size = 209919, upload-time = "2026-08-03T21:20:54.783Z" },
+    { url = "https://files.pythonhosted.org/packages/0d/fc/5f74e293fced6edb51af3a46c4ccf6c23c9943774ecb375ddbd522c76add/cffi-2.1.1-cp315-cp315-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:471cee653ae88de62096552e6d24ccb4a5adb8c8c9f10b5054d0122c15bf2779", size = 208529, upload-time = "2026-08-03T21:20:56.066Z" },
+    { url = "https://files.pythonhosted.org/packages/44/16/29e6d01b388bef055ecd6ca8244b3f4d336bd09e92d5d892187b9601084e/cffi-2.1.1-cp315-cp315-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:aeae0e330c9f6acd681f647d46cefd30c29f93e3392882e792e82080c9691399", size = 221630, upload-time = "2026-08-03T21:20:57.336Z" },
+    { url = "https://files.pythonhosted.org/packages/a4/18/fa7f1f6857d5eb88a4ca99ffcbfb7c387a287ccc154c64a73e86314745d7/cffi-2.1.1-cp315-cp315-musllinux_1_2_aarch64.whl", hash = "sha256:42a494cee34437f05546455144f2b5d9ac09b1face62bcfce597d2e521066688", size = 225134, upload-time = "2026-08-03T21:20:58.675Z" },
+    { url = "https://files.pythonhosted.org/packages/e0/9f/e8e3dfa04a1b4c241f8c91faacad872b4d4efd051d49764ad4e2fd4b9fea/cffi-2.1.1-cp315-cp315-musllinux_1_2_x86_64.whl", hash = "sha256:cc572dace3f60ef98d7b12ff411d20f5362feb31a0439eab0085bbfd349982d7", size = 223197, upload-time = "2026-08-03T21:20:59.968Z" },
+    { url = "https://files.pythonhosted.org/packages/53/b2/6187f46f2912276a3ae284076109cc5c8680482f11f766ccf26db4a86427/cffi-2.1.1-cp315-cp315t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:937c0052c05a31ca1daf18de3158eed4dbfcb9cc107adbea227728d647be701e", size = 223779, upload-time = "2026-08-03T21:21:03.553Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/f6/c3ad28bd19f77047a03084424fbd4cbe997303267c14423737324be0385d/cffi-2.1.1-cp315-cp315t-manylinux2014_ppc64le.manylinux_2_17_ppc64le.whl", hash = "sha256:df423d40ee8654634421812bc3b196da3f9bd7d32929da813f8394c4348a5358", size = 211520, upload-time = "2026-08-03T21:21:04.863Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/cd/ccac9013a5bd9fd764de118674ab9c805b5ca10c19270d90ee273f8b2240/cffi-2.1.1-cp315-cp315t-manylinux2014_s390x.manylinux_2_17_s390x.whl", hash = "sha256:a730a083190634c65cca36ba5f489531576ebd79bcd5c8e172130f6453127231", size = 210673, upload-time = "2026-08-03T21:21:06.223Z" },
+    { url = "https://files.pythonhosted.org/packages/52/86/2976131c639aead931c5bee5aba67e4b09fbeb8018b6f282f70803f923a7/cffi-2.1.1-cp315-cp315t-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:363e05fa78e15116c3c32c210ee36884fd6b9afa6d440e47112c3bd511d64cb6", size = 223835, upload-time = "2026-08-03T21:21:07.539Z" },
+    { url = "https://files.pythonhosted.org/packages/ac/0c/33a7aeab2f9c76918c52e084beb39c570db3588133412929e8ec06fab90b/cffi-2.1.1-cp315-cp315t-musllinux_1_2_aarch64.whl", hash = "sha256:770de9db11e84213beec501cfcaa013b019820ca881e03344dea5844f7876d94", size = 226705, upload-time = "2026-08-03T21:21:08.774Z" },
+    { url = "https://files.pythonhosted.org/packages/e3/26/2cde30fdde421130bfc18f70395731a6e6b2053c6a1978a5258ff04e72fa/cffi-2.1.1-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:7da0c5eff80f0197f3b3d1232ec5a682a9325f4ae9016a78f5f5ca35f9ced1f5", size = 225539, upload-time = "2026-08-03T21:21:09.911Z" },
+]
+
+[[package]]
 name = "click"
 version = "8.5.1"
 source = { registry = "https://pypi.org/simple" }
@@ -62,6 +125,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/21/cf/cd2f9e605c258d216ae48d86918ecff5bc652de338e090df3df4cd5d0d27/comtypes-1.5.0.tar.gz", hash = "sha256:831ddb867bc17bc89cac525b4f32132ebd4bef1ffe6432406ec9f5d858c1a122", size = 289180, upload-time = "2026-11-09T22:42:37.287Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/89/dc/818b43a6766800973e1611aeaff55e20cb38e36f3c499db1795838675f44/comtypes-1.5.0-py3-none-any.whl", hash = "sha256:c648ed3b243b1eb3b7cb893a873d1b35104ca1c8922061f4b1efafeb255bacb5", size = 325563, upload-time = "2026-11-09T22:42:35.97Z" },
+]
+
+[[package]]
+name = "dbus-next"
+version = "0.2.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/45/6a40fbe886d60a8c26f480e7d12535502b5ba123814b3b9a0b002ebca198/dbus_next-0.2.3.tar.gz", hash = "sha256:f4eae26909332ada528c0a3549dda8d4f088f9b365153952a408e28023a626a5", size = 71112, upload-time = "2021-07-25T22:11:28.398Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/fc/c0a3f4c4eaa5a22fbef91713474666e13d0ea2a69c84532579490a9f2cc8/dbus_next-0.2.3-py3-none-any.whl", hash = "sha256:58948f9aff9db08316734c0be2a120f6dc502124d9642f55e90ac82ffb16a18b", size = 57885, upload-time = "2021-07-25T22:11:25.466Z" },
 ]
 
 [[package]]
@@ -347,6 +419,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pycparser"
+version = "3.12"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cb/27/eeb9f307bf07060f3d9f9aa0fb8c15b01bdfded0a941e4b2719c7f94cacd/pycparser-3.12.tar.gz", hash = "sha256:f03387877eab82ce01bbdfd0ba7252ee55a90b1c708d5129e2ce915475cf1db6", size = 158785, upload-time = "2026-10-22T13:40:03.56Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b6/ae/315bbeee126a769cbde43cf4908acb4b40408d8bf8bbf334dd7368d8dadf/pycparser-3.12-py3-none-any.whl", hash = "sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e", size = 62600, upload-time = "2026-10-22T13:40:02.021Z" },
+]
+
+[[package]]
 name = "pydantic"
 version = "2.14.4"
 source = { registry = "https://pypi.org/simple" }
@@ -511,170 +592,170 @@ name = "pyobjc"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-accessibility", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-accessoryaccess", marker = "platform_release >= '26.0'" },
-    { name = "pyobjc-framework-accounts", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-addressbook" },
-    { name = "pyobjc-framework-adservices", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-adsupport", marker = "platform_release >= '18.0'" },
-    { name = "pyobjc-framework-applescriptkit" },
-    { name = "pyobjc-framework-applescriptobjc", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-applicationservices" },
-    { name = "pyobjc-framework-apptrackingtransparency", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-arkit", marker = "platform_release >= '25.0'" },
-    { name = "pyobjc-framework-audiovideobridging", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-authenticationservices", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-automaticassessmentconfiguration", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-automator" },
-    { name = "pyobjc-framework-avfoundation", marker = "platform_release >= '11.0'" },
-    { name = "pyobjc-framework-avkit", marker = "platform_release >= '13.0'" },
-    { name = "pyobjc-framework-avrouting", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-backgroundassets", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-browserenginekit", marker = "platform_release >= '23.4'" },
-    { name = "pyobjc-framework-businesschat", marker = "platform_release >= '18.0'" },
-    { name = "pyobjc-framework-calendarstore", marker = "platform_release >= '9.0'" },
-    { name = "pyobjc-framework-callkit", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-carbon" },
-    { name = "pyobjc-framework-cfnetwork" },
-    { name = "pyobjc-framework-cinematic", marker = "platform_release >= '23.0'" },
-    { name = "pyobjc-framework-classkit", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-cloudkit", marker = "platform_release >= '14.0'" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-collaboration", marker = "platform_release >= '9.0'" },
-    { name = "pyobjc-framework-colorsync", marker = "platform_release >= '17.0'" },
-    { name = "pyobjc-framework-compositorservices", marker = "platform_release >= '25.0'" },
-    { name = "pyobjc-framework-contacts", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-contactsui", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-coreaudio" },
-    { name = "pyobjc-framework-coreaudiokit" },
-    { name = "pyobjc-framework-corebluetooth", marker = "platform_release >= '14.0'" },
-    { name = "pyobjc-framework-coredata" },
-    { name = "pyobjc-framework-corehaptics", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-corelocation", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-coremedia", marker = "platform_release >= '11.0'" },
-    { name = "pyobjc-framework-coremediaio", marker = "platform_release >= '11.0'" },
-    { name = "pyobjc-framework-coremidi" },
-    { name = "pyobjc-framework-coreml", marker = "platform_release >= '17.0'" },
-    { name = "pyobjc-framework-coremotion", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-coreservices" },
-    { name = "pyobjc-framework-corespotlight", marker = "platform_release >= '17.0'" },
-    { name = "pyobjc-framework-coretext" },
-    { name = "pyobjc-framework-corewlan", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-cryptotokenkit", marker = "platform_release >= '14.0'" },
-    { name = "pyobjc-framework-datadetection", marker = "platform_release >= '21.0'" },
-    { name = "pyobjc-framework-devicecheck", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-devicediscoveryextension", marker = "platform_release >= '24.0'" },
-    { name = "pyobjc-framework-dictionaryservices", marker = "platform_release >= '9.0'" },
-    { name = "pyobjc-framework-discrecording" },
-    { name = "pyobjc-framework-discrecordingui" },
-    { name = "pyobjc-framework-diskarbitration" },
-    { name = "pyobjc-framework-dvdplayback" },
-    { name = "pyobjc-framework-eventkit", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-exceptionhandling" },
-    { name = "pyobjc-framework-executionpolicy", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-extensionkit", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-externalaccessory", marker = "platform_release >= '17.0'" },
-    { name = "pyobjc-framework-fileprovider", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-fileproviderui", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-findersync", marker = "platform_release >= '14.0'" },
-    { name = "pyobjc-framework-fsevents", marker = "platform_release >= '9.0'" },
-    { name = "pyobjc-framework-fskit", marker = "platform_release >= '24.4'" },
-    { name = "pyobjc-framework-gamecenter", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-gamecontroller", marker = "platform_release >= '13.0'" },
-    { name = "pyobjc-framework-gamekit", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-gameplaykit", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-gamesave", marker = "platform_release >= '25.0'" },
-    { name = "pyobjc-framework-healthkit", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-imagecapturecore", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-inputmethodkit", marker = "platform_release >= '9.0'" },
-    { name = "pyobjc-framework-installerplugins" },
-    { name = "pyobjc-framework-instantmessage", marker = "platform_release >= '9.0'" },
-    { name = "pyobjc-framework-intents", marker = "platform_release >= '16.0'" },
-    { name = "pyobjc-framework-intentsui", marker = "platform_release >= '21.0'" },
-    { name = "pyobjc-framework-iobluetooth" },
-    { name = "pyobjc-framework-iobluetoothui" },
-    { name = "pyobjc-framework-iosurface", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-ituneslibrary", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-kernelmanagement", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-latentsemanticmapping" },
-    { name = "pyobjc-framework-launchservices" },
-    { name = "pyobjc-framework-libdispatch", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-libxpc", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-linkpresentation", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-linksecurity", marker = "platform_release >= '26.0'" },
-    { name = "pyobjc-framework-localauthentication", marker = "platform_release >= '14.0'" },
-    { name = "pyobjc-framework-localauthenticationembeddedui", marker = "platform_release >= '21.0'" },
-    { name = "pyobjc-framework-mailkit", marker = "platform_release >= '21.0'" },
-    { name = "pyobjc-framework-mapkit", marker = "platform_release >= '13.0'" },
-    { name = "pyobjc-framework-mediaaccessibility", marker = "platform_release >= '13.0'" },
-    { name = "pyobjc-framework-mediaextension", marker = "platform_release >= '24.0'" },
-    { name = "pyobjc-framework-medialibrary", marker = "platform_release >= '13.0'" },
-    { name = "pyobjc-framework-mediaplayer", marker = "platform_release >= '16.0'" },
-    { name = "pyobjc-framework-mediatoolbox", marker = "platform_release >= '13.0'" },
-    { name = "pyobjc-framework-metal", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-metalfx", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-metalkit", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-metalperformanceshaders", marker = "platform_release >= '17.0'" },
-    { name = "pyobjc-framework-metalperformanceshadersgraph", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-metrickit", marker = "platform_release >= '21.0'" },
-    { name = "pyobjc-framework-mlcompute", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-modelio", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-multipeerconnectivity", marker = "platform_release >= '14.0'" },
-    { name = "pyobjc-framework-naturallanguage", marker = "platform_release >= '18.0'" },
-    { name = "pyobjc-framework-netfs", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-network", marker = "platform_release >= '18.0'" },
-    { name = "pyobjc-framework-networkextension", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-notificationcenter", marker = "platform_release >= '14.0'" },
-    { name = "pyobjc-framework-opendirectory", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-osakit" },
-    { name = "pyobjc-framework-oslog", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-passkit", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-pencilkit", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-phase", marker = "platform_release >= '21.0'" },
-    { name = "pyobjc-framework-photos", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-photosui", marker = "platform_release >= '15.0'" },
-    { name = "pyobjc-framework-preferencepanes" },
-    { name = "pyobjc-framework-pushkit", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-quartz" },
-    { name = "pyobjc-framework-quicklookthumbnailing", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-replaykit", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-safariservices", marker = "platform_release >= '16.0'" },
-    { name = "pyobjc-framework-safetykit", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-scenekit", marker = "platform_release >= '11.0'" },
-    { name = "pyobjc-framework-screencapturekit", marker = "platform_release >= '21.4'" },
-    { name = "pyobjc-framework-screensaver" },
-    { name = "pyobjc-framework-screentime", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-scriptingbridge", marker = "platform_release >= '9.0'" },
-    { name = "pyobjc-framework-searchkit" },
-    { name = "pyobjc-framework-security" },
-    { name = "pyobjc-framework-securityfoundation" },
-    { name = "pyobjc-framework-securityinterface" },
-    { name = "pyobjc-framework-securityui", marker = "platform_release >= '24.4'" },
-    { name = "pyobjc-framework-sensitivecontentanalysis", marker = "platform_release >= '23.0'" },
-    { name = "pyobjc-framework-servicemanagement", marker = "platform_release >= '10.0'" },
-    { name = "pyobjc-framework-sharedwithyou", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-sharedwithyoucore", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-shazamkit", marker = "platform_release >= '21.0'" },
-    { name = "pyobjc-framework-social", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-soundanalysis", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-speech", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-spritekit", marker = "platform_release >= '13.0'" },
-    { name = "pyobjc-framework-statereporting", marker = "platform_release >= '26.0'" },
-    { name = "pyobjc-framework-storekit", marker = "platform_release >= '11.0'" },
-    { name = "pyobjc-framework-symbols", marker = "platform_release >= '23.0'" },
-    { name = "pyobjc-framework-syncservices" },
-    { name = "pyobjc-framework-systemconfiguration" },
-    { name = "pyobjc-framework-systemextensions", marker = "platform_release >= '19.0'" },
-    { name = "pyobjc-framework-threadnetwork", marker = "platform_release >= '22.0'" },
-    { name = "pyobjc-framework-uniformtypeidentifiers", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-usernotifications", marker = "platform_release >= '18.0'" },
-    { name = "pyobjc-framework-usernotificationsui", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-videosubscriberaccount", marker = "platform_release >= '18.0'" },
-    { name = "pyobjc-framework-videotoolbox", marker = "platform_release >= '12.0'" },
-    { name = "pyobjc-framework-virtualization", marker = "platform_release >= '20.0'" },
-    { name = "pyobjc-framework-vision", marker = "platform_release >= '17.0'" },
-    { name = "pyobjc-framework-webkit" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-accessibility", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-accessoryaccess", marker = "(python_full_version < '3.12' and platform_release >= '26.0') or (platform_release >= '26.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-accounts", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-addressbook", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-adservices", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-adsupport", marker = "(python_full_version < '3.12' and platform_release >= '18.0') or (platform_release >= '18.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-applescriptkit", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-applescriptobjc", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-applicationservices", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-apptrackingtransparency", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-arkit", marker = "(python_full_version < '3.12' and platform_release >= '25.0') or (platform_release >= '25.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-audiovideobridging", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-authenticationservices", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-automaticassessmentconfiguration", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-automator", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-avfoundation", marker = "(python_full_version < '3.12' and platform_release >= '11.0') or (platform_release >= '11.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-avkit", marker = "(python_full_version < '3.12' and platform_release >= '13.0') or (platform_release >= '13.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-avrouting", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-backgroundassets", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-browserenginekit", marker = "(python_full_version < '3.12' and platform_release >= '23.4') or (platform_release >= '23.4' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-businesschat", marker = "(python_full_version < '3.12' and platform_release >= '18.0') or (platform_release >= '18.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-calendarstore", marker = "(python_full_version < '3.12' and platform_release >= '9.0') or (platform_release >= '9.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-callkit", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-carbon", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cfnetwork", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cinematic", marker = "(python_full_version < '3.12' and platform_release >= '23.0') or (platform_release >= '23.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-classkit", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-cloudkit", marker = "(python_full_version < '3.12' and platform_release >= '14.0') or (platform_release >= '14.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-collaboration", marker = "(python_full_version < '3.12' and platform_release >= '9.0') or (platform_release >= '9.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-colorsync", marker = "(python_full_version < '3.12' and platform_release >= '17.0') or (platform_release >= '17.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-compositorservices", marker = "(python_full_version < '3.12' and platform_release >= '25.0') or (platform_release >= '25.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-contacts", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-contactsui", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-coreaudio", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreaudiokit", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-corebluetooth", marker = "(python_full_version < '3.12' and platform_release >= '14.0') or (platform_release >= '14.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-coredata", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-corehaptics", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-corelocation", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-coremedia", marker = "(python_full_version < '3.12' and platform_release >= '11.0') or (platform_release >= '11.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-coremediaio", marker = "(python_full_version < '3.12' and platform_release >= '11.0') or (platform_release >= '11.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-coremidi", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreml", marker = "(python_full_version < '3.12' and platform_release >= '17.0') or (platform_release >= '17.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-coremotion", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-coreservices", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-corespotlight", marker = "(python_full_version < '3.12' and platform_release >= '17.0') or (platform_release >= '17.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-coretext", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-corewlan", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-cryptotokenkit", marker = "(python_full_version < '3.12' and platform_release >= '14.0') or (platform_release >= '14.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-datadetection", marker = "(python_full_version < '3.12' and platform_release >= '21.0') or (platform_release >= '21.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-devicecheck", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-devicediscoveryextension", marker = "(python_full_version < '3.12' and platform_release >= '24.0') or (platform_release >= '24.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-dictionaryservices", marker = "(python_full_version < '3.12' and platform_release >= '9.0') or (platform_release >= '9.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-discrecording", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-discrecordingui", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-diskarbitration", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-dvdplayback", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-eventkit", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-exceptionhandling", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-executionpolicy", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-extensionkit", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-externalaccessory", marker = "(python_full_version < '3.12' and platform_release >= '17.0') or (platform_release >= '17.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-fileprovider", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-fileproviderui", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-findersync", marker = "(python_full_version < '3.12' and platform_release >= '14.0') or (platform_release >= '14.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-fsevents", marker = "(python_full_version < '3.12' and platform_release >= '9.0') or (platform_release >= '9.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-fskit", marker = "(python_full_version < '3.12' and platform_release >= '24.4') or (platform_release >= '24.4' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-gamecenter", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-gamecontroller", marker = "(python_full_version < '3.12' and platform_release >= '13.0') or (platform_release >= '13.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-gamekit", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-gameplaykit", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-gamesave", marker = "(python_full_version < '3.12' and platform_release >= '25.0') or (platform_release >= '25.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-healthkit", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-imagecapturecore", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-inputmethodkit", marker = "(python_full_version < '3.12' and platform_release >= '9.0') or (platform_release >= '9.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-installerplugins", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-instantmessage", marker = "(python_full_version < '3.12' and platform_release >= '9.0') or (platform_release >= '9.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-intents", marker = "(python_full_version < '3.12' and platform_release >= '16.0') or (platform_release >= '16.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-intentsui", marker = "(python_full_version < '3.12' and platform_release >= '21.0') or (platform_release >= '21.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-iobluetooth", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-iobluetoothui", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-iosurface", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-ituneslibrary", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-kernelmanagement", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-latentsemanticmapping", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-launchservices", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-libdispatch", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-libxpc", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-linkpresentation", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-linksecurity", marker = "(python_full_version < '3.12' and platform_release >= '26.0') or (platform_release >= '26.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-localauthentication", marker = "(python_full_version < '3.12' and platform_release >= '14.0') or (platform_release >= '14.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-localauthenticationembeddedui", marker = "(python_full_version < '3.12' and platform_release >= '21.0') or (platform_release >= '21.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-mailkit", marker = "(python_full_version < '3.12' and platform_release >= '21.0') or (platform_release >= '21.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-mapkit", marker = "(python_full_version < '3.12' and platform_release >= '13.0') or (platform_release >= '13.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-mediaaccessibility", marker = "(python_full_version < '3.12' and platform_release >= '13.0') or (platform_release >= '13.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-mediaextension", marker = "(python_full_version < '3.12' and platform_release >= '24.0') or (platform_release >= '24.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-medialibrary", marker = "(python_full_version < '3.12' and platform_release >= '13.0') or (platform_release >= '13.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-mediaplayer", marker = "(python_full_version < '3.12' and platform_release >= '16.0') or (platform_release >= '16.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-mediatoolbox", marker = "(python_full_version < '3.12' and platform_release >= '13.0') or (platform_release >= '13.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-metal", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-metalfx", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-metalkit", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-metalperformanceshaders", marker = "(python_full_version < '3.12' and platform_release >= '17.0') or (platform_release >= '17.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-metalperformanceshadersgraph", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-metrickit", marker = "(python_full_version < '3.12' and platform_release >= '21.0') or (platform_release >= '21.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-mlcompute", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-modelio", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-multipeerconnectivity", marker = "(python_full_version < '3.12' and platform_release >= '14.0') or (platform_release >= '14.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-naturallanguage", marker = "(python_full_version < '3.12' and platform_release >= '18.0') or (platform_release >= '18.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-netfs", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-network", marker = "(python_full_version < '3.12' and platform_release >= '18.0') or (platform_release >= '18.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-networkextension", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-notificationcenter", marker = "(python_full_version < '3.12' and platform_release >= '14.0') or (platform_release >= '14.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-opendirectory", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-osakit", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-oslog", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-passkit", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-pencilkit", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-phase", marker = "(python_full_version < '3.12' and platform_release >= '21.0') or (platform_release >= '21.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-photos", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-photosui", marker = "(python_full_version < '3.12' and platform_release >= '15.0') or (platform_release >= '15.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-preferencepanes", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-pushkit", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quicklookthumbnailing", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-replaykit", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-safariservices", marker = "(python_full_version < '3.12' and platform_release >= '16.0') or (platform_release >= '16.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-safetykit", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-scenekit", marker = "(python_full_version < '3.12' and platform_release >= '11.0') or (platform_release >= '11.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-screencapturekit", marker = "(python_full_version < '3.12' and platform_release >= '21.4') or (platform_release >= '21.4' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-screensaver", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-screentime", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-scriptingbridge", marker = "(python_full_version < '3.12' and platform_release >= '9.0') or (platform_release >= '9.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-searchkit", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-security", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-securityfoundation", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-securityinterface", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-securityui", marker = "(python_full_version < '3.12' and platform_release >= '24.4') or (platform_release >= '24.4' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-sensitivecontentanalysis", marker = "(python_full_version < '3.12' and platform_release >= '23.0') or (platform_release >= '23.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-servicemanagement", marker = "(python_full_version < '3.12' and platform_release >= '10.0') or (platform_release >= '10.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-sharedwithyou", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-sharedwithyoucore", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-shazamkit", marker = "(python_full_version < '3.12' and platform_release >= '21.0') or (platform_release >= '21.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-social", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-soundanalysis", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-speech", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-spritekit", marker = "(python_full_version < '3.12' and platform_release >= '13.0') or (platform_release >= '13.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-statereporting", marker = "(python_full_version < '3.12' and platform_release >= '26.0') or (platform_release >= '26.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-storekit", marker = "(python_full_version < '3.12' and platform_release >= '11.0') or (platform_release >= '11.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-symbols", marker = "(python_full_version < '3.12' and platform_release >= '23.0') or (platform_release >= '23.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-syncservices", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-systemconfiguration", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-systemextensions", marker = "(python_full_version < '3.12' and platform_release >= '19.0') or (platform_release >= '19.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-threadnetwork", marker = "(python_full_version < '3.12' and platform_release >= '22.0') or (platform_release >= '22.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-uniformtypeidentifiers", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-usernotifications", marker = "(python_full_version < '3.12' and platform_release >= '18.0') or (platform_release >= '18.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-usernotificationsui", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-videosubscriberaccount", marker = "(python_full_version < '3.12' and platform_release >= '18.0') or (platform_release >= '18.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-videotoolbox", marker = "(python_full_version < '3.12' and platform_release >= '12.0') or (platform_release >= '12.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-virtualization", marker = "(python_full_version < '3.12' and platform_release >= '20.0') or (platform_release >= '20.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-vision", marker = "(python_full_version < '3.12' and platform_release >= '17.0') or (platform_release >= '17.0' and sys_platform != 'emscripten')" },
+    { name = "pyobjc-framework-webkit", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e5/9b/50182922ecf3bc6bcebfeabe765c2be574d085bcc3b76b240bcd08f53e1c/pyobjc-13.0.tar.gz", hash = "sha256:37d148a1c7eda3de8c45f29df2ece85e21e418a8c8fe2e8f4de26658efd1d6d5", size = 12188, upload-time = "2026-10-30T10:47:55.873Z" }
 wheels = [
@@ -702,9 +783,9 @@ name = "pyobjc-framework-accessibility"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/63/bb/6245d6b37a8b668f188e6f68f91d7c35a5fd55adbfe2c1749128d6b9849f/pyobjc_framework_accessibility-13.0.tar.gz", hash = "sha256:b6847d57ff69e1bfed57a8839a2b7150ce309d9801c781e9aff4ebbc347638eb", size = 34540, upload-time = "2026-10-30T10:45:40.88Z" }
 wheels = [
@@ -723,8 +804,8 @@ name = "pyobjc-framework-accessoryaccess"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/1b/de5946a5dcaf3dccd85a1e45b9031e7cf92024f458686c7770587adf3a53/pyobjc_framework_accessoryaccess-13.0.tar.gz", hash = "sha256:a8db219a2541b38c5edf99f7bc1853e2dcb7393d40edc2b9cbbc1d35536dea47", size = 20873, upload-time = "2026-10-30T10:45:41.602Z" }
 wheels = [
@@ -743,8 +824,8 @@ name = "pyobjc-framework-accounts"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/2b/ba/602868d026b19da2647eeda14fe290e9d09da0bcf07faf6d172023f62c5d/pyobjc_framework_accounts-13.0.tar.gz", hash = "sha256:0601b9572af3e5d7ff7473860ddc89cb40d7a0ace278e827ffbf386b4645764e", size = 15984, upload-time = "2026-10-30T10:45:42.266Z" }
 wheels = [
@@ -756,8 +837,8 @@ name = "pyobjc-framework-addressbook"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c0/53/b1a9ba33cf2a52ecd2da5c36c5ad5cfd5ad11ba8613d5482adc3a4da3b30/pyobjc_framework_addressbook-13.0.tar.gz", hash = "sha256:991499cfb7d17fc5ee37807e80b45071dff60a0e6501070e26155af39876ca68", size = 46648, upload-time = "2026-10-30T10:45:42.995Z" }
 wheels = [
@@ -776,8 +857,8 @@ name = "pyobjc-framework-adservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a2/f9/ee2f88aaf7d048b09bb34437d6f364bc4994634d640fb446f0d8a9c99248/pyobjc_framework_adservices-13.0.tar.gz", hash = "sha256:b6eb60a186e1ff24581d284165002b9729e4c2dae93e13e5e3711a726e3f88db", size = 12004, upload-time = "2026-10-30T10:45:43.761Z" }
 wheels = [
@@ -789,8 +870,8 @@ name = "pyobjc-framework-adsupport"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/34/c5/3dcff04253aaf68dd24e2bd51d6db908472172e564cd8b0334fd2ad28b2d/pyobjc_framework_adsupport-13.0.tar.gz", hash = "sha256:e04dc31ae94cd54fbfc22e1ee0b2fe1e839090a3aec3c4ca5eeab1ea9d0ce8b1", size = 11996, upload-time = "2026-10-30T10:45:44.412Z" }
 wheels = [
@@ -802,8 +883,8 @@ name = "pyobjc-framework-applescriptkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ae/0d/46f2eb381fdc8c5fbcddf15f3a16e4deeb9ecf691c0a39bab1196c3e58fa/pyobjc_framework_applescriptkit-13.0.tar.gz", hash = "sha256:ddb7f6ba3cd5776133453130a2c5c269e821a8ac384877d3fbc63caac0f7ceb9", size = 11539, upload-time = "2026-10-30T10:45:45.237Z" }
 wheels = [
@@ -815,8 +896,8 @@ name = "pyobjc-framework-applescriptobjc"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/24/ea/1f381299f0eb813570410c496126414d95d66f9fb0396ced0e4a22d1e0c0/pyobjc_framework_applescriptobjc-13.0.tar.gz", hash = "sha256:4441f7826544ccd326d09f8fd2f3892385b23926105c8cf51281acc9112dd3a8", size = 11668, upload-time = "2026-10-30T10:45:45.911Z" }
 wheels = [
@@ -828,10 +909,10 @@ name = "pyobjc-framework-applicationservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coretext" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coretext", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/69/02/fdcf6554abfb830f335e68a43a5ac102cdc73c720a1e039551d4a61f692b/pyobjc_framework_applicationservices-13.0.tar.gz", hash = "sha256:d869115dd13300fa9ce926cdc23e6cceec1279bc02cc75d1be24562c89cd9ecc", size = 108163, upload-time = "2026-10-30T10:45:46.598Z" }
 wheels = [
@@ -850,8 +931,8 @@ name = "pyobjc-framework-apptrackingtransparency"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ce/01/2d970e834c8cd3830103fbea1770ff255f8884e41c5e6557d062e525d2ce/pyobjc_framework_apptrackingtransparency-13.0.tar.gz", hash = "sha256:8f6d573085742fc58d44644bbb5a3b40fcb5f14ee8942371d5cd189ae1ba4b89", size = 12892, upload-time = "2026-10-30T10:45:47.44Z" }
 wheels = [
@@ -863,8 +944,8 @@ name = "pyobjc-framework-arkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/37/49/87c1eefa3f643539ed3523ff181c8ed927ec810427ffc683dc0e36a82f88/pyobjc_framework_arkit-13.0.tar.gz", hash = "sha256:12d1017dd73a1292b9e29ae6b813ace6b9d4f48db37c78afa0a47513145d1381", size = 46137, upload-time = "2026-10-30T10:45:48.104Z" }
 wheels = [
@@ -876,8 +957,8 @@ name = "pyobjc-framework-audiovideobridging"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7f/d6/05d08d14e688784cf6bcc30b1aa2ee33d5d233ed326551a0c9ca28cdcbce/pyobjc_framework_audiovideobridging-13.0.tar.gz", hash = "sha256:a1b9350621e1318a84a651d62e48362c3e71bb0ecacdff74ce406904633eb822", size = 44121, upload-time = "2026-10-30T10:45:49.4Z" }
 wheels = [
@@ -896,8 +977,8 @@ name = "pyobjc-framework-authenticationservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9c/66/bd981821062ee4acfa2c073711359a26052c80cb390f4279727de455d192/pyobjc_framework_authenticationservices-13.0.tar.gz", hash = "sha256:d64a9686330f74aaee9f6fe8fdce0b8b2b18e7d4c2fd0711f8827c3f85c9573e", size = 76771, upload-time = "2026-10-30T10:45:50.22Z" }
 wheels = [
@@ -916,8 +997,8 @@ name = "pyobjc-framework-automaticassessmentconfiguration"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3b/6b/36295d573c0cb1a5c8f2751b5d0b9fa4966347dd571abd1bb3275bc3602b/pyobjc_framework_automaticassessmentconfiguration-13.0.tar.gz", hash = "sha256:4432066d0112c7d429a13a89273cb24ba83049982726b3de10d1e7da4c9b6b1e", size = 30224, upload-time = "2026-10-30T10:45:50.971Z" }
 wheels = [
@@ -936,8 +1017,8 @@ name = "pyobjc-framework-automator"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/6a/4d/acf25db906c42f26d338b296e2aecd5c683c3726a1c1d262d18731534de2/pyobjc_framework_automator-13.0.tar.gz", hash = "sha256:1393e9218cff66a67b68d0d0baebd71be365dec3ade1059373030540be7b4527", size = 188903, upload-time = "2026-10-30T10:45:51.785Z" }
 wheels = [
@@ -956,11 +1037,11 @@ name = "pyobjc-framework-avfoundation"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coreaudio" },
-    { name = "pyobjc-framework-coremedia" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreaudio", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coremedia", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/64/2d/7dcc52c5f64bb653514667d1ea6e12dc5afb5f8a3bc0e5fc720b3f2dea85/pyobjc_framework_avfoundation-13.0.tar.gz", hash = "sha256:1b41ae09c8a66d7a7d18566983a97bf754bc07084334dd63b70540777c2ee847", size = 423426, upload-time = "2026-10-30T10:45:52.734Z" }
 wheels = [
@@ -979,9 +1060,9 @@ name = "pyobjc-framework-avkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f2/6e/de106c4aeccaf090ec53e929a654f7de044235e10c4761a1488f750e54f0/pyobjc_framework_avkit-13.0.tar.gz", hash = "sha256:dc91f728b2a65b6672a4c38fd3fb0ae3754f73cd22247abdece95efbdb65e7ef", size = 33403, upload-time = "2026-10-30T10:45:53.77Z" }
 wheels = [
@@ -1000,8 +1081,8 @@ name = "pyobjc-framework-avrouting"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/10/65/eab45bd5b69b8f166c96bfee0d5267a2030daee6fc3f1103df76420e5b1a/pyobjc_framework_avrouting-13.0.tar.gz", hash = "sha256:06dcbed0c5bdd377a07ee3f406d4186ea96202097d9e7b416977888715470b9a", size = 20989, upload-time = "2026-10-30T10:45:54.523Z" }
 wheels = [
@@ -1020,8 +1101,8 @@ name = "pyobjc-framework-backgroundassets"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/05/54/72299684921e9b95dfcc15fb946315a8dc5f3a357c71679cbb9f271af77a/pyobjc_framework_backgroundassets-13.0.tar.gz", hash = "sha256:aa66c2410e94825813dc7fae9d3eeb8af1b793f6d6c92cd34598901ca67d4658", size = 31231, upload-time = "2026-10-30T10:45:55.212Z" }
 wheels = [
@@ -1040,11 +1121,11 @@ name = "pyobjc-framework-browserenginekit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coreaudio" },
-    { name = "pyobjc-framework-coremedia" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreaudio", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coremedia", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a6/28/42e86e2e4731fd4546c7291c6bc7f526ef6a30deb647a895f37922e1fe94/pyobjc_framework_browserenginekit-13.0.tar.gz", hash = "sha256:873e5065e49ec674b10c05a29632f7ca4b46ee70e9e37ef5bba5119c6a78abb5", size = 34094, upload-time = "2026-10-30T10:45:55.998Z" }
 wheels = [
@@ -1063,8 +1144,8 @@ name = "pyobjc-framework-businesschat"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/93/2e/b02f2276aa0ba6c82006105cd98916dcc5036edeeb329640ca6f70007478/pyobjc_framework_businesschat-13.0.tar.gz", hash = "sha256:edda7bdd2bed2971af00472356b82bce2bb2eae35dbe4e5fdae1023bf4f08a20", size = 12322, upload-time = "2026-10-30T10:45:56.715Z" }
 wheels = [
@@ -1076,8 +1157,8 @@ name = "pyobjc-framework-calendarstore"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/64/24/83c5f20aa5513f82962b1d211284e49f279bb93fe1f01fbdb3c3172b456c/pyobjc_framework_calendarstore-13.0.tar.gz", hash = "sha256:4957709d0ab4475693a3d640a6277637f763c4b7197d2c34584b7785486ebc63", size = 54214, upload-time = "2026-10-30T10:45:57.371Z" }
 wheels = [
@@ -1089,8 +1170,8 @@ name = "pyobjc-framework-callkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0d/13/fb1d9825c26d665b56c20c8022e6b49e0a6a26d9d824e299d971e085bab4/pyobjc_framework_callkit-13.0.tar.gz", hash = "sha256:607f9c94bb43333eb411b08d4207172c3a219bd1b31132c063c539a614d8504b", size = 32643, upload-time = "2026-10-30T10:45:58.175Z" }
 wheels = [
@@ -1109,8 +1190,8 @@ name = "pyobjc-framework-carbon"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/04/5d/88a2d342d7b6f9ebf23744961fd9db49c49eda975033d61bca8353e9ad0d/pyobjc_framework_carbon-13.0.tar.gz", hash = "sha256:e39ff99f5203e7aa5b1ea5464a327e8a802065399563ea0f94397f8344fa15ad", size = 39329, upload-time = "2026-10-30T10:45:58.889Z" }
 wheels = [
@@ -1122,8 +1203,8 @@ name = "pyobjc-framework-cfnetwork"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9e/30/ae532f9045823628bf44399a337cbe0ac7b713f1e68c9a6cd65a69c871f7/pyobjc_framework_cfnetwork-13.0.tar.gz", hash = "sha256:186dc23ea65b1ff8c23abec46c63ebe770212fef8bb2c6d8f29298733ad72019", size = 47503, upload-time = "2026-10-30T10:45:59.593Z" }
 wheels = [
@@ -1142,11 +1223,11 @@ name = "pyobjc-framework-cinematic"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-avfoundation" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coremedia" },
-    { name = "pyobjc-framework-metal" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-avfoundation", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coremedia", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-metal", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/6e/95/1797f870811c149ce22c10ce6f1566d9d7f6fce27fc42366c74722fdd817/pyobjc_framework_cinematic-13.0.tar.gz", hash = "sha256:8907ba1040b2d5b1d6ab78c98995c9c3ffa7bebb80d20c0283c38cb622ad370a", size = 27908, upload-time = "2026-10-30T10:46:00.369Z" }
 wheels = [
@@ -1158,8 +1239,8 @@ name = "pyobjc-framework-classkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/df/10/dab225e35660e3bea38086ce276a0dcbb9b4e8c7070ab12d0f97ddc71beb/pyobjc_framework_classkit-13.0.tar.gz", hash = "sha256:cf3912a1ef612c367fa4f9247acea5dc19740415e7e9b36551c35b89c323f5f2", size = 28921, upload-time = "2026-10-30T10:46:01.179Z" }
 wheels = [
@@ -1178,11 +1259,11 @@ name = "pyobjc-framework-cloudkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-accounts" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coredata" },
-    { name = "pyobjc-framework-corelocation" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-accounts", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coredata", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-corelocation", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/2f/eb/e2e65da1741d69438aa7d590f173b43e51668e20ad1c0e28d725c066b355/pyobjc_framework_cloudkit-13.0.tar.gz", hash = "sha256:aadcd9a8eabac7c2d6f901605fce1baef3e1670cf7584a307b9cb5a03cbe5fbe", size = 71359, upload-time = "2026-10-30T10:46:01.943Z" }
 wheels = [
@@ -1194,7 +1275,7 @@ name = "pyobjc-framework-cocoa"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/30/50/55a8779d35f1f86d795264cbd6fe62e35b2cf4fb8343fc888e99268c988a/pyobjc_framework_cocoa-13.0.tar.gz", hash = "sha256:bb7a23941fc8d7866578dbc84e56140efd343a1d28510f530dd1dbf80807daf4", size = 3135308, upload-time = "2026-10-30T10:46:03.982Z" }
 wheels = [
@@ -1213,8 +1294,8 @@ name = "pyobjc-framework-collaboration"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b6/0d/153336392bad4332e9d5176b98eb289e8779e68c3ad7ece143522410cee4/pyobjc_framework_collaboration-13.0.tar.gz", hash = "sha256:f855ba09a83a50a4d582eb749cf58b25a479a5fc6af8d8e898f68f7fc858a6d2", size = 14964, upload-time = "2026-10-30T10:46:05.504Z" }
 wheels = [
@@ -1226,8 +1307,8 @@ name = "pyobjc-framework-colorsync"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/11/32/34a801cd823e70e2b59b8b7da33bd75bd747c19292341845c9e0aeb105f7/pyobjc_framework_colorsync-13.0.tar.gz", hash = "sha256:cfd81f73e255c3aa30d377835c3703294fb5cafe50d45910a8b8f21713a2bf69", size = 26639, upload-time = "2026-10-30T10:46:06.208Z" }
 wheels = [
@@ -1239,9 +1320,9 @@ name = "pyobjc-framework-compositorservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-metal" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-metal", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/31/7b/ac17d3fdc0f274d7dbefefb214f96ee6b31033cb3d3315ceb141407eda44/pyobjc_framework_compositorservices-13.0.tar.gz", hash = "sha256:fe5eebd7544eeb71b09453e67b0f0027146cddd6c4609d4b6c79915b8220ce66", size = 24827, upload-time = "2026-10-30T10:46:06.924Z" }
 wheels = [
@@ -1253,8 +1334,8 @@ name = "pyobjc-framework-contacts"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c5/16/3869302d6c83183a86183b9c7df4e2b4ddcae32d636582881416886c777b/pyobjc_framework_contacts-13.0.tar.gz", hash = "sha256:06b6f722c1328797ce52505a8f2dbb7028bc422404c745981be798002f900eb7", size = 47608, upload-time = "2026-10-30T10:46:07.844Z" }
 wheels = [
@@ -1273,9 +1354,9 @@ name = "pyobjc-framework-contactsui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-contacts" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-contacts", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/74/d8/fdd814efa36f44716afadabf4daac357d1ac4694d68d12e231b6b110757d/pyobjc_framework_contactsui-13.0.tar.gz", hash = "sha256:7a7a8bb4ca488c46d2be4c8017cbae57ed9c475be1ff81b6fdf82fd97fa06a0d", size = 19441, upload-time = "2026-10-30T10:46:08.735Z" }
 wheels = [
@@ -1294,8 +1375,8 @@ name = "pyobjc-framework-coreaudio"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e4/9d/168d845146eff0c73a2b2e53168e461f008fd406724900e6c4f15184bd84/pyobjc_framework_coreaudio-13.0.tar.gz", hash = "sha256:3581dcaa3c3b760c09bec782f5d4bc9cc5abc9ef96d9bead4d0d7a838d0d28d2", size = 80684, upload-time = "2026-10-30T10:46:09.666Z" }
 wheels = [
@@ -1314,9 +1395,9 @@ name = "pyobjc-framework-coreaudiokit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coreaudio" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreaudio", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a8/bb/d501730f7ab7e4883e81e98b8f20fa5c0b816abfdae27db08e757285fdd8/pyobjc_framework_coreaudiokit-13.0.tar.gz", hash = "sha256:7b389b9ede001b9a56f9bf8a64a8e2d6153ef49c19369faec028279ff0a663c7", size = 21014, upload-time = "2026-10-30T10:46:10.675Z" }
 wheels = [
@@ -1335,8 +1416,8 @@ name = "pyobjc-framework-corebluetooth"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dc/5b/9fd06be0f5815eba5fe8708f6a3f0e37c3e6c6e8aaf2a480c3e5b99cdab6/pyobjc_framework_corebluetooth-13.0.tar.gz", hash = "sha256:06c11f81d25286665460facd0b53562faff30d92d3c4a15517042b878c295443", size = 38000, upload-time = "2026-10-30T10:46:11.598Z" }
 wheels = [
@@ -1355,8 +1436,8 @@ name = "pyobjc-framework-coredata"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/47/74/039dd04c7a268c3c81baafcb8dc7c0430c3405f458adf4e5015e0726894f/pyobjc_framework_coredata-13.0.tar.gz", hash = "sha256:0fcfa0ebeda14a3ea4e4392ceb3b9a6ca5f38eb8e597a3fc2d506056d42a5d69", size = 141037, upload-time = "2026-10-30T10:46:12.389Z" }
 wheels = [
@@ -1375,8 +1456,8 @@ name = "pyobjc-framework-corehaptics"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/fc/5e92f06cbe54abd8ae875e8467a9dffcdcaae8efb27bd66d9d89be87c48d/pyobjc_framework_corehaptics-13.0.tar.gz", hash = "sha256:eb77c9ef75538156555a2bda064db38f51855fd6bf46b33e6054a537bce55251", size = 24719, upload-time = "2026-10-30T10:46:13.219Z" }
 wheels = [
@@ -1388,8 +1469,8 @@ name = "pyobjc-framework-corelocation"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1a/64/b05df970e300c8206bb8db31744263db6873dec7161eb8fbf1460bafaf27/pyobjc_framework_corelocation-13.0.tar.gz", hash = "sha256:cf85b0f286976bf34642091c646b03f3245db708f53c9452ed8330aa30181d9c", size = 60520, upload-time = "2026-10-30T10:46:14.146Z" }
 wheels = [
@@ -1408,8 +1489,8 @@ name = "pyobjc-framework-coremedia"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/10/f6/3ccdac27fd6a2a94ae122b807a6f0512076614b85265559a9055996b5839/pyobjc_framework_coremedia-13.0.tar.gz", hash = "sha256:d95ef87f6f33ec98347439284f0add1f7d1d019b88cb8e218e81b39aec14d324", size = 99534, upload-time = "2026-10-30T10:46:14.941Z" }
 wheels = [
@@ -1428,8 +1509,8 @@ name = "pyobjc-framework-coremediaio"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/37/28/b56a88e730ef91024648fa31a3c4987bdb808c8ec877dd680d7cde7a232a/pyobjc_framework_coremediaio-13.0.tar.gz", hash = "sha256:94782f1240efec6c8913b6a5eb8314924c0d6a0e8282b4efab47e1bfbadb927d", size = 56483, upload-time = "2026-10-30T10:46:15.734Z" }
 wheels = [
@@ -1448,8 +1529,8 @@ name = "pyobjc-framework-coremidi"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8b/ee/c0805182436b76b0feaa4fe408fb2316fe1920d252de07c29af0c86a81f8/pyobjc_framework_coremidi-13.0.tar.gz", hash = "sha256:2fd36d6e0aeee9bb39090838233d2c1bceda9569e6e5e3b76de425ab35c0eeb7", size = 63235, upload-time = "2026-10-30T10:46:16.457Z" }
 wheels = [
@@ -1468,8 +1549,8 @@ name = "pyobjc-framework-coreml"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/79/83/e2a2709d14a76bd61a2ded2484b99d75e9c2e2afc1fa684225ee9fadfe38/pyobjc_framework_coreml-13.0.tar.gz", hash = "sha256:c2a41fb9fb008646df7fbd71e6aeb2284a7c985cbddb30189a511560e06ebdcf", size = 48852, upload-time = "2026-10-30T10:46:17.223Z" }
 wheels = [
@@ -1488,8 +1569,8 @@ name = "pyobjc-framework-coremotion"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d0/7e/e7c3deb1736ef6a9051e6c0d45700cb7211723998e5d63146874b2d5a504/pyobjc_framework_coremotion-13.0.tar.gz", hash = "sha256:a6ecc23193dc370cc9203e222ff0d7031bc4915679ca3ece0af9aed46c55ed98", size = 38489, upload-time = "2026-10-30T10:46:18.079Z" }
 wheels = [
@@ -1508,9 +1589,9 @@ name = "pyobjc-framework-coreservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-fsevents" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-fsevents", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e0/ae/b6f3422a052483706624326bc90929ea8de144f1c943af397766f6f3c1e2/pyobjc_framework_coreservices-13.0.tar.gz", hash = "sha256:5b619bff5b49007e9089598cdb7f6375edfb9c1370b7a6aff44e4acc07ea5a03", size = 396416, upload-time = "2026-10-30T10:46:18.931Z" }
 wheels = [
@@ -1529,8 +1610,8 @@ name = "pyobjc-framework-corespotlight"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e9/9c/09d159c1d6fcd22ac09ac16257a4bcd391b923a890c1f227dd068eb0355c/pyobjc_framework_corespotlight-13.0.tar.gz", hash = "sha256:c5f8238756b3a8c5cb55f99326e08d70e83e1d2deeee1024c362a8a200283d51", size = 45923, upload-time = "2026-10-30T10:46:19.896Z" }
 wheels = [
@@ -1549,9 +1630,9 @@ name = "pyobjc-framework-coretext"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/fb/8c/6521bee7ae7a25ff7cf2ac91078f06a50a2ecf6ef35068108e18f542b398/pyobjc_framework_coretext-13.0.tar.gz", hash = "sha256:0ee3b7e886ffa4be769402c5341b2101d949e31a33d1a468d64b3a3579d2aea1", size = 97797, upload-time = "2026-10-30T10:46:20.71Z" }
 wheels = [
@@ -1570,8 +1651,8 @@ name = "pyobjc-framework-corewlan"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d3/2a/5e9b45ba2bb277cfaa0f884f4f4c09b95dd09620dee013bd26d5c75ec847/pyobjc_framework_corewlan-13.0.tar.gz", hash = "sha256:9db55c560c3532cc4c77aef7d38eba6770e3563008ea515096d1013eb414871d", size = 34227, upload-time = "2026-10-30T10:46:21.48Z" }
 wheels = [
@@ -1590,8 +1671,8 @@ name = "pyobjc-framework-cryptotokenkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a2/f8/cff1f793c7e8db1e54c8ce3ec8b6a469f85d339f2cd8dfa1931435143c3e/pyobjc_framework_cryptotokenkit-13.0.tar.gz", hash = "sha256:c52f6ea7b0ed3cb201240fa784063e57bef3bafbdd7fab6f7c323996f3b6003b", size = 38170, upload-time = "2026-10-30T10:46:22.423Z" }
 wheels = [
@@ -1610,8 +1691,8 @@ name = "pyobjc-framework-datadetection"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/97/16/1af5f8b534d20521b24f3e1a6f8f6ba94a41a65ec001787381da1ccd41f7/pyobjc_framework_datadetection-13.0.tar.gz", hash = "sha256:e6aa65c27f8a079ec28e68fcc2c331948ba044af9adb33c2013683d5d8c2ced0", size = 12669, upload-time = "2026-10-30T10:46:23.182Z" }
 wheels = [
@@ -1623,8 +1704,8 @@ name = "pyobjc-framework-devicecheck"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d9/76/e6396d52524dd955bffe0a58f17055f8cc15186b3d4cd1eea2d27e0f2031/pyobjc_framework_devicecheck-13.0.tar.gz", hash = "sha256:171d01a589fab69575b18c1d9c6cd2e14bd82acb132d7bd33856b7f1c60ba55f", size = 13243, upload-time = "2026-10-30T10:46:23.871Z" }
 wheels = [
@@ -1636,8 +1717,8 @@ name = "pyobjc-framework-devicediscoveryextension"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/98/a2/6fe0feead02b7937d48bdf0024a6c5d4ec91bd121e0a4334646e0074fb86/pyobjc_framework_devicediscoveryextension-13.0.tar.gz", hash = "sha256:300072968eeb6414c59923b8a3cd8dc401073d5aca73ddf3c729fb90f5eaca64", size = 15688, upload-time = "2026-10-30T10:46:24.522Z" }
 wheels = [
@@ -1649,8 +1730,8 @@ name = "pyobjc-framework-dictionaryservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-coreservices" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreservices", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/91/73/0a2927f8e1579cf00d15d89edd54a254a7d3f9703f8fff9e221e9a3f944f/pyobjc_framework_dictionaryservices-13.0.tar.gz", hash = "sha256:15f56437f4149c5a04c75db847314763b9b47722719a7feb39aa1c3d421c5ebe", size = 10680, upload-time = "2026-10-30T10:46:25.183Z" }
 wheels = [
@@ -1662,8 +1743,8 @@ name = "pyobjc-framework-discrecording"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a2/1e/8ff5cd128ee83ba886a1134de4496f8c6d5e326c639ce995f31b47dd8f23/pyobjc_framework_discrecording-13.0.tar.gz", hash = "sha256:4ce1c4f8df7fe991f5c83a0cad7a1cb294d562b5ca6183281c429078dd765d56", size = 61586, upload-time = "2026-10-30T10:46:25.892Z" }
 wheels = [
@@ -1682,9 +1763,9 @@ name = "pyobjc-framework-discrecordingui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-discrecording" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-discrecording", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/fe/aa/e7fac35dea0ac6848524e8a42f9391236a78460864f26f47a9507edba0d4/pyobjc_framework_discrecordingui-13.0.tar.gz", hash = "sha256:3f986a92fb732e08f1c27826107a1b4a52224078e750e884bf868e05bd0fd046", size = 19288, upload-time = "2026-10-30T10:46:26.791Z" }
 wheels = [
@@ -1696,8 +1777,8 @@ name = "pyobjc-framework-diskarbitration"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/6b/4b/81ce3d66fac130fbf3b2e47098ad034553cea6052a027b3748d6c941ae00/pyobjc_framework_diskarbitration-13.0.tar.gz", hash = "sha256:161ce95fb084f9aa4e1c4c9a62d43560c778071b1ea0678c8c12592a9d3fe3e7", size = 17698, upload-time = "2026-10-30T10:46:27.515Z" }
 wheels = [
@@ -1709,8 +1790,8 @@ name = "pyobjc-framework-dvdplayback"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/95/ad/b523e7ee08d586d51e4283b9a251799f80cd82079919bbeec782e02e7198/pyobjc_framework_dvdplayback-13.0.tar.gz", hash = "sha256:93b0f1599b2767c375c3e54e5f40869858ed24a3aa24c2355eaf32122a07fe62", size = 34641, upload-time = "2026-10-30T10:46:28.239Z" }
 wheels = [
@@ -1722,8 +1803,8 @@ name = "pyobjc-framework-eventkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/2c/c6c311619c099ae622f8c6815854888154db0439785619013ad9ba10453c/pyobjc_framework_eventkit-13.0.tar.gz", hash = "sha256:77d8cd18ff038b6e88bb54461cd769cb1e45ae36eecc780adf51fc53adc397b2", size = 33168, upload-time = "2026-10-30T10:46:28.952Z" }
 wheels = [
@@ -1735,8 +1816,8 @@ name = "pyobjc-framework-exceptionhandling"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/95/3c/7ff8637b74bbf5155a17cd28447fa4d06277557d71b648831278027360a7/pyobjc_framework_exceptionhandling-13.0.tar.gz", hash = "sha256:6646914875a496a4bf91f1e22bc19600258d3a97b94721a473fb8d4221ed7ba5", size = 17078, upload-time = "2026-10-30T10:46:29.687Z" }
 wheels = [
@@ -1748,8 +1829,8 @@ name = "pyobjc-framework-executionpolicy"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/dd/f3/f551561bd49919338a5829e2857f3ef9a603b62df08de6ae6593d03d170f/pyobjc_framework_executionpolicy-13.0.tar.gz", hash = "sha256:3a889d173e5da884f4de9ba674052c9ddcd33ef5cdd4bd13d6bcceee5d89586d", size = 12967, upload-time = "2026-10-30T10:46:30.359Z" }
 wheels = [
@@ -1761,8 +1842,8 @@ name = "pyobjc-framework-extensionkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/65/9d/52eec8f78381556b2241e618b648e9b1c4ad60962df772e38d29e41b88fa/pyobjc_framework_extensionkit-13.0.tar.gz", hash = "sha256:8a8c1551200ebd539d278e5e69a94480b2a6f22d4668d25927d3255fbc6d1471", size = 19326, upload-time = "2026-10-30T10:46:31.011Z" }
 wheels = [
@@ -1781,8 +1862,8 @@ name = "pyobjc-framework-externalaccessory"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0b/e6/0e1732bfba786734929fa1803d6602f375f9485d99a6c5adce84b34f09e7/pyobjc_framework_externalaccessory-13.0.tar.gz", hash = "sha256:f3a7ba002286e1686070348a80a02e22f33b04f0f1af7b3aa3a906a9ef53af23", size = 21948, upload-time = "2026-10-30T10:46:31.683Z" }
 wheels = [
@@ -1801,8 +1882,8 @@ name = "pyobjc-framework-fileprovider"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4e/78/f794a841977cef1f308de04fc77d5fb399b1d51f400cf0cb2faadb5caaf7/pyobjc_framework_fileprovider-13.0.tar.gz", hash = "sha256:3a835cea852ca6476ddeac6e64e47d60bfe4a8e1f6b12825952dd50cff0bdc30", size = 50747, upload-time = "2026-10-30T10:46:32.457Z" }
 wheels = [
@@ -1821,8 +1902,8 @@ name = "pyobjc-framework-fileproviderui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-fileprovider" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-fileprovider", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/75/bd/11e95d441d47d17efd143f15cf405718dd3be2a7f9c4c316ce07c3929c6f/pyobjc_framework_fileproviderui-13.0.tar.gz", hash = "sha256:991aa138ac0c2c77f2a6508b81d320a290af8895590a817e82804caf5af9c3a1", size = 12758, upload-time = "2026-10-30T10:46:33.205Z" }
 wheels = [
@@ -1834,8 +1915,8 @@ name = "pyobjc-framework-findersync"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/fd/18/2ac0646c00601f146e278ecb62137287269841a1b97f1fd00f375ba6ccb6/pyobjc_framework_findersync-13.0.tar.gz", hash = "sha256:aa5339c789168c7d4d19938ff1ad99697f802a544b4d58d46b63694257f2bf5f", size = 14114, upload-time = "2026-10-30T10:46:33.827Z" }
 wheels = [
@@ -1847,8 +1928,8 @@ name = "pyobjc-framework-fsevents"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4f/79/4e91fe8b64fb1802d1e803c2d3d96901d66cb0e28e49ffaa3ed370acf180/pyobjc_framework_fsevents-13.0.tar.gz", hash = "sha256:150060ed21c0818892bba8b9c2c54e8d6db51e8af7481ba8742df94340bdc0b9", size = 28074, upload-time = "2026-10-30T10:46:34.489Z" }
 wheels = [
@@ -1867,8 +1948,8 @@ name = "pyobjc-framework-fskit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b4/e0/b30f668f377705c36c61c8465d23f4bea5f963e49967622a9228e61ca093/pyobjc_framework_fskit-13.0.tar.gz", hash = "sha256:39252c463231bb17223e206a848ab1367c4cedaef4de6c90aed7eaa83057fc95", size = 60926, upload-time = "2026-10-30T10:46:35.196Z" }
 wheels = [
@@ -1887,8 +1968,8 @@ name = "pyobjc-framework-gamecenter"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/24/13/b86b5d8fd0da31e86142494afa320ce295ac71d327be9a1b45f3b1bf8037/pyobjc_framework_gamecenter-13.0.tar.gz", hash = "sha256:687b471ff0f650ab4b32d67d38a431e9ef45e8625a469635ff81b18e9020b778", size = 32728, upload-time = "2026-10-30T10:46:35.95Z" }
 wheels = [
@@ -1907,8 +1988,8 @@ name = "pyobjc-framework-gamecontroller"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/71/cc/2e5f0c658eec24bd59e4d89eaf28b42c5ba13c19f5cfb29ee73e16603e4d/pyobjc_framework_gamecontroller-13.0.tar.gz", hash = "sha256:98678d889022fcdf2d101aa8783cc6fc3fd1e778b1fb6d8f32e0d814a231782a", size = 68260, upload-time = "2026-10-30T10:46:36.947Z" }
 wheels = [
@@ -1927,9 +2008,9 @@ name = "pyobjc-framework-gamekit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/04/c7/3f10e4e9c0f1bb2dd77733f8c96b55248cc22b7ae77317d7deb3bca40e16/pyobjc_framework_gamekit-13.0.tar.gz", hash = "sha256:fa86ab91d47d053bab52063fed9e196f85f1db80fd533bedbc93ffcb6310014b", size = 82398, upload-time = "2026-10-30T10:46:37.761Z" }
 wheels = [
@@ -1948,9 +2029,9 @@ name = "pyobjc-framework-gameplaykit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-spritekit" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-spritekit", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c3/f8/db4a20b05e0ae1f9d140d6832d6fdf1bf79b6515f29e0cab2ac7ffdf851c/pyobjc_framework_gameplaykit-13.0.tar.gz", hash = "sha256:4e3632356ca7b28a3062892aedd26e84a52eed08708090844f3e5e66ab1c6269", size = 50900, upload-time = "2026-10-30T10:46:38.504Z" }
 wheels = [
@@ -1969,8 +2050,8 @@ name = "pyobjc-framework-gamesave"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/13/87/cccc00f1cc8a1920b1b4a263bde2bcb08270c11989ebd0fc62b17361c0b6/pyobjc_framework_gamesave-13.0.tar.gz", hash = "sha256:b7cc197631443f376783c1d8c555d1e5eba5db9f3ff107973a27abc5a3fa7d6c", size = 13321, upload-time = "2026-10-30T10:46:39.75Z" }
 wheels = [
@@ -1982,8 +2063,8 @@ name = "pyobjc-framework-healthkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a8/6a/cbcfd6449f318776a81ffa4330f112d00f2ab827c6ec69977f6fcf02a657/pyobjc_framework_healthkit-13.0.tar.gz", hash = "sha256:3b0245cb4b917b4c309b6047371fe768ff633b34cc343777164a9f807583372d", size = 117148, upload-time = "2026-10-30T10:46:40.504Z" }
 wheels = [
@@ -2002,8 +2083,8 @@ name = "pyobjc-framework-imagecapturecore"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/45/18e5c086bc3d3354f41e412c5b3d518a5d521c570a7c457fa442960191d6/pyobjc_framework_imagecapturecore-13.0.tar.gz", hash = "sha256:d7c2bc3984879bd28aecbbc0918918c6e35e12a1a8a2561abeb865f4c6bc09de", size = 53054, upload-time = "2026-10-30T10:46:41.289Z" }
 wheels = [
@@ -2022,8 +2103,8 @@ name = "pyobjc-framework-inputmethodkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/52/6e/889331d625c0313f979f115c5d95a2b0ccef1db0afdd0837fe50211fed35/pyobjc_framework_inputmethodkit-13.0.tar.gz", hash = "sha256:e5a889f251c7786a752fb8d19fff695cfd48f07e879a9abec2852ea9bbb9e979", size = 26212, upload-time = "2026-10-30T10:46:42.088Z" }
 wheels = [
@@ -2042,8 +2123,8 @@ name = "pyobjc-framework-installerplugins"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/c7/47ec5da023b7243a97d613a76306ef6668b74e9f8986298a052f434a5509/pyobjc_framework_installerplugins-13.0.tar.gz", hash = "sha256:f6c09d3a21c6da37b41ee85c43f1257635870f10456ce3adce4344d4c7628587", size = 25971, upload-time = "2026-10-30T10:46:43.096Z" }
 wheels = [
@@ -2055,9 +2136,9 @@ name = "pyobjc-framework-instantmessage"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9b/d2/191d8b1472b26dafe3ed6972ed10215ecb893525e8f2d6b0b39981416513/pyobjc_framework_instantmessage-13.0.tar.gz", hash = "sha256:ec66abab058db2c9d9c8d2608a79e8bc63ec0ab1f625814a057d375072470dee", size = 33975, upload-time = "2026-10-30T10:46:44.014Z" }
 wheels = [
@@ -2069,8 +2150,8 @@ name = "pyobjc-framework-intents"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/db/65/1f6dbefff420dcccb44dc4ed05ccffe51547d6c22b135c32a144734ffa54/pyobjc_framework_intents-13.0.tar.gz", hash = "sha256:e0067a185d035e5b263253830ad9ab00c7f8a613496303dc85b9c11eb21cbcc8", size = 186540, upload-time = "2026-10-30T10:46:44.841Z" }
 wheels = [
@@ -2089,8 +2170,8 @@ name = "pyobjc-framework-intentsui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-intents" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-intents", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/65/da/b8efe8999ef92524dea7efdb02853bb9a0068785ae47de733e23b49fe4c4/pyobjc_framework_intentsui-13.0.tar.gz", hash = "sha256:ca49a888538b6c7a7caedb03c879c5552adb988dfcf74cdf734e9848daa2e072", size = 20881, upload-time = "2026-10-30T10:46:46.157Z" }
 wheels = [
@@ -2109,8 +2190,8 @@ name = "pyobjc-framework-iobluetooth"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5e/3f/271a6fcc9808f1ef571d7125b28868bc9165dbff9478fec05f7283b977d2/pyobjc_framework_iobluetooth-13.0.tar.gz", hash = "sha256:98b0a1da2bb77411aca5a1c42724a3b8a025419a416fe953a9212e241589c879", size = 174423, upload-time = "2026-10-30T10:46:47.054Z" }
 wheels = [
@@ -2129,8 +2210,8 @@ name = "pyobjc-framework-iobluetoothui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-iobluetooth" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-iobluetooth", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/12/df/a415e510a0c964cad4218d1ed86b15f703ae173e2f67e08fee61c1c79eb7/pyobjc_framework_iobluetoothui-13.0.tar.gz", hash = "sha256:40fec359e32166e84a1857de9d540514cff71c1a2d4a935f29ab3cccee1e5e1b", size = 17831, upload-time = "2026-10-30T10:46:47.954Z" }
 wheels = [
@@ -2142,8 +2223,8 @@ name = "pyobjc-framework-iosurface"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c9/7b/546ed155c50ae2a7e3d80c1c73cd75a2fbd5e8b7b13420b014e088f12969/pyobjc_framework_iosurface-13.0.tar.gz", hash = "sha256:14504c4371a6724ed96c230e77500e9d85e89808695d5050e89dca3f3cf46998", size = 22152, upload-time = "2026-10-30T10:46:48.636Z" }
 wheels = [
@@ -2155,8 +2236,8 @@ name = "pyobjc-framework-ituneslibrary"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/24/c4/adaa251740b449dba0e57e8d6da1526f93246f38893d7e2af8676cd75bcb/pyobjc_framework_ituneslibrary-13.0.tar.gz", hash = "sha256:3108979443d0d3545104434a16bc7b8e78f8cd71bb01249ac126fb3d2b5cf3a1", size = 25000, upload-time = "2026-10-30T10:46:49.346Z" }
 wheels = [
@@ -2168,8 +2249,8 @@ name = "pyobjc-framework-kernelmanagement"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e1/b8/48347477969cd3470a406909cdf674048664db83a3bcfb2c930f4992d93e/pyobjc_framework_kernelmanagement-13.0.tar.gz", hash = "sha256:8d5449706639b53dda2b6301e9a1786061168ed41b6cbf4a1c1b25ec8da996c8", size = 11870, upload-time = "2026-10-30T10:46:50.081Z" }
 wheels = [
@@ -2181,8 +2262,8 @@ name = "pyobjc-framework-latentsemanticmapping"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/21/a7/e67f7f52396108691d36238cf9cfa95b97e25f1e27187bb06219be6c348a/pyobjc_framework_latentsemanticmapping-13.0.tar.gz", hash = "sha256:4750228fa98a17e189d2df1bc03510cea90be83db0ad9e2bb2137a51a2aefcf0", size = 15645, upload-time = "2026-10-30T10:46:50.894Z" }
 wheels = [
@@ -2194,8 +2275,8 @@ name = "pyobjc-framework-launchservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-coreservices" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreservices", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d3/2b/0dc931abb9fdf9c4f10e276e9c2096bb0d6cb8a06edd9cf27fba6d3b020b/pyobjc_framework_launchservices-13.0.tar.gz", hash = "sha256:5b928fec77ef6fd42058c54f6930918fa84695795636a9c795cda2ef7b6d582b", size = 20991, upload-time = "2026-10-30T10:46:51.812Z" }
 wheels = [
@@ -2207,8 +2288,8 @@ name = "pyobjc-framework-libdispatch"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ca/67/ec3a8e6dce218dc78968d2a5580d7140b6d93541b76e6ab89147663e7d49/pyobjc_framework_libdispatch-13.0.tar.gz", hash = "sha256:840f8f719984b1128ce69e3a586cd10f89a394795885a54be8c1769158cf8555", size = 39627, upload-time = "2026-10-30T10:46:52.503Z" }
 wheels = [
@@ -2227,8 +2308,8 @@ name = "pyobjc-framework-libxpc"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/73/68/c4288c6c7107268fa85c2703243570ce3029a2bc8e641dcea8f1530246c7/pyobjc_framework_libxpc-13.0.tar.gz", hash = "sha256:20de427561f775848aeca011b7a5bff038689408babc3f160a94e0dd4a60aee9", size = 38041, upload-time = "2026-10-30T10:46:53.463Z" }
 wheels = [
@@ -2247,9 +2328,9 @@ name = "pyobjc-framework-linkpresentation"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cc/f8/e0cf2d60e745d24510061fd7e5147f523fb5972b8f33b41851e3b89878cf/pyobjc_framework_linkpresentation-13.0.tar.gz", hash = "sha256:147abfdf2cf7fc5ab184f37e24afb5d2e0ac1903903b489cd23715e9c530823e", size = 13911, upload-time = "2026-10-30T10:46:54.166Z" }
 wheels = [
@@ -2261,8 +2342,8 @@ name = "pyobjc-framework-linksecurity"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c5/a8/48c31482dd9e8cf547985a08df8bb0d1f1a61dd55479bf4542fcbfc9253e/pyobjc_framework_linksecurity-13.0.tar.gz", hash = "sha256:86054177a1ce65cc19c449db762e01f7dd20042f3ce17e244fb504f545b9c0fd", size = 12200, upload-time = "2026-10-30T10:46:54.827Z" }
 wheels = [
@@ -2274,9 +2355,9 @@ name = "pyobjc-framework-localauthentication"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-security" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-security", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/04/68/d929404ce89508d81a6bdc28288fb6e5e345a06bcbc53512d99ccbe64de2/pyobjc_framework_localauthentication-13.0.tar.gz", hash = "sha256:81f6c6a777d094cfb586b0f2572ffb7400233e770e43e17200915b86a25ca2cd", size = 32608, upload-time = "2026-10-30T10:46:55.505Z" }
 wheels = [
@@ -2295,9 +2376,9 @@ name = "pyobjc-framework-localauthenticationembeddedui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-localauthentication" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-localauthentication", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cc/3e/8ec11c88ce5fb713a2dcd81e0fb0d3fd79c480a5fbeee88e5e544b0f9892/pyobjc_framework_localauthenticationembeddedui-13.0.tar.gz", hash = "sha256:73629a5472ffb2676f2331652566c142abb72f60c1085a96f7a370d36832048c", size = 12959, upload-time = "2026-10-30T10:46:56.226Z" }
 wheels = [
@@ -2309,8 +2390,8 @@ name = "pyobjc-framework-mailkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9c/52/40f3f956b6aefa03b53cbc99790a08cd0f7b939999f3fff16dd8c651e420/pyobjc_framework_mailkit-13.0.tar.gz", hash = "sha256:ed6c05e45bb624ad31a5c5a2ce6847b670043331124df91545a872e9352ac9e8", size = 23830, upload-time = "2026-10-30T10:46:56.959Z" }
 wheels = [
@@ -2322,10 +2403,10 @@ name = "pyobjc-framework-mapkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-corelocation" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-corelocation", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4b/17/32e0f6daa681c460b8fab6df42b1ea421456a53269949f15598bf5155452/pyobjc_framework_mapkit-13.0.tar.gz", hash = "sha256:486886deba554a85cfa39007b1c9e2bb2f6bcf3f8b4f9b2e725dcce79904ddaf", size = 79501, upload-time = "2026-10-30T10:46:57.634Z" }
 wheels = [
@@ -2344,8 +2425,8 @@ name = "pyobjc-framework-mediaaccessibility"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f1/4e/998006cf2c9d56833b75bf053ac526ea3165e58582c0ca845dbed4ae235c/pyobjc_framework_mediaaccessibility-13.0.tar.gz", hash = "sha256:93a1213f95d29308fc14fb50725b6f7bc0c15bedae64711006c67dc3b97fa8c9", size = 17176, upload-time = "2026-10-30T10:46:58.479Z" }
 wheels = [
@@ -2357,10 +2438,10 @@ name = "pyobjc-framework-mediaextension"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-avfoundation" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coremedia" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-avfoundation", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coremedia", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e8/ef/1e048245ab799dd31fdec30e983765538622403fcb3a90cff47d9c434070/pyobjc_framework_mediaextension-13.0.tar.gz", hash = "sha256:26edad2ef5093e75a9ebb4e55b1f5fa621d7fe94b788699b73dd5c9201bf0d9a", size = 39529, upload-time = "2026-10-30T10:46:59.185Z" }
 wheels = [
@@ -2379,9 +2460,9 @@ name = "pyobjc-framework-medialibrary"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/74/30/12a73b56037896072d88fa12d1f8af9fb690300df3c17efc277ce4abc38a/pyobjc_framework_medialibrary-13.0.tar.gz", hash = "sha256:5e7a64a4db8b2dd99864e5e7b66db072cafd80445ec81f5bf5e4ec39082c4c52", size = 18517, upload-time = "2026-10-30T10:46:59.889Z" }
 wheels = [
@@ -2393,8 +2474,8 @@ name = "pyobjc-framework-mediaplayer"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-avfoundation" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-avfoundation", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/6c/2a/1d9511ffeb3b639548cfc0942fa16d079b37b73b70748d0c0e56831a6135/pyobjc_framework_mediaplayer-13.0.tar.gz", hash = "sha256:b44e9158fae3a5365244c3ada2d6e4bea5f5e493b52639cd469042184bce8efe", size = 42341, upload-time = "2026-10-30T10:47:00.813Z" }
 wheels = [
@@ -2406,8 +2487,8 @@ name = "pyobjc-framework-mediatoolbox"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8f/1b/6994fcfa1aa587c5a443c4a18b6f9dd63954ad38f12e098ca8c7ec87de33/pyobjc_framework_mediatoolbox-13.0.tar.gz", hash = "sha256:86b8385a900b5f2af049a5632603725ec2a0cc603d0b9503b29fe7de3f22f688", size = 94585, upload-time = "2026-10-30T10:47:01.593Z" }
 wheels = [
@@ -2426,8 +2507,8 @@ name = "pyobjc-framework-metal"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/27/e6/f6efb0f951df22e8571facc26e7bfde7f1b06cb59bf682737c0bbbbc4593/pyobjc_framework_metal-13.0.tar.gz", hash = "sha256:be798a872021520701183f015f1b0fdadbc5ca74e4aee80d0c4952b890c90a7a", size = 244348, upload-time = "2026-10-30T10:47:02.567Z" }
 wheels = [
@@ -2446,8 +2527,8 @@ name = "pyobjc-framework-metalfx"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-metal" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-metal", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/80/49/7f00cb7565ff56ccac025f340e0e367abe57aea780c2762968c3eb3a6aea/pyobjc_framework_metalfx-13.0.tar.gz", hash = "sha256:dfe9f57746589588b0398405500ab128a866497c43ba2c76e52e70925acfe308", size = 37441, upload-time = "2026-10-30T10:47:03.513Z" }
 wheels = [
@@ -2466,9 +2547,9 @@ name = "pyobjc-framework-metalkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-metal" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-metal", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4d/ba/cd5e6fb442dc9d8c7099234deece0c641ccae7e15dbfee11beb5977120e5/pyobjc_framework_metalkit-13.0.tar.gz", hash = "sha256:2233347f00375776043cfff37bd4d33ec113b813b156408c17286cad1193b0a5", size = 28230, upload-time = "2026-10-30T10:47:04.236Z" }
 wheels = [
@@ -2487,8 +2568,8 @@ name = "pyobjc-framework-metalperformanceshaders"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-metal" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-metal", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/64/52336aee343eecb4b8f3dee758969df317490ec2c82063e7425b11d99c55/pyobjc_framework_metalperformanceshaders-13.0.tar.gz", hash = "sha256:071786c185b9279ece89deed2ea0d15b6ab018aa71b1c931ee78a5e6746aedac", size = 194204, upload-time = "2026-10-30T10:47:05.145Z" }
 wheels = [
@@ -2507,8 +2588,8 @@ name = "pyobjc-framework-metalperformanceshadersgraph"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-metalperformanceshaders" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-metalperformanceshaders", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/86/cc/b58a94d847f154c44506a094062b75d18e3f316ef89db660103a83044ae5/pyobjc_framework_metalperformanceshadersgraph-13.0.tar.gz", hash = "sha256:c2211556e426c536f1d9880afa4f299ad6b7dc03564f10fbae91729e1d5d2e31", size = 60657, upload-time = "2026-10-30T10:47:06.275Z" }
 wheels = [
@@ -2520,8 +2601,8 @@ name = "pyobjc-framework-metrickit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/b1/92/153504d761b40bd15dadaa119f360e6bd5eb71df4319033895ec71fc7a60/pyobjc_framework_metrickit-13.0.tar.gz", hash = "sha256:aca2f02b4e03e6e6b5e6454352f1e9408dfd621225b0d62c34bd14f22710c926", size = 30910, upload-time = "2026-10-30T10:47:07.004Z" }
 wheels = [
@@ -2540,8 +2621,8 @@ name = "pyobjc-framework-mlcompute"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/bb/1f/38f7b6f3b14b3274ef741c7c6f32c60344a293bca86b32eab7ab1c34d7b3/pyobjc_framework_mlcompute-13.0.tar.gz", hash = "sha256:0e6bdb18857487cf41a3b71672b9e7b06b8931d92551387781f1bbeb8bceb44c", size = 54683, upload-time = "2026-10-30T10:47:07.712Z" }
 wheels = [
@@ -2553,9 +2634,9 @@ name = "pyobjc-framework-modelio"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4f/b8/72c8420af40a9bf8d0e19a18bef04206c5e45a1510cb7a586e8d14f916d6/pyobjc_framework_modelio-13.0.tar.gz", hash = "sha256:8f954d4ce59a91bbb6dcb41919718e4b445bdb7ea00a79f56e44014383cd0832", size = 81922, upload-time = "2026-10-30T10:47:08.44Z" }
 wheels = [
@@ -2574,8 +2655,8 @@ name = "pyobjc-framework-multipeerconnectivity"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4b/3c/63363e1b5e597778b7a3c3a3cdf82783d1885a22196ffc5ebaeb182139c7/pyobjc_framework_multipeerconnectivity-13.0.tar.gz", hash = "sha256:9280529aea95556935e67d7eddfd0df43f7a2c8f5f909dd4e94c250fe61f640c", size = 26489, upload-time = "2026-10-30T10:47:09.187Z" }
 wheels = [
@@ -2594,8 +2675,8 @@ name = "pyobjc-framework-naturallanguage"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ec/09/74c3ce25f37fc4d69fc58cfefcbee7569e2fd53e005d653ee2bd3dd115e4/pyobjc_framework_naturallanguage-13.0.tar.gz", hash = "sha256:1c1fbd9441a77c381d5a44e1fc79db51f8ac5b91714b3ee47337b436b48da07b", size = 26290, upload-time = "2026-10-30T10:47:10.109Z" }
 wheels = [
@@ -2607,8 +2688,8 @@ name = "pyobjc-framework-netfs"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/88/8302770f845b71e91a13caa15d0d8171beb422622b051f739aa093fc8c25/pyobjc_framework_netfs-13.0.tar.gz", hash = "sha256:83649e55f45effb705f23664432b40111a5ff1255084c628082ab2393ffe6be5", size = 14988, upload-time = "2026-10-30T10:47:10.821Z" }
 wheels = [
@@ -2620,8 +2701,8 @@ name = "pyobjc-framework-network"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c4/08/e2b9fcc37c0499452b4848d60ffcc10bf9828b9758a2b77b1e2a0e724145/pyobjc_framework_network-13.0.tar.gz", hash = "sha256:5662a95fa60ed5d394365181ba016aa288d8ecb0f1be91f4774a4b783e6555d4", size = 63100, upload-time = "2026-10-30T10:47:11.577Z" }
 wheels = [
@@ -2640,8 +2721,8 @@ name = "pyobjc-framework-networkextension"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f1/59/76deb6b21bc1edf096cac9237d7d42c420cf4c402b699f0d4717472469c9/pyobjc_framework_networkextension-13.0.tar.gz", hash = "sha256:93fee3ef1706c2c35912f728535010549dee06e98bf4ef0805a072fe261875da", size = 81107, upload-time = "2026-10-30T10:47:12.4Z" }
 wheels = [
@@ -2660,8 +2741,8 @@ name = "pyobjc-framework-notificationcenter"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a4/c8/48dd254816a0d7db6c5d5414682e45e7fd32bf1293ef6015b356f46c6129/pyobjc_framework_notificationcenter-13.0.tar.gz", hash = "sha256:a9680f3e5cd439eafed5000eb3c08f8dd4a3454b52c8b3f02387aecdf471fe04", size = 22166, upload-time = "2026-10-30T10:47:13.166Z" }
 wheels = [
@@ -2680,8 +2761,8 @@ name = "pyobjc-framework-opendirectory"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/41/db/6cc024d574bb0173246de7d7a1c28a1d3d6a9ee3e8e218eeb45209c19d23/pyobjc_framework_opendirectory-13.0.tar.gz", hash = "sha256:6d0db44f1b37c3a61f0cea72a83be2b1bbe8778d7307b599a1a324be5d87cfef", size = 68879, upload-time = "2026-10-30T10:47:13.917Z" }
 wheels = [
@@ -2693,8 +2774,8 @@ name = "pyobjc-framework-osakit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3f/09/9c7e7777b1b958333b8f2b824f51ce0ccfbade0245caad858a217556ccdc/pyobjc_framework_osakit-13.0.tar.gz", hash = "sha256:4cf0ebe1e377e9ec6c8f1bd2216f446fb7fba644ae848af7964d3485d776a713", size = 18767, upload-time = "2026-10-30T10:47:14.682Z" }
 wheels = [
@@ -2706,10 +2787,10 @@ name = "pyobjc-framework-oslog"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coremedia" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coremedia", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/27/1b/e0d2266f0e3bd1ef1a01edc29fd7ad906eb84964e4de9ad987f9a8ca2291/pyobjc_framework_oslog-13.0.tar.gz", hash = "sha256:b0b02c35233b0d67a84f6bddb27664306ffc64abca0c35cfdce18618e3d71dab", size = 22316, upload-time = "2026-10-30T10:47:15.489Z" }
 wheels = [
@@ -2728,8 +2809,8 @@ name = "pyobjc-framework-passkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a3/09/54c0f7ba70058298a50ac0ce9644c0d353dd53d940f83fed7e79dc3bf946/pyobjc_framework_passkit-13.0.tar.gz", hash = "sha256:3c40b77f46b8c1ee6b24a61c021aa4847124283d20f6b0ad6b22bb4dd1016182", size = 69158, upload-time = "2026-10-30T10:47:16.224Z" }
 wheels = [
@@ -2748,8 +2829,8 @@ name = "pyobjc-framework-pencilkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e3/27/d1c06b91a791a6d8cdf0dc5b27d1567aaaea7900ff0b85d51ebb811e0287/pyobjc_framework_pencilkit-13.0.tar.gz", hash = "sha256:1d9510dd2a6d0151c4f2f3c4a712da937967ea472e8189e2ef9bff37e0cfa412", size = 21533, upload-time = "2026-10-30T10:47:17.012Z" }
 wheels = [
@@ -2761,8 +2842,8 @@ name = "pyobjc-framework-phase"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-avfoundation" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-avfoundation", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/53/7b/b0a3b6a672219efb4c48038f1c04414fce44f6945476cd1cab0b1afb75f2/pyobjc_framework_phase-13.0.tar.gz", hash = "sha256:4ebbf09b3cf92de37fad7c94ffb469921d71e539f5649c6767ca55c86125fff3", size = 40514, upload-time = "2026-10-30T10:47:17.708Z" }
 wheels = [
@@ -2774,8 +2855,8 @@ name = "pyobjc-framework-photos"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/86/59/066cb8db296550bea2588929427f614087323b1ab5b4b1d1676365400a43/pyobjc_framework_photos-13.0.tar.gz", hash = "sha256:94367cd068bb2cb528fb534a783693320d7ba5ff28cfbbfc1a46a10f569e9692", size = 62052, upload-time = "2026-10-30T10:47:18.436Z" }
 wheels = [
@@ -2794,8 +2875,8 @@ name = "pyobjc-framework-photosui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/53/cf/1eeaebaba24fd6aa2deee550330f88ff721b0a49dc12707ae827591c1eff/pyobjc_framework_photosui-13.0.tar.gz", hash = "sha256:d0480c3cdd9540e75beb456000c5697b861b0d4d025ba9ccb2b6a9e273381c2d", size = 36403, upload-time = "2026-10-30T10:47:19.17Z" }
 wheels = [
@@ -2814,8 +2895,8 @@ name = "pyobjc-framework-preferencepanes"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5f/43/87d0e2197a237360b83614f8a6301573a9dc98c31c4a34091bb0e1b4b895/pyobjc_framework_preferencepanes-13.0.tar.gz", hash = "sha256:a257aa8cf10944fce61b5f95805b0984466712810dfa416119d41fd90a226a32", size = 24903, upload-time = "2026-10-30T10:47:19.907Z" }
 wheels = [
@@ -2827,8 +2908,8 @@ name = "pyobjc-framework-pushkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f7/0f/d54bc0e5080616d621b9de1fe3914aff207175b242847de90bcf20342a14/pyobjc_framework_pushkit-13.0.tar.gz", hash = "sha256:6818009b95411c326075b141811216d058cdefb84334e8c35dd105c6c25c4c78", size = 20584, upload-time = "2026-10-30T10:47:21.357Z" }
 wheels = [
@@ -2847,8 +2928,8 @@ name = "pyobjc-framework-quartz"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/86/ffaa76ca28df5450cce14614c657b910bbd7bb737feaf47f74230c3b78d3/pyobjc_framework_quartz-13.0.tar.gz", hash = "sha256:b9a4942182efbbc7e18e6cb7f5a8faa166dc2fc5e33bece7c7b1355494274add", size = 3399243, upload-time = "2026-10-30T10:47:23.667Z" }
 wheels = [
@@ -2867,9 +2948,9 @@ name = "pyobjc-framework-quicklookthumbnailing"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/80/6f/bf3e3df73377779e87b4de3100215063c323938cf2228f4e0ffa298e126c/pyobjc_framework_quicklookthumbnailing-13.0.tar.gz", hash = "sha256:bf54805a18b3248361f39118f22d8d1eecfb639585492ee0e02cebd3adf2eeb4", size = 15671, upload-time = "2026-10-30T10:47:25.218Z" }
 wheels = [
@@ -2881,8 +2962,8 @@ name = "pyobjc-framework-replaykit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/06/74/caf6fb18b06420cc60e51f43769cd7a44d7606bd04a8e794323d393cc1c0/pyobjc_framework_replaykit-13.0.tar.gz", hash = "sha256:cd8aa3e6bca8ef4cf510de92bb83eb610d2eb865675b2c81f4dc3d53dd885a65", size = 27338, upload-time = "2026-10-30T10:47:26.024Z" }
 wheels = [
@@ -2901,8 +2982,8 @@ name = "pyobjc-framework-safariservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0a/2d/d5de643e77bdbcd9f4c976f2d730548f228887034fc6b9e8574e8c29141c/pyobjc_framework_safariservices-13.0.tar.gz", hash = "sha256:8cbf56ec7a0279fe94a9e75edb8009ce03384f919df97d3e3c6ef464f2308174", size = 27664, upload-time = "2026-10-30T10:47:26.699Z" }
 wheels = [
@@ -2921,9 +3002,9 @@ name = "pyobjc-framework-safetykit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/41/35/14b3edd61da94f26721f6205d62c74a1b1b2ce15d5a39b7e566a96789f0c/pyobjc_framework_safetykit-13.0.tar.gz", hash = "sha256:6e1c3bda26a0928553116a80d5a0860d99acca91a8870139638d751c6d770caf", size = 21050, upload-time = "2026-10-30T10:47:27.413Z" }
 wheels = [
@@ -2942,9 +3023,9 @@ name = "pyobjc-framework-scenekit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/95/b2/8b1bb93b956aed3b3de8c7ce89dd99acac414136a64f2649cd5ff8b224f1/pyobjc_framework_scenekit-13.0.tar.gz", hash = "sha256:5a87a43a6adaa1b4f2ab4fd3a343abe8c5e9d13ad5226161179707bc84a2c0ec", size = 130820, upload-time = "2026-10-30T10:47:28.255Z" }
 wheels = [
@@ -2963,9 +3044,9 @@ name = "pyobjc-framework-screencapturekit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coremedia" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coremedia", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/b3/2a38e35a2d0b7703e6a3c0a03c4e4854f1ea700b930ad50cf8fe34de1aec/pyobjc_framework_screencapturekit-13.0.tar.gz", hash = "sha256:036ee91a5566c053117120c423c747becdd803906dae1822c537ea61af976273", size = 40818, upload-time = "2026-10-30T10:47:29.126Z" }
 wheels = [
@@ -2984,8 +3065,8 @@ name = "pyobjc-framework-screensaver"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/33/12/97c20934aedf0cfecbd7a89e2d4b5798330f9987c4168e612665f833035b/pyobjc_framework_screensaver-13.0.tar.gz", hash = "sha256:ab63759339ec39aef29c9b4ed673dab3a05d4eef580adb2e44007216a263757b", size = 22854, upload-time = "2026-10-30T10:47:29.872Z" }
 wheels = [
@@ -3004,8 +3085,8 @@ name = "pyobjc-framework-screentime"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/96/08/acbf9a02df2a60db46786af2c8acf473d8697a7f641ead262a4cba34a7ba/pyobjc_framework_screentime-13.0.tar.gz", hash = "sha256:eb81094949147462b1713d7c427acc298084a401a664acbe41a718f9ece3e69e", size = 13996, upload-time = "2026-10-30T10:47:30.611Z" }
 wheels = [
@@ -3017,8 +3098,8 @@ name = "pyobjc-framework-scriptingbridge"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d7/ec/7d54ef324f4814006c5b0403c574872189e0adac6f3636945624b50db43a/pyobjc_framework_scriptingbridge-13.0.tar.gz", hash = "sha256:546099444d913c624989ff92d846c999ebd821bfa611b9faeb0ddcaeeda2334c", size = 21247, upload-time = "2026-10-30T10:47:31.468Z" }
 wheels = [
@@ -3037,8 +3118,8 @@ name = "pyobjc-framework-searchkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-coreservices" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreservices", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0e/74/09aef15a45fe44e1719cd8f5f805b8e1cf318ba147532292834923cc9481/pyobjc_framework_searchkit-13.0.tar.gz", hash = "sha256:13ea1cbd476b588a14cdd2e3d5bf11eba6a48bf9198ce97b91906cd308aeaa4d", size = 31160, upload-time = "2026-10-30T10:47:33.13Z" }
 wheels = [
@@ -3050,8 +3131,8 @@ name = "pyobjc-framework-security"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/63/3a/58e0d6ef73812d279a89858ffd06b64d08eebe30bf84441c4b4df6e9665d/pyobjc_framework_security-13.0.tar.gz", hash = "sha256:e5c3f90773fb53dcd525075011f80a83e6f38cb0ad0bcd13fb8f629bf35d22aa", size = 180769, upload-time = "2026-10-30T10:47:33.878Z" }
 wheels = [
@@ -3070,9 +3151,9 @@ name = "pyobjc-framework-securityfoundation"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-security" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-security", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/aa/f2/1f6118d5bdd55386f30061c3c82e04b665f1284d551c3976072728c479ce/pyobjc_framework_securityfoundation-13.0.tar.gz", hash = "sha256:3599c7a85e314d42b533ff4d8075897fd3ea921c87695f50f6cdf042ecbb0f18", size = 12976, upload-time = "2026-10-30T10:47:34.676Z" }
 wheels = [
@@ -3084,9 +3165,9 @@ name = "pyobjc-framework-securityinterface"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-security" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-security", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/71/91/cc9d665eaa44cb28aa8981d79d49a26beb32339806927f7ca69f1582c1bf/pyobjc_framework_securityinterface-13.0.tar.gz", hash = "sha256:8e1d79ac985f654486b6711985012da91c1cb6ad394a77f8889adc716c95f8a7", size = 28942, upload-time = "2026-10-30T10:47:35.372Z" }
 wheels = [
@@ -3105,9 +3186,9 @@ name = "pyobjc-framework-securityui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-security" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-security", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/4a/52/4e027a305a19dd1d080363ce2633b2961c038b2108b054c3b5f3ca7435f0/pyobjc_framework_securityui-13.0.tar.gz", hash = "sha256:51722e129efea7f023be892fa84451ef9dd285ebafbc8ab3b2f9d2081390ea4e", size = 12523, upload-time = "2026-10-30T10:47:36.235Z" }
 wheels = [
@@ -3119,9 +3200,9 @@ name = "pyobjc-framework-sensitivecontentanalysis"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/3e/75/2c0ec827fedeaa132be9d36c4110826d3a41ed30531bc8ba841ea9ddf69a/pyobjc_framework_sensitivecontentanalysis-13.0.tar.gz", hash = "sha256:f971491fe95202e995fee7bfd2cd0bdb66b115b86fd0aa3d44ed942424224d04", size = 14617, upload-time = "2026-10-30T10:47:36.872Z" }
 wheels = [
@@ -3133,8 +3214,8 @@ name = "pyobjc-framework-servicemanagement"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/03/9b/b6d085589026f017a7eb8b847810fb1c2da1304df07532702a4529af720f/pyobjc_framework_servicemanagement-13.0.tar.gz", hash = "sha256:d3769c181f5f94a2e279498e972862ba8f9a5e094c6027e99745dc2d20bde351", size = 15150, upload-time = "2026-10-30T10:47:37.552Z" }
 wheels = [
@@ -3146,8 +3227,8 @@ name = "pyobjc-framework-sharedwithyou"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-sharedwithyoucore" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-sharedwithyoucore", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/64/8e/831810a4a4620c64678c464ad388b2371b4e24f20e8362df13e29289dabe/pyobjc_framework_sharedwithyou-13.0.tar.gz", hash = "sha256:9a5cdb9904858f6ee6e47b64a90fafad144bf7e4b36e497d23de09af747ab001", size = 27918, upload-time = "2026-10-30T10:47:38.401Z" }
 wheels = [
@@ -3166,8 +3247,8 @@ name = "pyobjc-framework-sharedwithyoucore"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/f1/19/5ac82fab3acb1736469645dcacd35c97a98d9f543431868e5e44e6937c6c/pyobjc_framework_sharedwithyoucore-13.0.tar.gz", hash = "sha256:e37eb6395c23735cda31bd2b74f06fdbd191f35db69f2fbb2d03604060f1a355", size = 24385, upload-time = "2026-10-30T10:47:39.238Z" }
 wheels = [
@@ -3186,8 +3267,8 @@ name = "pyobjc-framework-shazamkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/6e/25/ff070cdb7c15c5eecc6e1030d4ac7eb76825e68b86bb99a772c9e203d080/pyobjc_framework_shazamkit-13.0.tar.gz", hash = "sha256:c569e5b49310ed2ed69ccdd093bf7b3da8539fbb28b97201137c9f150a701fd2", size = 26021, upload-time = "2026-10-30T10:47:40.327Z" }
 wheels = [
@@ -3206,8 +3287,8 @@ name = "pyobjc-framework-social"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/c4/47/fd158dfd1ab576374fe003b2cd9db2b54a6f9801807c97532cead9885424/pyobjc_framework_social-13.0.tar.gz", hash = "sha256:cc4cef813a7a7f83f409a7f65972b9147d5b651f0e3f03163dccbf1bb3ea3c32", size = 13653, upload-time = "2026-10-30T10:47:41.225Z" }
 wheels = [
@@ -3219,8 +3300,8 @@ name = "pyobjc-framework-soundanalysis"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d3/03/466f2cefc6c2020b77267a8b87a6d59cec67e0144bd4b80745ffb5e2b613/pyobjc_framework_soundanalysis-13.0.tar.gz", hash = "sha256:7c3ef1050d2161fe6e7355957c9daac11efba25f6602b0adda3a47ffc844f3b5", size = 15587, upload-time = "2026-10-30T10:47:41.879Z" }
 wheels = [
@@ -3232,8 +3313,8 @@ name = "pyobjc-framework-speech"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/c3/14d36d5f116c8176fa38cf9b519088d61c6aa61adca43c982875831c0c2f/pyobjc_framework_speech-13.0.tar.gz", hash = "sha256:76d4946b21592f7d9455afc14818b96f85c7bcca11dbebce2e163dc63b771c5a", size = 27802, upload-time = "2026-10-30T10:47:42.567Z" }
 wheels = [
@@ -3252,9 +3333,9 @@ name = "pyobjc-framework-spritekit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/94/32/88c1c5f5bacba1d0ce9f1df60e9ae33224341099d8b9ada37dc648d81e2b/pyobjc_framework_spritekit-13.0.tar.gz", hash = "sha256:f145ea23683b31476a7200f0acc4b96ee87e87f10cca33f2de62b5d3816a1536", size = 83840, upload-time = "2026-10-30T10:47:43.711Z" }
 wheels = [
@@ -3273,8 +3354,8 @@ name = "pyobjc-framework-statereporting"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/16/9d/16f452b7eb96c28172a7ad665aadf0d7d36cbc9c6efe3865c991ef153b93/pyobjc_framework_statereporting-13.0.tar.gz", hash = "sha256:490cfb950e39d49cc2fddba68094e7964cd1ce43aa4ac872757e8ec983326e70", size = 12068, upload-time = "2026-10-30T10:47:44.637Z" }
 wheels = [
@@ -3286,8 +3367,8 @@ name = "pyobjc-framework-storekit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/49/41/7daebc810fd9cf97f64641d9e59f2a4aa744f33abab22544dbc6654347d0/pyobjc_framework_storekit-13.0.tar.gz", hash = "sha256:aa9c5e8eeb1f022f0f086990878024d222f57e3225dc94352ccad0573e068e6f", size = 40823, upload-time = "2026-10-30T10:47:45.459Z" }
 wheels = [
@@ -3306,8 +3387,8 @@ name = "pyobjc-framework-symbols"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8f/bd/61229fdd63fbc3082a202b042fa405928b840477a7a36a9ec08e6ab30b76/pyobjc_framework_symbols-13.0.tar.gz", hash = "sha256:43b32eefc9f7055a29b4c2b49832cda544e96ebe0d410065dbd642bc52d8b54a", size = 14639, upload-time = "2026-10-30T10:47:46.153Z" }
 wheels = [
@@ -3319,9 +3400,9 @@ name = "pyobjc-framework-syncservices"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coredata" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coredata", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/16/e8/0254ff9ee77c4a461f0b68a29335fd66b39826e84a0eba5bdaca7e2314a2/pyobjc_framework_syncservices-13.0.tar.gz", hash = "sha256:fd0fb9da33946bcd0be9972687edcabd33f225327008500a47ac7eb58c17dcd0", size = 34430, upload-time = "2026-10-30T10:47:46.874Z" }
 wheels = [
@@ -3340,8 +3421,8 @@ name = "pyobjc-framework-systemconfiguration"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/4e/1dc610b8a850feac8ea0d75279d3b3be7f467f80e849176b72de6dfaca9a/pyobjc_framework_systemconfiguration-13.0.tar.gz", hash = "sha256:8e3a0e33cd78f0161a4fc1bc79a66013c9877c2cea5dd708df4c6e8888b4df17", size = 62085, upload-time = "2026-10-30T10:47:47.578Z" }
 wheels = [
@@ -3360,8 +3441,8 @@ name = "pyobjc-framework-systemextensions"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0e/38/19f789fe232d89d537cf28b3888ab01dd53b2c2dcd36ee8512a00b617557/pyobjc_framework_systemextensions-13.0.tar.gz", hash = "sha256:2116a0d23cb9d8940d4f735b9acb5222e8d5d36a48e3599f1e5043e136087c73", size = 21721, upload-time = "2026-10-30T10:47:48.318Z" }
 wheels = [
@@ -3380,8 +3461,8 @@ name = "pyobjc-framework-threadnetwork"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1d/76/c407274804db22bcd26272bc68b21663c9350c130a3081cbe6ea731bc81c/pyobjc_framework_threadnetwork-13.0.tar.gz", hash = "sha256:8478948c2e2faca7098afe299d7f1a339eb12e373210d43dc723813f5820d3bd", size = 13389, upload-time = "2026-10-30T10:47:48.985Z" }
 wheels = [
@@ -3393,8 +3474,8 @@ name = "pyobjc-framework-uniformtypeidentifiers"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/ba/3d/ab2b17b2d31286c405bc7d818cf85de538bd90144cd3163c693b0de1d623/pyobjc_framework_uniformtypeidentifiers-13.0.tar.gz", hash = "sha256:d70ae3722c91c57de71a77d1004a22a118e38798f66c30552cb93754f7a9cbb5", size = 20694, upload-time = "2026-10-30T10:47:49.642Z" }
 wheels = [
@@ -3406,8 +3487,8 @@ name = "pyobjc-framework-usernotifications"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cc/b6/7be965213588af173bba5cb9d93554f3c268fa0845057a5d40dcf0d8c957/pyobjc_framework_usernotifications-13.0.tar.gz", hash = "sha256:b2e7574043889c11bff555f2203c4e79bcff9a4de513afb6f1f1f13b0aca35e8", size = 33585, upload-time = "2026-10-30T10:47:50.311Z" }
 wheels = [
@@ -3426,9 +3507,9 @@ name = "pyobjc-framework-usernotificationsui"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-usernotifications" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-usernotifications", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/41/82/9c569c7c14c085a358520a31e535ce816886abd7831b695316906b85336f/pyobjc_framework_usernotificationsui-13.0.tar.gz", hash = "sha256:77b666405935c11229ca969562bcee1557571f7f65514b0f96a865f6d213cd87", size = 13377, upload-time = "2026-10-30T10:47:51.099Z" }
 wheels = [
@@ -3440,8 +3521,8 @@ name = "pyobjc-framework-videosubscriberaccount"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/00/e1/a79e6fbd20e5be9b6f6e05126e76a4c37333de1f029fce11475805a3c57d/pyobjc_framework_videosubscriberaccount-13.0.tar.gz", hash = "sha256:908546177c36d67efe86b51c74e979cbd977429b66d51b1a65dc34dfc3662b85", size = 21168, upload-time = "2026-10-30T10:47:51.775Z" }
 wheels = [
@@ -3453,10 +3534,10 @@ name = "pyobjc-framework-videotoolbox"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coremedia" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coremedia", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/36/9a/ef2269eb7114c0a77752c7ec43d0dc4cd4422b9538cfdfe9a1de9e74cf19/pyobjc_framework_videotoolbox-13.0.tar.gz", hash = "sha256:51b0e3a8e755c9dd4f95a7de74d6fb7f2866b207a624e136f09607ed9f303b1e", size = 64958, upload-time = "2026-10-30T10:47:52.51Z" }
 wheels = [
@@ -3475,8 +3556,8 @@ name = "pyobjc-framework-virtualization"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/91/ab/5da80d9187244806a05cb1b8b18b0a19d0819c982452089e0086c5b18d68/pyobjc_framework_virtualization-13.0.tar.gz", hash = "sha256:cf4bcc5fc7e305d21003867e4eaf69d869bc900def8200363fd651db615f31c5", size = 58909, upload-time = "2026-10-30T10:47:53.275Z" }
 wheels = [
@@ -3495,10 +3576,10 @@ name = "pyobjc-framework-vision"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
-    { name = "pyobjc-framework-coreml" },
-    { name = "pyobjc-framework-quartz" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-coreml", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-quartz", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/13/9f/f1f90a39966bb2e0b25176fe20d44572ac86f2fff1b724eed6c87a144ed3/pyobjc_framework_vision-13.0.tar.gz", hash = "sha256:e9197f267528bf345ccae3f949d4acf6330b69658b9b02dd03088e6e1f4395bb", size = 70656, upload-time = "2026-10-30T10:47:53.999Z" }
 wheels = [
@@ -3517,8 +3598,8 @@ name = "pyobjc-framework-webkit"
 version = "13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
-    { name = "pyobjc-framework-cocoa" },
+    { name = "pyobjc-core", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
+    { name = "pyobjc-framework-cocoa", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/5c/c3/8cf2bd403676ac956046150c666357f3eaf246e936bfd29069dba59534ce/pyobjc_framework_webkit-13.0.tar.gz", hash = "sha256:80debaa16c416895214c74e483bd13f510fc0965e4def34653e37705a5eef1a6", size = 334160, upload-time = "2026-10-30T10:47:54.863Z" }
 wheels = [
@@ -3537,7 +3618,7 @@ name = "pypiwin32"
 version = "223"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pywin32" },
+    { name = "pywin32", marker = "python_full_version < '3.12' or sys_platform != 'emscripten'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/13/e8/4f38eb30c4dae36634a53c5b2cd73b517ea3607e10d00f61f2494449cec0/pypiwin32-223.tar.gz", hash = "sha256:71be40c1fbd28594214ecaecb58e7aa8b708eabfa0125c8a109ebd51edbd776a", size = 622, upload-time = "2018-02-26T00:43:23.994Z" }
 wheels = [
@@ -3573,6 +3654,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/94/4e/a37786f666f4f084fc45e026ca1e63f7b49ac0d90b53fa35ae62b73c96a8/pyttsx3-2.99.tar.gz", hash = "sha256:a18a5601530a570c43491b4112887fc34c47e118fc937287db8d21905da1f74e", size = 33968, upload-time = "2025-07-08T12:24:21.314Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/84/14/9fb5842581f0419b5eb85f8c26c1c0c0f4cf6b4d5be638ae3157316a2650/pyttsx3-2.99-py3-none-any.whl", hash = "sha256:ff3e4ff756c24d72b9f3f2f304e0edaafd0f58adb0e6f4b90d930440cda8b207", size = 32157, upload-time = "2025-07-08T12:24:20.299Z" },
+]
+
+[[package]]
+name = "pywayland"
+version = "0.4.19"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cffi", marker = "(python_full_version < '3.12' and platform_python_implementation != 'PyPy') or (platform_python_implementation != 'PyPy' and sys_platform != 'emscripten')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ef/43/81da8524a9e81bee3cd4d8bd1752de34031060e8011d2d3d1e9950840d6f/pywayland-0.4.19.tar.gz", hash = "sha256:9d8478f5b0df3540333ccf85a55fe8b34150b2c28c685805de9ffa855898549e", size = 280412, upload-time = "2026-08-15T15:03:51.982Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d4/fe/df2e2249cddb74b6e0815f5535afd3fbfc028be597dc60de526879b98611/pywayland-0.4.19-cp311-cp311-manylinux_2_34_x86_64.whl", hash = "sha256:f60860fd181d2420a6cb931cb91db49592691f7f6834eb4ce956de11abe2321a", size = 704098, upload-time = "2026-08-15T15:03:46.085Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/46/20d628982baab0f57df815e2ba6b34b4f08a8111edd65eeb831dd6bcd5c3/pywayland-0.4.19-cp312-cp312-manylinux_2_34_x86_64.whl", hash = "sha256:1cde2f1f133f5f8d6974014969bad64789c5d2b129acbe212a9425805c65fe2b", size = 705327, upload-time = "2026-08-15T15:03:47.282Z" },
+    { url = "https://files.pythonhosted.org/packages/a3/22/dc49766cb01d174d5f1f55620385436bd8032547d6196aef22c8fec991e2/pywayland-0.4.19-cp313-cp313-manylinux_2_34_x86_64.whl", hash = "sha256:267e24092fefad19b0d8c4ca79ed11f9e6ab8074a4953d6dbbba1b180ec36363", size = 705279, upload-time = "2026-08-15T15:03:48.411Z" },
+    { url = "https://files.pythonhosted.org/packages/27/e8/10f36b4db54bcccfc906c2939333e9b6482ca953f5a36a61fb5c7ed8518e/pywayland-0.4.19-cp314-cp314-manylinux_2_34_x86_64.whl", hash = "sha256:51bba0917ba7815a4db75a3ecf7efe4683d4d78e861d59f83f7efade719faedb", size = 705127, upload-time = "2026-08-15T15:03:49.674Z" },
+    { url = "https://files.pythonhosted.org/packages/76/a9/a740a45412a3486bda29de37ed8950de884bc38ee5b626ee4006f0c95561/pywayland-0.4.19-pp311-pypy311_pp73-manylinux_2_34_x86_64.whl", hash = "sha256:46ece208f847900ff33b753eaaeaa0ff350ef0d6880b14b6b89d2d71c3b2dade", size = 631528, upload-time = "2026-08-15T15:03:50.944Z" },
 ]
 
 [[package]]
@@ -3765,11 +3862,13 @@ name = "workgraph"
 version = "2.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "dbus-next", marker = "sys_platform == 'linux'" },
     { name = "fastapi" },
     { name = "jinja2" },
     { name = "psutil" },
     { name = "pydantic" },
     { name = "pyttsx3" },
+    { name = "pywayland", marker = "sys_platform == 'linux'" },
     { name = "pyyaml" },
     { name = "uvicorn" },
     { name = "winotify", marker = "sys_platform == 'win32'" },
@@ -3792,6 +3891,7 @@ windows = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dbus-next", marker = "sys_platform == 'linux'", specifier = ">=0.2.3" },
     { name = "fastapi", specifier = ">=0.104" },
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.104" },
     { name = "httpx2", marker = "extra == 'dev'", specifier = ">=0.27" },
@@ -3801,6 +3901,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pyttsx3", specifier = ">=2.98" },
+    { name = "pywayland", marker = "sys_platform == 'linux'", specifier = ">=0.4.19" },
     { name = "pywin32", marker = "extra == 'windows'", specifier = ">=306" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4.0" },
