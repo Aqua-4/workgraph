@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from collector.browser_tracker import BrowserTracker
 from collector.git_tracker import GitActivity, GitTracker
 from collector.idle_tracker import IdleState, IdleTracker
+from collector.platforms import create_platform_provider
 from collector.window_tracker import WindowTracker
 from db.repository import ActivityRepository
 from processor.session_builder import SessionBuilder
@@ -69,9 +70,12 @@ class CollectorSettings(BaseModel):
 class CollectorService:
     def __init__(self, settings: CollectorSettings) -> None:
         self.settings = settings
-        self.window_tracker = WindowTracker()
+        platform_provider = create_platform_provider()
+        self.window_tracker = WindowTracker(platform_provider)
         self.browser_tracker = BrowserTracker(settings.browser_history_lookback_seconds)
-        self.idle_tracker = IdleTracker(settings.idle_threshold_seconds)
+        self.idle_tracker = IdleTracker(
+            settings.idle_threshold_seconds, platform_provider
+        )
         self.git_tracker = GitTracker()
         self.activity_tagger = ActivityTagger()
         self.session_builder = SessionBuilder(settings.session_gap_seconds)

@@ -7,6 +7,7 @@ Project documentation is organized by domain.
 - [operations/](operations/): architecture diagrams, troubleshooting, deployment, and upgrade guidance.
 - [plan/](plan/): implementation plans and technical proposals.
 - [architecture-overview.md](architecture-overview.md): shared vs mode-specific architecture summary.
+- [TRACKING_COMPATIBILITY.md](TRACKING_COMPATIBILITY.md): tracking capabilities, platform and desktop environment coverage, and extension priorities.
 - [DASHBOARD_FEATURES_AND_LOGIC.md](DASHBOARD_FEATURES_AND_LOGIC.md): mode-by-mode dashboard rendering logic, data sources, and visibility rules.
 - [UI_NOTES.md](UI_NOTES.md): current UI notes for standalone, sync-client, and sync-server views.
 - [../api/README.md](../api/README.md): FastAPI architecture and endpoint reference.

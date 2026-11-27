@@ -5,33 +5,98 @@ import re
 import shutil
 import sqlite3
 import tempfile
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
 from workgraph.models import ActiveWindow
 
-BROWSER_PROCESSES = {
-    "arc",
-    "brave",
-    "brave-browser",
-    "chrome",
-    "chrome.exe",
-    "chromium.exe",
-    "chromium",
-    "chromium-browser",
-    "firefox",
-    "firefox.exe",
-    "google-chrome",
-    "iexplore.exe",
-    "msedge",
-    "msedge.exe",
-    "opera",
-    "opera.exe",
-    "safari",
-    "vivaldi",
-    "vivaldi.exe",
+
+@dataclass(frozen=True)
+class BrowserProfile:
+    process_names: frozenset[str]
+    history_filename: str | None
+    profile_roots: Mapping[str, Callable[[], Path]]
+
+
+def _windows_local_app_data() -> Path:
+    return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+
+
+def _windows_roaming_app_data() -> Path:
+    return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+
+
+def _linux_config_home() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+BROWSER_PROFILES = {
+    "arc": BrowserProfile(frozenset({"arc"}), None, {}),
+    "brave": BrowserProfile(
+        frozenset({"brave", "brave-browser", "brave.exe"}),
+        "History",
+        {
+            "windows": lambda: (
+                _windows_local_app_data()
+                / "BraveSoftware"
+                / "Brave-Browser"
+                / "User Data"
+            ),
+            "linux": lambda: _linux_config_home() / "BraveSoftware" / "Brave-Browser",
+        },
+    ),
+    "chrome": BrowserProfile(
+        frozenset({"chrome", "chrome.exe", "google-chrome"}),
+        "History",
+        {
+            "windows": lambda: (
+                _windows_local_app_data() / "Google" / "Chrome" / "User Data"
+            ),
+            "linux": lambda: _linux_config_home() / "google-chrome",
+        },
+    ),
+    "chromium": BrowserProfile(
+        frozenset({"chromium", "chromium.exe", "chromium-browser"}),
+        "History",
+        {
+            "windows": lambda: _windows_local_app_data() / "Chromium" / "User Data",
+            "linux": lambda: _linux_config_home() / "chromium",
+        },
+    ),
+    "edge": BrowserProfile(
+        frozenset({"msedge", "msedge.exe"}),
+        "History",
+        {
+            "windows": lambda: (
+                _windows_local_app_data() / "Microsoft" / "Edge" / "User Data"
+            ),
+            "linux": lambda: _linux_config_home() / "microsoft-edge",
+        },
+    ),
+    "firefox": BrowserProfile(
+        frozenset({"firefox", "firefox.exe"}),
+        "places.sqlite",
+        {
+            "windows": lambda: (
+                _windows_roaming_app_data() / "Mozilla" / "Firefox" / "Profiles"
+            ),
+            "linux": lambda: Path.home() / ".mozilla" / "firefox",
+        },
+    ),
+    "iexplorer": BrowserProfile(frozenset({"iexplore.exe"}), None, {}),
+    "opera": BrowserProfile(frozenset({"opera", "opera.exe"}), None, {}),
+    "safari": BrowserProfile(frozenset({"safari"}), None, {}),
+    "vivaldi": BrowserProfile(frozenset({"vivaldi", "vivaldi.exe"}), None, {}),
 }
+_PROFILE_BY_PROCESS = {
+    process_name: profile
+    for profile in BROWSER_PROFILES.values()
+    for process_name in profile.process_names
+}
+BROWSER_PROCESSES = set(_PROFILE_BY_PROCESS)
 
 
 class BrowserTracker:
@@ -94,54 +159,20 @@ def history_paths(process_name: str | None, active_platform: str) -> list[Path]:
     if not process_name:
         return []
 
-    process = process_name.lower()
-    base_paths = _browser_base_paths(process, active_platform.lower())
-    paths: list[Path] = []
-    for base_path in base_paths:
-        paths.extend(_profile_history_paths(base_path))
-    return paths
+    profile = _PROFILE_BY_PROCESS.get(process_name.lower())
+    if profile is None or profile.history_filename is None:
+        return []
+    root_resolver = profile.profile_roots.get(active_platform.lower())
+    if root_resolver is None:
+        return []
+    return _profile_history_paths(root_resolver(), profile.history_filename)
 
 
-def _browser_base_paths(process: str, active_platform: str) -> list[Path]:
-    if active_platform == "windows":
-        local_app_data = Path(
-            os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")
-        )
-        roaming_app_data = Path(
-            os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")
-        )
-        if process in {"brave.exe", "brave"}:
-            return [local_app_data / "BraveSoftware" / "Brave-Browser" / "User Data"]
-        if process in {"chrome.exe", "chrome"}:
-            return [local_app_data / "Google" / "Chrome" / "User Data"]
-        if process in {"msedge.exe", "msedge"}:
-            return [local_app_data / "Microsoft" / "Edge" / "User Data"]
-        if process in {"chromium.exe", "chromium"}:
-            return [local_app_data / "Chromium" / "User Data"]
-        if process in {"firefox.exe", "firefox"}:
-            return [roaming_app_data / "Mozilla" / "Firefox" / "Profiles"]
-
-    if active_platform == "linux":
-        config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-        if process in {"brave", "brave-browser"}:
-            return [config_home / "BraveSoftware" / "Brave-Browser"]
-        if process in {"chrome", "google-chrome"}:
-            return [config_home / "google-chrome"]
-        if process in {"chromium", "chromium-browser"}:
-            return [config_home / "chromium"]
-        if process == "msedge":
-            return [config_home / "microsoft-edge"]
-        if process == "firefox":
-            return [Path.home() / ".mozilla" / "firefox"]
-
-    return []
-
-
-def _profile_history_paths(base_path: Path) -> list[Path]:
+def _profile_history_paths(base_path: Path, history_filename: str) -> list[Path]:
     if not base_path.exists():
         return []
 
-    direct_history = base_path / "History"
+    direct_history = base_path / history_filename
     if direct_history.exists():
         return [direct_history]
 
@@ -149,12 +180,9 @@ def _profile_history_paths(base_path: Path) -> list[Path]:
     for profile in base_path.iterdir():
         if not profile.is_dir():
             continue
-        history = profile / "History"
-        places = profile / "places.sqlite"
+        history = profile / history_filename
         if history.exists():
             candidates.append(history)
-        elif places.exists():
-            candidates.append(places)
 
     def sort_key(path: Path) -> tuple[int, str]:
         profile_name = path.parent.name

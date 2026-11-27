@@ -9,6 +9,7 @@ from collector.browser_tracker import (
     _chromium_timestamp,
     domain_from_browser_history,
     extract_domain,
+    history_paths,
 )
 
 
@@ -27,6 +28,34 @@ class BrowserTrackerTests(unittest.TestCase):
 
     def test_extract_domain_returns_none_without_host(self) -> None:
         self.assertIsNone(extract_domain("Project notes - Visual Studio Code"))
+
+    def test_windows_chrome_history_path_uses_profile_registry(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "Google" / "Chrome" / "User Data"
+            history_path = root / "Default" / "History"
+            history_path.parent.mkdir(parents=True)
+            history_path.touch()
+
+            with patch.dict("os.environ", {"LOCALAPPDATA": temp_dir}):
+                paths = history_paths("chrome.exe", "windows")
+
+        self.assertEqual(paths, [history_path])
+
+    def test_linux_firefox_history_path_uses_profile_registry(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / ".mozilla" / "firefox"
+            history_path = root / "default-release" / "places.sqlite"
+            history_path.parent.mkdir(parents=True)
+            history_path.touch()
+
+            with patch("pathlib.Path.home", return_value=Path(temp_dir)):
+                paths = history_paths("firefox", "linux")
+
+        self.assertEqual(paths, [history_path])
+
+    def test_history_paths_are_empty_for_unknown_browser_or_os(self) -> None:
+        self.assertEqual(history_paths("unknown-browser", "linux"), [])
+        self.assertEqual(history_paths("chrome", "darwin"), [])
 
     def test_domain_from_brave_history_matches_window_title(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -63,7 +92,10 @@ class BrowserTrackerTests(unittest.TestCase):
             ):
                 domain = domain_from_browser_history(
                     "brave.exe",
-                    "64,225.9 | BTCUSDT USDⓈ-Margined Perpetual Chart | Binance Futures - Brave",
+                    (
+                        "64,225.9 | BTCUSDT USDⓈ-Margined Perpetual Chart | "
+                        "Binance Futures - Brave"
+                    ),
                     "windows",
                     lookback_seconds=600,
                 )

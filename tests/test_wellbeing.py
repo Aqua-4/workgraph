@@ -1,6 +1,6 @@
 import json
 import subprocess
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from queue import Queue
 from unittest.mock import MagicMock, patch
@@ -773,6 +773,100 @@ def test_overnight_announcement_hours() -> None:
     assert service._within_hours(datetime(2026, 11, 15, 23).time())
     assert service._within_hours(datetime(2026, 11, 16, 5).time())
     assert not service._within_hours(datetime(2026, 11, 16, 12).time())
+
+
+def test_collector_tracks_metadata_across_active_app_switches(
+    tmp_path: Path,
+) -> None:
+    settings = CollectorSettings(
+        database_path=str(tmp_path / "activity.db"),
+        identity_path=str(tmp_path / "identity.json"),
+        log_path=str(tmp_path / "workgraph.log"),
+        dashboard_mode="sync-server",
+    )
+    collector = CollectorService(settings)
+    start = datetime(2026, 11, 28, 10, 0, tzinfo=UTC)
+    active_windows = [
+        ActiveWindow("code", "code", "src/main.py", 101, "linux"),
+        ActiveWindow("code", "code", "src/main.py", 101, "linux"),
+        ActiveWindow("firefox", "firefox", "python docs", 202, "linux"),
+        ActiveWindow("firefox", "firefox", "python docs", 202, "linux"),
+        ActiveWindow("konsole", "konsole", "workgraph shell", 303, "linux"),
+        ActiveWindow("konsole", "konsole", "workgraph shell", 303, "linux"),
+    ]
+    timestamps = [start + timedelta(seconds=30 * index) for index in range(6)]
+    git_activities = {
+        "code": GitActivity("workgraph", "feature/test", "abc1234", []),
+        "firefox": GitActivity(None, None, None, []),
+        "konsole": GitActivity("ops-scripts", "main", "def5678", []),
+    }
+    git_calls: list[dict[str, object]] = []
+
+    def get_git_activity(**kwargs: object) -> GitActivity:
+        git_calls.append(kwargs)
+        return git_activities[str(kwargs["app_name"])]
+
+    collector.idle_tracker.get_idle_state = MagicMock(
+        side_effect=[
+            IdleState(False, 0),
+            IdleState(False, 0),
+            IdleState(False, 0),
+            IdleState(False, 0),
+            IdleState(True, 321),
+            IdleState(True, 321),
+        ]
+    )
+    collector.git_tracker.get_activity = get_git_activity
+    collector.browser_tracker.get_domain = lambda window: (
+        "docs.python.org" if window.app_name == "firefox" else None
+    )
+    collector.activity_tagger.tag_session = lambda session: f"tag:{session.app_name}"
+
+    try:
+        with (
+            patch("services.collector_service.utc_now", side_effect=timestamps),
+            patch.object(
+                collector.window_tracker,
+                "get_active_window",
+                side_effect=active_windows,
+            ),
+        ):
+            for _ in timestamps:
+                collector.collect_once()
+            collector.flush()
+        rows = collector.repository.all_sessions()
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
+
+    assert len(rows) == 3
+    expected_fields = {
+        "app_name": ["code", "firefox", "konsole"],
+        "process_name": ["code", "firefox", "konsole"],
+        "window_title": ["src/main.py", "python docs", "workgraph shell"],
+        "browser_domain": [None, "docs.python.org", None],
+        "is_idle": [0, 0, 1],
+        "idle_seconds": [0, 0, 321],
+        "platform": ["linux", "linux", "linux"],
+        "git_repo": ["workgraph", None, "ops-scripts"],
+        "git_branch": ["feature/test", None, "main"],
+        "context_switches": [0, 0, 0],
+        "tag": ["tag:code", "tag:firefox", "tag:konsole"],
+        "duration_sec": [30, 30, 30],
+    }
+    for field, expected in expected_fields.items():
+        assert [row[field] for row in rows] == expected
+
+    assert [datetime.fromisoformat(row["start_time"]) for row in rows] == timestamps[
+        ::2
+    ]
+    assert [datetime.fromisoformat(row["end_time"]) for row in rows] == timestamps[1::2]
+    assert all(
+        row[field]
+        for row in rows
+        for field in ("uuid", "user_id", "device_id", "created_at", "updated_at")
+    )
+    assert [call["pid"] for call in git_calls] == [101, 101, 202, 202, 303, 303]
 
 
 def test_collector_wires_samples_and_controls(tmp_path: Path) -> None:
