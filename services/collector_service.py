@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import signal
+import threading
 import time
 from dataclasses import replace
 from datetime import datetime
@@ -104,6 +106,10 @@ class CollectorService:
         self._git_unavailable_warned = False
         self._browser_unavailable_warned = False
         self._running = False
+        self._tracking_started_at: float | None = None
+        self._stop_event = threading.Event()
+        heartbeat_path = os.environ.get("WORKGRAPH_HEARTBEAT_PATH")
+        self._heartbeat_path = Path(heartbeat_path) if heartbeat_path else None
         wellbeing = settings.wellbeing
         self._service_status = {
             "Activity collector": "Running",
@@ -129,9 +135,12 @@ class CollectorService:
 
     def run_forever(self) -> None:
         self._running = True
+        self._stop_event.clear()
         signal.signal(signal.SIGINT, self.stop)
         signal.signal(signal.SIGTERM, self.stop)
         LOGGER.info("WorkGraph collector started")
+        self._tracking_started_at = time.monotonic()
+        self._heartbeat()
 
         try:
             start_provider = getattr(self._platform_provider, "start", None)
@@ -151,23 +160,33 @@ class CollectorService:
             else:
                 self._run_collector_loop()
         finally:
-            close_provider = getattr(self._platform_provider, "close", None)
-            if callable(close_provider):
-                close_provider()
-            self._close_tk_ui()
-            self.flush()
-            self.repository.close()
-            self.wellbeing_delivery.close()
-            LOGGER.info("WorkGraph collector stopped")
+            try:
+                close_provider = getattr(self._platform_provider, "close", None)
+                if callable(close_provider):
+                    close_provider()
+            finally:
+                try:
+                    self._close_tk_ui()
+                finally:
+                    try:
+                        self.flush()
+                    finally:
+                        try:
+                            self.repository.close()
+                        finally:
+                            self.wellbeing_delivery.close()
+                            LOGGER.info("WorkGraph collector stopped")
 
     def _run_collector_loop(self) -> None:
         announced = False
         while self._running:
             self.collect_once()
+            self._heartbeat()
             if not announced:
                 self._announce_started()
                 announced = True
-            time.sleep(self.settings.poll_interval_seconds)
+            if self._running:
+                self._stop_event.wait(self.settings.poll_interval_seconds)
 
     def _run_tk_loop(self) -> None:
         import tkinter as tk
@@ -186,6 +205,7 @@ class CollectorService:
             return
         try:
             self.collect_once()
+            self._heartbeat()
             self._announce_started()
         except Exception:
             LOGGER.exception("Collector sample failed")
@@ -202,7 +222,7 @@ class CollectorService:
             self, "_announced", False
         ):
             self.wellbeing_delivery.speak(
-                "WorkGraph activity tracking started.", error_on_failure=True
+                "WorkGraph collector started.", error_on_failure=True
             )
             self._announced = True
             if self._wellbeing_ui is not None:
@@ -273,7 +293,7 @@ class CollectorService:
             active_window = self.window_tracker.get_active_window()
             self._window_unavailable_warned = False
         except Exception:
-            self._service_status["Window detection"] = "Unavailable"
+            self._set_tracking_status("Window detection", False)
             if not self._window_unavailable_warned:
                 LOGGER.warning(
                     "Window detection failed; skipping this collection sample",
@@ -283,8 +303,8 @@ class CollectorService:
             if self._platform_provider_started:
                 self.flush()
             return
-        self._service_status["Window detection"] = (
-            "Unavailable" if active_window.app_name == "Unknown" else "Running"
+        self._set_tracking_status(
+            "Window detection", active_window.app_name != "Unknown"
         )
         try:
             idle_state = self.idle_tracker.get_idle_state()
@@ -299,9 +319,7 @@ class CollectorService:
                     exc_info=True,
                 )
                 self._idle_unavailable_warned = True
-        self._service_status["Idle detection"] = (
-            "Running" if idle_state.available else "Unavailable"
-        )
+        self._set_tracking_status("Idle detection", idle_state.available)
         if self.settings.wellbeing.idle_check_enabled:
             self._service_status["Idle checks"] = (
                 "Enabled" if idle_state.available else "Unavailable"
@@ -497,11 +515,34 @@ class CollectorService:
 
     def stop(self, *_args) -> None:
         self._running = False
+        self._stop_event.set()
         if self._tk_root is not None:
             try:
                 self._tk_root.quit()
             except Exception:
                 LOGGER.debug("Could not stop Tk event loop", exc_info=True)
+
+    def _set_tracking_status(self, name: str, available: bool) -> None:
+        previous = self._service_status[name]
+        if available:
+            status = "Running"
+        elif (
+            self._tracking_started_at is not None
+            and time.monotonic() - self._tracking_started_at < 30
+        ):
+            status = "Connecting"
+        else:
+            status = "Unavailable"
+        self._service_status[name] = status
+        if status == "Running" and previous in {"Connecting", "Unavailable"}:
+            LOGGER.info("%s recovered", name)
+
+    def _heartbeat(self) -> None:
+        if self._heartbeat_path is not None:
+            try:
+                self._heartbeat_path.write_text(str(time.monotonic()), encoding="ascii")
+            except OSError:
+                LOGGER.warning("Could not write collector heartbeat", exc_info=True)
 
     def _process_wellbeing_actions(self, tick: float, now) -> None:
         while True:

@@ -6,6 +6,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from services.collector_supervisor import CollectorSupervisor
+from services.linux_session import DesktopSession, SessionDiscovery
 from services.unified_launcher import (
     _has_sync_config,
     _resolve_settings_path,
@@ -126,17 +127,60 @@ class UnifiedLauncherTests(unittest.TestCase):
         with (
             patch.object(supervisor, "_configure_logging"),
             patch.object(supervisor, "_register_signal_handlers"),
+            patch.object(
+                supervisor, "_monitor", return_value=("exited unexpectedly", 1)
+            ),
+            patch(
+                "services.collector_supervisor.discover_session",
+                return_value=SessionDiscovery(DesktopSession("3", ()), "ready"),
+            ),
             patch(
                 "services.collector_supervisor.subprocess.Popen", return_value=process
             ),
             patch("services.collector_supervisor.error_beep") as beep,
-            patch(
-                "services.collector_supervisor.time.sleep",
+            patch.object(
+                supervisor,
+                "_wait",
                 side_effect=lambda _: setattr(supervisor, "_stopping", True),
             ),
         ):
             supervisor.run_forever()
         beep.assert_called_once_with()
+
+    def test_collector_restart_backoff_resets_after_stable_run(self) -> None:
+        supervisor = CollectorSupervisor()
+        process = Mock(pid=123)
+        process.wait.return_value = 1
+        delays = []
+
+        def wait_before_restart(delay: int) -> None:
+            delays.append(delay)
+            if len(delays) == 3:
+                supervisor._stopping = True
+
+        with (
+            patch.object(supervisor, "_configure_logging"),
+            patch.object(supervisor, "_register_signal_handlers"),
+            patch.object(
+                supervisor, "_monitor", return_value=("exited unexpectedly", 1)
+            ),
+            patch(
+                "services.collector_supervisor.discover_session",
+                return_value=SessionDiscovery(DesktopSession("3", ()), "ready"),
+            ),
+            patch(
+                "services.collector_supervisor.subprocess.Popen", return_value=process
+            ),
+            patch("services.collector_supervisor.error_beep"),
+            patch.object(supervisor, "_wait", side_effect=wait_before_restart),
+            patch(
+                "services.collector_supervisor.time.monotonic",
+                side_effect=[0, 1, 2, 3, 4, 40],
+            ),
+        ):
+            supervisor.run_forever()
+
+        self.assertEqual(delays, [2, 4, 2])
 
     def test_dashboard_start_failure_signals_error_and_stops_collector(self) -> None:
         collector = Mock(pid=123)

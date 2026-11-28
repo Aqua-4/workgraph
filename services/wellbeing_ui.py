@@ -43,7 +43,7 @@ class TkWellbeingUI:
         self._ttk.Label(
             frame, text=f"{greeting}!", font=("TkDefaultFont", 15, "bold")
         ).grid(row=0, column=0, sticky="w", pady=(0, 8))
-        self._ttk.Label(frame, text="WorkGraph activity tracking is running.").grid(
+        self._ttk.Label(frame, text="WorkGraph collector is running.").grid(
             row=1, column=0, sticky="w", pady=(0, 12)
         )
         rows = {}

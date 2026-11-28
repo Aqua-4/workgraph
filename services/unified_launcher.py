@@ -136,7 +136,7 @@ def run_unified(
             sync_process.terminate()
 
         try:
-            collector_process.wait(timeout=5)
+            collector_process.wait(timeout=40)
             dashboard_process.wait(timeout=5)
             if sync_process is not None:
                 sync_process.wait(timeout=5)

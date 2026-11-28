@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -513,7 +514,7 @@ def test_collector_announces_only_after_successful_first_sample(
         else:
             collector.run_forever()
             speak.assert_called_once_with(
-                "WorkGraph activity tracking started.", error_on_failure=True
+                "WorkGraph collector started.", error_on_failure=True
             )
 
 
@@ -697,7 +698,7 @@ def test_startup_greeting_and_speech_only_once(tmp_path: Path) -> None:
             collector._announce_started()
             collector._announce_started()
         speak.assert_called_once_with(
-            "WorkGraph activity tracking started.", error_on_failure=True
+            "WorkGraph collector started.", error_on_failure=True
         )
         collector._wellbeing_ui.show_greeting.assert_called_once_with(
             14, collector._greeting_statuses
@@ -954,6 +955,64 @@ def test_collector_starts_and_closes_native_provider(tmp_path: Path) -> None:
 
     provider.start.assert_called_once()
     provider.close.assert_called_once()
+
+
+def test_collector_flushes_session_even_if_provider_close_fails(tmp_path: Path) -> None:
+    provider = MagicMock()
+    provider.get_active_window.return_value = ActiveWindow(
+        "code", "code", "work", 42, "linux"
+    )
+    provider.get_idle_seconds.return_value = 0
+    provider.close.side_effect = RuntimeError("provider close failed")
+    database = tmp_path / "activity.db"
+    with patch(
+        "services.collector_service.create_platform_provider", return_value=provider
+    ):
+        collector = CollectorService(
+            CollectorSettings(
+                database_path=str(database),
+                identity_path=str(tmp_path / "identity.json"),
+            )
+        )
+    collector.git_tracker.get_activity = lambda **kwargs: GitActivity(
+        None, None, None, []
+    )
+    collector.browser_tracker.get_domain = lambda window: None
+    collector.collect_once()
+    with (
+        patch.object(collector, "_run_tk_loop"),
+        patch("services.collector_service.signal.signal"),
+        pytest.raises(RuntimeError, match="provider close failed"),
+    ):
+        collector.run_forever()
+    with sqlite3.connect(database) as connection:
+        assert (
+            connection.execute("SELECT count(*) FROM activity_sessions").fetchone()[0]
+            == 1
+        )
+
+
+def test_tracking_status_reports_connecting_and_recovery(
+    tmp_path: Path, caplog
+) -> None:
+    collector = CollectorService(
+        CollectorSettings(
+            database_path=str(tmp_path / "activity.db"),
+            identity_path=str(tmp_path / "identity.json"),
+        )
+    )
+    collector._tracking_started_at = 100
+    try:
+        with patch("services.collector_service.time.monotonic", side_effect=[110, 140]):
+            collector._set_tracking_status("Window detection", False)
+            assert collector._service_status["Window detection"] == "Connecting"
+            collector._set_tracking_status("Window detection", False)
+            assert collector._service_status["Window detection"] == "Unavailable"
+        collector._set_tracking_status("Window detection", True)
+        assert collector._service_status["Window detection"] == "Running"
+    finally:
+        collector.repository.close()
+        collector.wellbeing_delivery.close()
 
 
 def test_collector_isolates_optional_tracker_failures_and_recovers(

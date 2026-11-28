@@ -726,14 +726,21 @@ crontab -e
 Run at boot (continuous collector):
 
 ```cron
-@reboot /bin/bash -lc 'sleep 45; export DISPLAY=:0; export XAUTHORITY=/run/user/1000/.Xauthority; export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus; export XDG_RUNTIME_DIR=/run/user/1000; /absolute/path/to/workgraph/run.sh >> /absolute/path/to/workgraph/logs/cron.log 2>&1'
+@reboot /bin/bash -lc '/absolute/path/to/workgraph/run.sh >> /absolute/path/to/workgraph/logs/cron.log 2>&1'
 ```
 
-Why this is needed on Linux:
+The supervisor waits for a supported graphical login and recovers its session
+environment. It retries temporary tracking failures and restarts the collector
+after a crash, a prolonged stall, or a desktop session change. It waits rather
+than guessing if multiple graphical sessions are present. KDE Wayland and X11 are
+supported; other Wayland desktops require a supported tracker. On systems without
+logind, start from a valid desktop environment instead of a boot-time cron job.
 
-- `@reboot` jobs usually start before the desktop session is fully ready.
-- Without `DISPLAY`, `XAUTHORITY`, `DBUS_SESSION_BUS_ADDRESS`, and `XDG_RUNTIME_DIR`, focused-window capture can fail and sessions may appear as stale or `Unknown`.
-- Replace `1000` with your user id if different (`id -u`).
+Planned restarts flush the current activity session before starting another.
+A crash or forced termination can still lose the in-progress session. Check
+`logs/workgraph.log` and `logs/cron.log` for waiting or recovery messages. Do not
+run both cron and desktop autostart for the same database; supervised collectors
+use a per-database lock to prevent duplicate collection.
 
 Run a one-shot snapshot every hour:
 
